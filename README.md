@@ -6,33 +6,32 @@ Build and debug Model Context Protocol integrations with a browser-based interfa
 npx mcpconnect
 ```
 
-[Try it free](https://mcp.rconnect.tech) · [Documentation](https://docs.mcpconnect.dev) · [GitHub](https://github.com/rocket-connect/mcpconnect)
-
 ## Get Started
 
-**Free hosted version**  
-Visit [mcp.rconnect.tech](https://mcp.rconnect.tech) to connect to your MCP servers instantly.
-
 **Local development**
+
 ```bash
 npx mcpconnect
 ```
+
 Opens MCPConnect at `http://localhost:3000`
 
 **Embed in your app**
+
 ```bash
 npm install @mcpconnect/express
 ```
 
 ```javascript
-import express from 'express'
-import { mcpConnect } from '@mcpconnect/express'
+import express from "express";
+import { mcpConnect } from "@mcpconnect/express";
 
-const app = express()
-app.use('/mcp', mcpConnect())
+const app = express();
+app.use("/mcp", mcpConnect());
 ```
 
 **Deploy to your infrastructure**
+
 ```bash
 git clone https://github.com/rocket-connect/mcpconnect
 cd mcpconnect
@@ -65,28 +64,30 @@ npm install @mcpconnect/components
 ```
 
 ```javascript
-import { 
+import {
   MCPProvider,
   ChatInterface,
   ToolExecutor,
   ResourceProvider,
-  LLMProvider
-} from '@mcpconnect/components'
+  LLMProvider,
+} from "@mcpconnect/components";
 
 function App() {
   return (
     <LLMProvider apiKey={process.env.OPENAI_API_KEY} provider="openai">
-      <MCPProvider servers={[
-        { url: "ws://localhost:8080", name: "Database Tools" },
-        { url: "ws://localhost:8081", name: "File System" }
-      ]}>
+      <MCPProvider
+        servers={[
+          { url: "ws://localhost:8080", name: "Database Tools" },
+          { url: "ws://localhost:8081", name: "File System" },
+        ]}
+      >
         <ChatInterface>
           <ToolExecutor />
           <ResourceProvider />
         </ChatInterface>
       </MCPProvider>
     </LLMProvider>
-  )
+  );
 }
 ```
 
@@ -95,6 +96,7 @@ function App() {
 MCPConnect supports standard model providers with your own API keys:
 
 **Supported Models**
+
 - OpenAI (GPT-4, GPT-3.5)
 - Anthropic (Claude 3.5 Sonnet, Claude 3)
 - Google (Gemini Pro, Gemini Flash)
@@ -105,8 +107,8 @@ const config = {
   provider: "openai",
   apiKey: "your-key",
   model: "gpt-4",
-  baseUrl: "https://api.openai.com/v1" // Optional for custom endpoints
-}
+  baseUrl: "https://api.openai.com/v1", // Optional for custom endpoints
+};
 ```
 
 The LLM integration enables natural language responses using MCP tool results, intelligent tool suggestions, and conversational context across tool executions.
@@ -122,6 +124,7 @@ Use MCPConnect to iterate on MCP server implementations:
 5. **Monitor performance** and error rates
 
 **Development Features**
+
 - Schema validation with instant feedback
 - Raw MCP message inspection
 - Request/response timing analysis
@@ -132,12 +135,12 @@ Use MCPConnect to iterate on MCP server implementations:
 Build specialized debugging or testing interfaces:
 
 ```javascript
-import { 
+import {
   ServerExplorer,
-  ToolInvoker, 
+  ToolInvoker,
   ResourceViewer,
-  MessageLog 
-} from '@mcpconnect/components'
+  MessageLog,
+} from "@mcpconnect/components";
 
 function CustomDebugger() {
   return (
@@ -149,7 +152,7 @@ function CustomDebugger() {
       </div>
       <MessageLog />
     </div>
-  )
+  );
 }
 ```
 
@@ -161,10 +164,10 @@ Connect to secured MCP servers with standard authentication:
 const serverConfig = {
   url: "wss://api.example.com/mcp",
   headers: {
-    "Authorization": "Bearer your-token",
-    "X-API-Key": "your-api-key"
-  }
-}
+    Authorization: "Bearer your-token",
+    "X-API-Key": "your-api-key",
+  },
+};
 ```
 
 ## Local Models
@@ -176,8 +179,8 @@ const localConfig = {
   provider: "openai",
   baseUrl: "http://localhost:1234/v1", // LM Studio endpoint
   apiKey: "not-required",
-  model: "local-llama-model"
-}
+  model: "local-llama-model",
+};
 ```
 
 ## Self-Hosting
@@ -212,7 +215,4 @@ Shared development environment with configuration export/import
 **Open Source**  
 MIT License - contribute on [GitHub](https://github.com/rocket-connect/mcpconnect)
 
-**Community**  
-[Discord](https://discord.gg/mcpconnect) · [Discussions](https://github.com/rocket-connect/mcpconnect/discussions) · [Twitter](https://twitter.com/rconnect_tech)
-
-Built by [Rocket Connect](https://rconnect.tech) – connecting people through open source
+Built by [rconnect.tech](https://rconnect.tech) – connecting people through open source
