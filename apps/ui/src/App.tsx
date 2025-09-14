@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { RequestInspector, MCPLayout } from "@mcpconnect/components";
+import {
+  NetworkInspector,
+  MCPLayout,
+  type ToolExecution,
+} from "@mcpconnect/components";
 import { Database, Code, Server, FileText, BarChart3 } from "lucide-react";
 
 import {
@@ -87,33 +91,83 @@ function App() {
     },
   ];
 
-  const executionData = {
-    tool: "query_database",
-    duration: "142ms",
-    success: true,
-    request: {
+  // Updated to match the NetworkInspector's expected data format
+  const toolExecutions: ToolExecution[] = [
+    {
+      id: "1",
       tool: "query_database",
-      arguments: {
-        query:
-          "SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '1 month'",
-        timeout: 5000,
+      status: "success",
+      duration: 142,
+      timestamp: "10:30:47",
+      request: {
+        tool: "query_database",
+        arguments: {
+          query:
+            "SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '1 month'",
+          timeout: 5000,
+        },
+        timestamp: "2025-01-15T10:30:45Z",
       },
-      timestamp: "2025-01-15T10:30:45Z",
-    },
-    response: {
-      success: true,
-      result: {
-        count: 47,
-        execution_time: 142,
+      response: {
+        success: true,
+        result: {
+          count: 47,
+          execution_time: 142,
+        },
+        timestamp: "2025-01-15T10:30:47Z",
       },
-      timestamp: "2025-01-15T10:30:47Z",
     },
-    metrics: {
-      responseTime: "142ms",
-      dataSize: "3.2KB",
-      successRate: "98.2%",
+    {
+      id: "2",
+      tool: "get_schema",
+      status: "success",
+      duration: 89,
+      timestamp: "10:29:15",
+      request: {
+        tool: "get_schema",
+        arguments: { table: "users" },
+        timestamp: "2025-01-15T10:29:13Z",
+      },
+      response: {
+        success: true,
+        result: {
+          columns: [
+            { name: "id", type: "INTEGER", nullable: false },
+            { name: "email", type: "VARCHAR", nullable: false },
+            { name: "created_at", type: "TIMESTAMP", nullable: false },
+          ],
+        },
+        timestamp: "2025-01-15T10:29:15Z",
+      },
     },
-  };
+    {
+      id: "3",
+      tool: "backup_data",
+      status: "error",
+      duration: 2341,
+      timestamp: "10:25:32",
+      request: {
+        tool: "backup_data",
+        arguments: { format: "sql", compress: true },
+        timestamp: "2025-01-15T10:25:30Z",
+      },
+      error: "Permission denied: insufficient privileges for backup operation",
+    },
+    {
+      id: "4",
+      tool: "query_database",
+      status: "pending",
+      timestamp: "10:30:50",
+      request: {
+        tool: "query_database",
+        arguments: {
+          query:
+            "SELECT * FROM orders WHERE status = 'pending' ORDER BY created_at DESC LIMIT 10",
+        },
+        timestamp: "2025-01-15T10:30:50Z",
+      },
+    },
+  ];
 
   return (
     <MCPLayout
@@ -127,8 +181,8 @@ function App() {
         />
       }
       inspector={
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors">
-          <RequestInspector execution={executionData} />
+        <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors h-full">
+          <NetworkInspector executions={toolExecutions} />
         </div>
       }
     >

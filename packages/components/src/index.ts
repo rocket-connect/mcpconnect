@@ -12,9 +12,10 @@ export {
   type ConnectionStatusProps,
 } from "./ConnectionStatus";
 export {
-  RequestInspector,
-  type RequestInspectorProps,
-} from "./RequestInspector";
+  NetworkInspector,
+  type NetworkInspectorProps,
+  type ToolExecution,
+} from "./NetworkInspector";
 export { MCPLayout, type MCPLayoutProps } from "./MCPLayout";
 
 // Theme Toggle Component
