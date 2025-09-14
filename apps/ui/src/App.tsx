@@ -1,38 +1,33 @@
-// apps/ui/src/App.tsx
+// apps/ui/src/App.tsx - Complete fixed version
 import { useState } from "react";
-import { NetworkInspector, MCPLayout } from "@mcpconnect/components";
-import { Tool } from "@mcpconnect/schemas";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { MCPLayout } from "@mcpconnect/components";
+import { Tool, Resource } from "@mcpconnect/schemas";
 import {
   Header,
   Sidebar,
   ChatInterface,
   ToolInterface,
-  ModeToggle,
+  ConnectionView,
+  ResourceView,
 } from "./components";
 import { useStorage } from "./contexts/StorageContext";
+import { InspectorProvider, InspectorUI } from "./contexts/InspectorProvider";
 
-function App() {
-  const [activeMode, setActiveMode] = useState<"chat" | "tools">("chat");
+function AppContent() {
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(
+    null
+  );
 
-  const {
-    connections,
-    tools,
-    resources,
-    chatMessages,
-    toolExecutions,
-    isLoading,
-    error,
-  } = useStorage();
+  const { connections, tools, resources, isLoading, error } = useStorage();
 
   const handleToolSelect = (tool: Tool) => {
     setSelectedTool(tool);
   };
 
-  const handleModeChange = (mode: "chat" | "tools" | "inspector" | "split") => {
-    if (mode === "chat" || mode === "tools") {
-      setActiveMode(mode);
-    }
+  const handleResourceSelect = (resource: Resource) => {
+    setSelectedResource(resource);
   };
 
   if (isLoading) {
@@ -83,30 +78,101 @@ function App() {
   }
 
   return (
-    <MCPLayout
-      header={<Header />}
-      sidebar={
-        <Sidebar
-          connections={connections}
-          tools={tools}
-          resources={resources}
-          onToolSelect={handleToolSelect}
-        />
-      }
-      inspector={
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors h-full">
-          <NetworkInspector executions={toolExecutions} />
-        </div>
-      }
-    >
-      <ModeToggle activeMode={activeMode} onModeChange={handleModeChange} />
+    <InspectorProvider>
+      <MCPLayout
+        header={<Header />}
+        sidebar={
+          <Sidebar
+            connections={connections}
+            tools={tools}
+            resources={resources}
+            onToolSelect={handleToolSelect}
+            onResourceSelect={handleResourceSelect}
+            selectedTool={selectedTool}
+          />
+        }
+        inspector={<InspectorUI />}
+      >
+        <Routes>
+          {/* Default redirect to connections */}
+          <Route path="/" element={<Navigate to="/connections" replace />} />
 
-      {activeMode === "chat" ? (
-        <ChatInterface chatMessages={chatMessages} />
-      ) : (
-        <ToolInterface selectedTool={selectedTool} />
-      )}
-    </MCPLayout>
+          {/* Connections overview */}
+          <Route
+            path="/connections"
+            element={<ConnectionView connections={connections} />}
+          />
+
+          {/* Connection-specific routes with proper parameter structure */}
+
+          {/* Basic connection chat (defaults to first chat) */}
+          <Route path="/connections/:id/chat" element={<ChatInterface />} />
+
+          {/* Specific chat within a connection */}
+          <Route
+            path="/connections/:id/chat/:chatId"
+            element={<ChatInterface />}
+          />
+
+          {/* Tool execution within a specific chat */}
+          <Route
+            path="/connections/:id/chat/:chatId/tools/:toolId"
+            element={<ChatInterface expandedToolCall={true} />}
+          />
+
+          {/* Connection-specific tools routes */}
+          <Route
+            path="/connections/:id/tools"
+            element={<ToolInterface selectedTool={selectedTool} />}
+          />
+          <Route
+            path="/connections/:id/tools/:toolName"
+            element={<ToolInterface selectedTool={selectedTool} />}
+          />
+
+          {/* Connection-specific resources routes */}
+          <Route
+            path="/connections/:id/resources"
+            element={<ResourceView selectedResource={selectedResource} />}
+          />
+          <Route
+            path="/connections/:id/resources/:resourceId"
+            element={<ResourceView selectedResource={selectedResource} />}
+          />
+
+          {/* Global tool routes */}
+          <Route
+            path="/tools"
+            element={<ToolInterface selectedTool={selectedTool} />}
+          />
+          <Route
+            path="/tools/:toolName"
+            element={<ToolInterface selectedTool={selectedTool} />}
+          />
+
+          {/* Global resources routes */}
+          <Route
+            path="/resources"
+            element={<ResourceView selectedResource={selectedResource} />}
+          />
+          <Route
+            path="/resources/:id"
+            element={<ResourceView selectedResource={selectedResource} />}
+          />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/connections" replace />} />
+        </Routes>
+      </MCPLayout>
+    </InspectorProvider>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
   );
 }
 
