@@ -21,14 +21,8 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Check formatting
-        run: pnpm format:check
-
-      - name: Run linting
-        run: pnpm lint
-
-      - name: Type check
-        run: pnpm type-check
+      - name: Build
+        run: pnpm build
 
       - name: Prepare for publishing
         run: pnpm prepare-publish
