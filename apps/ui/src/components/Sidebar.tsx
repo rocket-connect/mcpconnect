@@ -1,4 +1,3 @@
-// apps/ui/src/components/Sidebar.tsx - Complete updated version with tool selection highlighting
 import { ConnectionItem, ToolItem, ResourceItem } from "@mcpconnect/components";
 import { Connection, Tool, Resource } from "@mcpconnect/schemas";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
@@ -12,7 +11,7 @@ interface SidebarProps {
   resources: Record<string, Resource[]>;
   onToolSelect: (tool: Tool) => void;
   onResourceSelect?: (resource: Resource) => void;
-  selectedTool?: Tool | null; // Add selected tool prop
+  selectedTool?: Tool | null;
 }
 
 export const Sidebar = ({
@@ -21,7 +20,7 @@ export const Sidebar = ({
   resources,
   onToolSelect,
   onResourceSelect,
-  selectedTool, // Accept selected tool prop
+  selectedTool,
 }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,19 +29,21 @@ export const Sidebar = ({
 
   // Get current connection ID from URL params
   const currentConnectionId = params.id;
+  const currentChatId = params.chatId;
 
   const handleConnectionClick = (_connection: Connection, index: number) => {
-    // Navigate to connection chat by default - will use first chat
-    navigate(`/connections/${index}/chat`);
+    // Navigate to connection chat - will use first chat's ID if available
+    const connectionChats = conversations[index.toString()] || [];
+    const firstChatId = connectionChats[0]?.id || "new";
+    navigate(`/connections/${index}/chat/${firstChatId}`);
   };
 
-  const handleChatClick = (connectionIndex: number, chatIndex: number) => {
-    navigate(`/connections/${connectionIndex}/chat/${chatIndex}`);
+  const handleChatClick = (connectionIndex: number, chatId: string) => {
+    navigate(`/connections/${connectionIndex}/chat/${chatId}`);
   };
 
   const handleToolClick = (tool: Tool) => {
     onToolSelect(tool);
-    // If we're in a connection context, stay there, otherwise go to global tools
     if (currentConnectionId) {
       navigate(`/connections/${currentConnectionId}/tools`);
     } else {
@@ -54,7 +55,6 @@ export const Sidebar = ({
     if (onResourceSelect) {
       onResourceSelect(resource);
     }
-    // If we're in a connection context, navigate to that connection's resource
     if (currentConnectionId) {
       navigate(`/connections/${currentConnectionId}/resources/${index}`);
     } else {
@@ -113,7 +113,7 @@ export const Sidebar = ({
           </div>
         )}
 
-        {/* Conversations/Chats Section (only show if in connection context) */}
+        {/* Conversations/Chats Section */}
         {currentConnectionId && chatsToShow.length > 0 && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
@@ -122,30 +122,31 @@ export const Sidebar = ({
               </h2>
             </div>
             <div className="space-y-2">
-              {chatsToShow.map((chat, chatIndex) => (
-                <button
-                  key={chat.id}
-                  onClick={() =>
-                    handleChatClick(parseInt(currentConnectionId), chatIndex)
-                  }
-                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                    location.pathname.includes(`/chat/${chatIndex}`)
-                      ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <MessageSquare className="w-4 h-4 text-blue-500" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                        {chat.title}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {chat.messages.length} messages
+              {chatsToShow.map(chat => (
+                <div key={chat.id} className="group relative">
+                  <button
+                    onClick={() =>
+                      handleChatClick(parseInt(currentConnectionId), chat.id)
+                    }
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      currentChatId === chat.id
+                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <MessageSquare className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                          {chat.title}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {chat.messages.length} messages
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))}
             </div>
           </div>

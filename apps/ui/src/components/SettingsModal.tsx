@@ -7,6 +7,7 @@ import {
   AlertCircle,
   CheckCircle,
   Loader,
+  RefreshCw,
 } from "lucide-react";
 import {
   ModelService,
@@ -190,6 +191,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
       // Show confirmation
       alert("Local storage cleared successfully. The page will reload.");
+      window.location.reload();
+    }
+  };
+
+  const handleResetToMockData = () => {
+    if (
+      confirm(
+        "Are you sure you want to reset to mock data? This will clear all your chats and data. This cannot be undone."
+      )
+    ) {
+      // Clear all MCPConnect-related localStorage items
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith("mcpconnect")) {
+          keysToRemove.push(key);
+        }
+      }
+
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      // Show confirmation and reload
+      alert("Data cleared and reset to mock data. The page will reload.");
       window.location.reload();
     }
   };
@@ -440,17 +464,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            <button
-              onClick={handleClearStorage}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              Clear All Data
-            </button>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              This will clear all MCPConnect data including connections,
-              conversations, and settings.
-            </p>
+            <div className="space-y-3">
+              <button
+                onClick={handleClearStorage}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear All Data
+              </button>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                This will clear all MCPConnect data including connections,
+                conversations, and settings.
+              </p>
+            </div>
+
+            {/* Development Options */}
+            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                Development Options
+              </h4>
+              <div className="space-y-3">
+                <button
+                  onClick={handleResetToMockData}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Reset to Mock Data
+                </button>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  This will clear all your data and reload the original mock
+                  data for testing. Useful when you want to start fresh with the
+                  demo content.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 

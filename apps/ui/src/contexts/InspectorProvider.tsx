@@ -1,4 +1,4 @@
-// apps/ui/src/contexts/InspectorProvider.tsx - Separated context from UI rendering
+// apps/ui/src/contexts/InspectorProvider.tsx - Updated for chat ID support
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { NetworkInspector } from "@mcpconnect/components";
 import { useStorage } from "./StorageContext";
@@ -38,7 +38,7 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
 
   // Extract parameters with proper defaults
   let connectionId: string = params.id || "";
-  let chatId: string = params.chatId || "0";
+  let chatId: string = params.chatId || "";
   let toolId: string = params.toolId || "";
 
   // If params are empty, try to extract from pathname
@@ -84,11 +84,10 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
       setSelectedToolCall(toolCallId);
       setExpandedToolCall(toolCallId);
 
-      // Update URL to include tool call
-      if (connectionId) {
-        const currentChatId = chatId || "0";
+      // Update URL to include tool call - now using chat ID instead of index
+      if (connectionId && chatId) {
         navigate(
-          `/connections/${connectionId}/chat/${currentChatId}/tools/${toolCallId}`
+          `/connections/${connectionId}/chat/${chatId}/tools/${toolCallId}`
         );
       }
     } else {
@@ -96,10 +95,9 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
       if (expandedToolCall === toolCallId) {
         setExpandedToolCall(null);
 
-        // Remove tool call from URL
-        if (connectionId) {
-          const currentChatId = chatId || "0";
-          navigate(`/connections/${connectionId}/chat/${currentChatId}`);
+        // Remove tool call from URL - now using chat ID instead of index
+        if (connectionId && chatId) {
+          navigate(`/connections/${connectionId}/chat/${chatId}`);
         }
       }
     }
@@ -129,7 +127,7 @@ export function InspectorUI() {
 
   // Extract parameters with proper defaults
   let connectionId: string = params.id || "";
-  let chatId: string = params.chatId || "0";
+  let chatId: string = params.chatId || "";
 
   // If params are empty, try to extract from pathname
   if (!connectionId && location.pathname.includes("/connections/")) {
@@ -189,14 +187,12 @@ export function InspectorUI() {
   console.log("currentConversations length:", currentConversations.length);
   console.log("connectionExecutions length:", connectionExecutions.length);
 
-  // Parse chat index
-  const chatIndex = parseInt(chatId);
-  const currentChat =
-    !isNaN(chatIndex) && chatIndex < currentConversations.length
-      ? currentConversations[chatIndex]
-      : currentConversations[0];
+  // Find current chat by ID instead of index
+  const currentChat = chatId
+    ? currentConversations.find(conv => conv.id === chatId)
+    : currentConversations[0];
 
-  console.log("chatIndex (parsed):", chatIndex);
+  console.log("chatId (ID):", chatId);
   console.log(
     "currentChat:",
     currentChat
@@ -208,9 +204,10 @@ export function InspectorUI() {
   let executionsToShow = connectionExecutions;
 
   if (currentChat) {
+    // For chat ID based filtering, we need to get executions for the specific chat
     const chatSpecificExecutions = mockData.getExecutionsForChat(
       connectionId,
-      chatId
+      chatId // Now passing the chat ID instead of index
     );
 
     console.log("Using chat-specific filtering");

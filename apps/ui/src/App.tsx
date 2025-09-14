@@ -1,4 +1,4 @@
-// apps/ui/src/App.tsx - Complete fixed version
+// apps/ui/src/App.tsx - Updated routing for chat IDs
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { MCPLayout } from "@mcpconnect/components";
@@ -20,7 +20,8 @@ function AppContent() {
     null
   );
 
-  const { connections, tools, resources, isLoading, error } = useStorage();
+  const { connections, tools, resources, conversations, isLoading, error } =
+    useStorage();
 
   const handleToolSelect = (tool: Tool) => {
     setSelectedTool(tool);
@@ -77,6 +78,27 @@ function AppContent() {
     );
   }
 
+  // Helper component to redirect to first chat ID
+  const ConnectionChatRedirect = ({
+    connectionId,
+  }: {
+    connectionId: string;
+  }) => {
+    const connectionChats = conversations[connectionId] || [];
+    const firstChatId = connectionChats[0]?.id;
+
+    if (firstChatId) {
+      return (
+        <Navigate
+          to={`/connections/${connectionId}/chat/${firstChatId}`}
+          replace
+        />
+      );
+    } else {
+      return <Navigate to={`/connections/${connectionId}`} replace />;
+    }
+  };
+
   return (
     <InspectorProvider>
       <MCPLayout
@@ -103,18 +125,33 @@ function AppContent() {
             element={<ConnectionView connections={connections} />}
           />
 
-          {/* Connection-specific routes with proper parameter structure */}
+          {/* Connection detail redirect to first chat */}
+          <Route
+            path="/connections/:id"
+            element={
+              <ConnectionChatRedirect
+                connectionId={window.location.pathname.split("/")[2]}
+              />
+            }
+          />
 
-          {/* Basic connection chat (defaults to first chat) */}
-          <Route path="/connections/:id/chat" element={<ChatInterface />} />
+          {/* Basic connection chat redirect to first chat */}
+          <Route
+            path="/connections/:id/chat"
+            element={
+              <ConnectionChatRedirect
+                connectionId={window.location.pathname.split("/")[2]}
+              />
+            }
+          />
 
-          {/* Specific chat within a connection */}
+          {/* Specific chat within a connection - NOW USING CHAT IDs */}
           <Route
             path="/connections/:id/chat/:chatId"
             element={<ChatInterface />}
           />
 
-          {/* Tool execution within a specific chat */}
+          {/* Tool execution within a specific chat - NOW USING CHAT IDs */}
           <Route
             path="/connections/:id/chat/:chatId/tools/:toolId"
             element={<ChatInterface expandedToolCall={true} />}

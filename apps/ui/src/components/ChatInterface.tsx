@@ -1,10 +1,12 @@
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
-import { Send, ExternalLink, Plus } from "lucide-react";
-import { useState } from "react";
+import { Send, ExternalLink, Plus, Loader, X } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
+import { ModelService, LLMSettings } from "../services/modelService";
+import { nanoid } from "nanoid";
 
 interface ChatInterfaceProps {
   expandedToolCall?: boolean;
@@ -13,26 +15,41 @@ interface ChatInterfaceProps {
 export const ChatInterface = (_args: ChatInterfaceProps) => {
   const { id: connectionId, chatId } = useParams();
   const navigate = useNavigate();
-  const { connections, conversations } = useStorage();
+  const { connections, conversations, updateConversations } = useStorage();
   const { expandedToolCall: inspectorExpandedTool, syncToolCallState } =
     useInspector();
 
   // Local state for UI interactions
   const [messageInput, setMessageInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Get the current connection and conversation
+  // Load LLM settings on mount
+  useEffect(() => {
+    const settings = ModelService.loadSettings();
+    setLlmSettings(settings);
+  }, []);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [conversations]);
+
+  // Get the current connection and conversation using chat ID
   const currentConnection = connectionId
     ? connections[parseInt(connectionId)]
     : null;
   const connectionConversations = connectionId
     ? conversations[connectionId] || []
     : [];
+
+  // Find conversation by ID instead of index
   const currentConversation = chatId
-    ? connectionConversations[parseInt(chatId)]
+    ? connectionConversations.find(conv => conv.id === chatId)
     : connectionConversations[0];
 
   const currentMessages = currentConversation?.messages || [];
-  const activeChatId = chatId || "0";
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -50,20 +67,240 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     syncToolCallState(messageId, !isCurrentlyExpanded);
   };
 
-  const handleSendMessage = () => {
-    if (!messageInput.trim()) return;
-    // TODO: Implement message sending
-    console.log("Sending message:", messageInput);
-    setMessageInput("");
+  // Create a new chat conversation
+  const handleNewChat = async () => {
+    if (!connectionId) return;
+
+    try {
+      const newChatId = nanoid();
+      const newChat = {
+        id: newChatId,
+        title: `Chat ${connectionConversations.length + 1}`,
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Get current conversations and add new one
+      const updatedConnectionConversations = [
+        ...connectionConversations,
+        newChat,
+      ];
+      const updatedConversations = {
+        ...conversations,
+        [connectionId]: updatedConnectionConversations,
+      };
+
+      // Update both storage and local state
+      await updateConversations(updatedConversations);
+
+      // Navigate to the new chat using its ID
+      navigate(`/connections/${connectionId}/chat/${newChatId}`);
+
+      console.log("Created new chat:", newChat.title, "with ID:", newChatId);
+    } catch (error) {
+      console.error("Failed to create new chat:", error);
+    }
   };
 
-  const handleTabClick = (tabChatId: string) => {
-    navigate(`/connections/${connectionId}/chat/${tabChatId}`);
+  // Delete a chat conversation
+  const handleDeleteChat = async (
+    chatToDeleteId: string,
+    event?: React.MouseEvent
+  ) => {
+    if (event) {
+      event.stopPropagation(); // Prevent tab click
+    }
+
+    if (!connectionId || !chatToDeleteId) return;
+
+    // Confirm deletion
+    const chatToDelete = connectionConversations.find(
+      conv => conv.id === chatToDeleteId
+    );
+    if (!chatToDelete) return;
+
+    const confirmed = confirm(
+      `Are you sure you want to delete "${chatToDelete.title}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      // Remove the chat from conversations
+      const updatedConnectionConversations = connectionConversations.filter(
+        conv => conv.id !== chatToDeleteId
+      );
+
+      const updatedConversations = {
+        ...conversations,
+        [connectionId]: updatedConnectionConversations,
+      };
+
+      // Update both storage and local state
+      await updateConversations(updatedConversations);
+
+      // If we're currently viewing the deleted chat, navigate away
+      if (chatId === chatToDeleteId) {
+        if (updatedConnectionConversations.length > 0) {
+          // Navigate to the first remaining chat
+          navigate(
+            `/connections/${connectionId}/chat/${updatedConnectionConversations[0].id}`
+          );
+        } else {
+          // No chats left, go to connection overview
+          navigate(`/connections/${connectionId}`);
+        }
+      }
+
+      console.log("Deleted chat:", chatToDelete.title);
+    } catch (error) {
+      console.error("Failed to delete chat:", error);
+    }
   };
 
-  const handleNewChat = () => {
-    // TODO: Implement new chat creation
-    console.log("Create new chat - disabled for now");
+  // Send a message to Anthropic
+  const handleSendMessage = async () => {
+    if (
+      !messageInput.trim() ||
+      !llmSettings?.apiKey ||
+      !connectionId ||
+      !currentConversation
+    ) {
+      if (!llmSettings?.apiKey) {
+        console.warn(
+          "No API key configured. Please configure Claude settings."
+        );
+      }
+      return;
+    }
+
+    const userMessage: ChatMessageType = {
+      id: nanoid(),
+      message: messageInput.trim(),
+      isUser: true,
+      timestamp: new Date(),
+      isExecuting: false,
+    };
+
+    try {
+      setIsLoading(true);
+      setMessageInput("");
+
+      // Add user message immediately
+      const updatedMessages = [...currentMessages, userMessage];
+      await updateConversationMessages(updatedMessages);
+
+      // Create assistant thinking message
+      const thinkingMessage: ChatMessageType = {
+        id: nanoid(),
+        message: "",
+        isUser: false,
+        timestamp: new Date(),
+        isExecuting: true,
+      };
+
+      const messagesWithThinking = [...updatedMessages, thinkingMessage];
+      await updateConversationMessages(messagesWithThinking);
+
+      // Call Anthropic API
+      const response = await callAnthropicAPI(
+        updatedMessages.filter(m => m.message)
+      );
+
+      // Replace thinking message with response
+      const assistantMessage: ChatMessageType = {
+        id: thinkingMessage.id,
+        message: response,
+        isUser: false,
+        timestamp: new Date(),
+        isExecuting: false,
+      };
+
+      const finalMessages = [...updatedMessages, assistantMessage];
+      await updateConversationMessages(finalMessages);
+    } catch (error) {
+      console.error("Failed to send message:", error);
+
+      // Replace thinking message with error
+      const errorMessage: ChatMessageType = {
+        id: nanoid(),
+        message:
+          "Sorry, I encountered an error. Please check your API settings and try again.",
+        isUser: false,
+        timestamp: new Date(),
+        isExecuting: false,
+      };
+
+      const errorMessages = [...currentMessages, userMessage, errorMessage];
+      await updateConversationMessages(errorMessages);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Update conversation messages in both storage and state
+  const updateConversationMessages = async (messages: ChatMessageType[]) => {
+    if (!connectionId || !currentConversation) return;
+
+    const updatedConversation = {
+      ...currentConversation,
+      messages,
+      updatedAt: new Date(),
+    };
+
+    // Find the conversation by ID and update it
+    const updatedConnectionConversations = connectionConversations.map(conv =>
+      conv.id === currentConversation.id ? updatedConversation : conv
+    );
+
+    const allConversations = {
+      ...conversations,
+      [connectionId]: updatedConnectionConversations,
+    };
+
+    // Use the updateConversations function from StorageContext
+    await updateConversations(allConversations);
+  };
+
+  // Call Anthropic API
+  const callAnthropicAPI = async (
+    messages: ChatMessageType[]
+  ): Promise<string> => {
+    if (!llmSettings) throw new Error("No LLM settings configured");
+
+    const anthropicMessages = messages.map(msg => ({
+      role: msg.isUser ? "user" : ("assistant" as const),
+      content: msg.message || "",
+    }));
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+        "x-api-key": llmSettings.apiKey,
+      },
+      body: JSON.stringify({
+        model: llmSettings.model,
+        max_tokens: llmSettings.maxTokens,
+        temperature: llmSettings.temperature,
+        messages: anthropicMessages,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `API request failed: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const data = await response.json();
+    return data.content?.[0]?.text || "No response received";
+  };
+
+  const handleTabClick = (selectedChatId: string) => {
+    navigate(`/connections/${connectionId}/chat/${selectedChatId}`);
   };
 
   const CleanChatMessage = ({
@@ -93,7 +330,13 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
             }`}
           >
-            {message.isUser ? "U" : "A"}
+            {message.isUser ? (
+              "U"
+            ) : message.isExecuting ? (
+              <Loader className="w-4 h-4 animate-spin" />
+            ) : (
+              "A"
+            )}
           </div>
 
           {/* Message Content */}
@@ -101,7 +344,12 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             <div
               className={`text-sm text-gray-900 dark:text-gray-100 ${message.isUser ? "text-right" : ""}`}
             >
-              {hasToolExecution ? (
+              {message.isExecuting && !message.message ? (
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  <span>Claude is thinking...</span>
+                </div>
+              ) : hasToolExecution ? (
                 <div className="space-y-2">
                   {message.isExecuting ||
                   message.toolExecution?.status === "pending" ? (
@@ -130,7 +378,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                   )}
                 </div>
               ) : (
-                <div className="leading-relaxed">{message.message}</div>
+                <div className="leading-relaxed whitespace-pre-wrap">
+                  {message.message}
+                </div>
               )}
             </div>
 
@@ -252,6 +502,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     );
   }
 
+  // Show API key warning if not configured
+  const showApiWarning = !llmSettings?.apiKey;
+
   return (
     <div className="flex-1 flex flex-col bg-white dark:bg-gray-950 transition-colors">
       {/* Header with Connection Info */}
@@ -280,46 +533,84 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                   </div>
                 </>
               )}
+              {showApiWarning && (
+                <>
+                  <span>•</span>
+                  <span className="text-amber-600 dark:text-amber-400">
+                    Claude API not configured
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Chat Tabs */}
+      {/* Chat Tabs with Delete Buttons */}
       {connectionConversations.length > 0 && (
         <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center px-6">
             <div className="flex overflow-x-auto scrollbar-hide">
-              {connectionConversations.map((conv, index) => {
-                const isActive = activeChatId === index.toString();
+              {connectionConversations.map(conv => {
+                const isActive = chatId === conv.id;
                 return (
-                  <button
-                    key={conv.id}
-                    onClick={() => handleTabClick(index.toString())}
-                    className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                      isActive
-                        ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-950"
-                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                    }`}
-                  >
-                    <span className="truncate max-w-32">{conv.title}</span>
-                    <span className="ml-2 text-xs opacity-60">
-                      ({conv.messages.length})
-                    </span>
-                  </button>
+                  <div key={conv.id} className="relative flex-shrink-0 group">
+                    <button
+                      onClick={() => handleTabClick(conv.id)}
+                      className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                        isActive
+                          ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-950"
+                          : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                      }`}
+                    >
+                      <span className="truncate max-w-32">{conv.title}</span>
+                      <span className="ml-2 text-xs opacity-60">
+                        ({conv.messages.length})
+                      </span>
+                    </button>
+
+                    {/* Delete Button - Only show on hover and when there's more than 1 chat */}
+                    {connectionConversations.length > 1 && (
+                      <button
+                        onClick={e => handleDeleteChat(conv.id, e)}
+                        className={`absolute top-1 right-1 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                          isActive
+                            ? "text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            : "text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        }`}
+                        title={`Delete "${conv.title}"`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
 
-            {/* New Chat Button (Disabled) */}
+            {/* New Chat Button */}
             <button
               onClick={handleNewChat}
-              disabled={true}
-              className="flex-shrink-0 ml-4 p-2 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Create new chat (coming soon)"
+              className="flex-shrink-0 ml-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+              title="Create new chat"
             >
               <Plus className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* API Key Warning */}
+      {showApiWarning && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3">
+          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+            <div className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center">
+              <span className="text-xs text-amber-900">!</span>
+            </div>
+            <span>
+              Configure your Anthropic API key in Settings to start chatting
+              with Claude
+            </span>
           </div>
         </div>
       )}
@@ -333,12 +624,14 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 <ExternalLink className="w-8 h-8" />
               </div>
               <p className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
-                No messages yet
+                {showApiWarning
+                  ? "Configure Claude API"
+                  : "Start a conversation"}
               </p>
               <p className="text-sm">
-                {currentConnection
-                  ? `Start a conversation with ${currentConnection.name}`
-                  : "Select a connection to start chatting"}
+                {showApiWarning
+                  ? "Add your Anthropic API key in Settings to begin chatting"
+                  : `Start chatting with Claude about ${currentConnection?.name}`}
               </p>
             </div>
           ) : (
@@ -351,6 +644,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                     index={index}
                   />
                 ))}
+              <div ref={messagesEndRef} />
             </div>
           )}
         </div>
@@ -363,26 +657,36 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             <input
               type="text"
               placeholder={
-                currentConnection
-                  ? `Message ${currentConnection.name}...`
-                  : "Type a message..."
+                showApiWarning
+                  ? "Configure API key to start chatting..."
+                  : currentConnection
+                    ? `Message Claude about ${currentConnection.name}...`
+                    : "Type a message..."
               }
               value={messageInput}
               onChange={e => setMessageInput(e.target.value)}
-              onKeyPress={e => e.key === "Enter" && handleSendMessage()}
+              onKeyPress={e =>
+                e.key === "Enter" && !e.shiftKey && handleSendMessage()
+              }
+              disabled={showApiWarning || isLoading}
               className="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-lg 
                        bg-white dark:bg-gray-900
                        text-gray-900 dark:text-gray-100
                        placeholder:text-gray-500 dark:placeholder:text-gray-400
                        focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 focus:border-transparent
+                       disabled:opacity-50 disabled:cursor-not-allowed
                        transition-colors"
             />
             <Button
               onClick={handleSendMessage}
-              disabled={!messageInput.trim()}
+              disabled={!messageInput.trim() || showApiWarning || isLoading}
               className="px-4 py-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <Send className="w-4 h-4" />
+              {isLoading ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
             </Button>
           </div>
           {currentConnection && !currentConnection.isConnected && (

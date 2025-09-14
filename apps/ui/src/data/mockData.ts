@@ -542,25 +542,41 @@ export function getExecutionsForConnection(
 // Helper function to get executions for a specific chat
 export function getExecutionsForChat(
   connectionId: string,
-  chatId: string
+  chatId: string // Now expects chat ID instead of chat index
 ): ToolExecution[] {
   const connectionExecutions = getExecutionsForConnection(connectionId);
   const conversations = mockConversations[connectionId] || [];
-  const chatIndex = parseInt(chatId);
 
-  if (isNaN(chatIndex) || chatIndex >= conversations.length) {
+  // Find conversation by ID instead of index
+  const currentChat = conversations.find(conv => conv.id === chatId);
+
+  if (!currentChat) {
+    console.log(
+      `Chat with ID ${chatId} not found in connection ${connectionId}`
+    );
     return [];
   }
 
-  const currentChat = conversations[chatIndex];
+  console.log(
+    `Found chat: ${currentChat.title} with ${currentChat.messages.length} messages`
+  );
+
   const toolMessageIds = currentChat.messages
     .filter(msg => Boolean(msg.executingTool) || Boolean(msg.toolExecution))
     .map(msg => msg.id)
     .filter(Boolean) as string[];
 
-  return connectionExecutions.filter(execution =>
+  console.log(`Tool message IDs for chat ${chatId}:`, toolMessageIds);
+
+  const matchingExecutions = connectionExecutions.filter(execution =>
     toolMessageIds.includes(execution.id)
   );
+
+  console.log(
+    `Found ${matchingExecutions.length} matching executions for chat ${chatId}`
+  );
+
+  return matchingExecutions;
 }
 
 // Enhanced validation function with ID consistency checks
