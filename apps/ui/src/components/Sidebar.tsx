@@ -289,7 +289,7 @@ export const Sidebar = ({
 
       {/* RconnectLogo at bottom */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-        <RconnectLogo className="opacity-90 hover:opacity-100 transition-opacity" />
+        <RconnectLogo className="transition-opacity" />
       </div>
     </div>
   );

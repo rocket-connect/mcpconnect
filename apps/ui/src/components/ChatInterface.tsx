@@ -1,7 +1,7 @@
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
-import { Send, ExternalLink } from "lucide-react";
+import { Send, ExternalLink, Plus } from "lucide-react";
 import { useState } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
@@ -32,6 +32,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     : connectionConversations[0];
 
   const currentMessages = currentConversation?.messages || [];
+  const activeChatId = chatId || "0";
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -54,6 +55,15 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     // TODO: Implement message sending
     console.log("Sending message:", messageInput);
     setMessageInput("");
+  };
+
+  const handleTabClick = (tabChatId: string) => {
+    navigate(`/connections/${connectionId}/chat/${tabChatId}`);
+  };
+
+  const handleNewChat = () => {
+    // TODO: Implement new chat creation
+    console.log("Create new chat - disabled for now");
   };
 
   const CleanChatMessage = ({
@@ -244,16 +254,14 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
   return (
     <div className="flex-1 flex flex-col bg-white dark:bg-gray-950 transition-colors">
-      {/* Header */}
+      {/* Header with Connection Info */}
       <div className="border-b border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {currentConversation?.title || "Chat"}
+              {currentConnection?.name}
             </h2>
             <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
-              <span>{currentConnection?.name}</span>
-              <span>•</span>
               <span>{currentMessages.length} messages</span>
               {currentConnection && (
                 <>
@@ -274,25 +282,47 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               )}
             </div>
           </div>
-
-          {/* Chat selector if multiple chats exist */}
-          {connectionConversations.length > 1 && (
-            <select
-              value={chatId || "0"}
-              onChange={e =>
-                navigate(`/connections/${connectionId}/chat/${e.target.value}`)
-              }
-              className="text-sm px-3 py-1 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-            >
-              {connectionConversations.map((conv, index) => (
-                <option key={conv.id} value={index.toString()}>
-                  {conv.title} ({conv.messages.length})
-                </option>
-              ))}
-            </select>
-          )}
         </div>
       </div>
+
+      {/* Chat Tabs */}
+      {connectionConversations.length > 0 && (
+        <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+          <div className="flex items-center px-6">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              {connectionConversations.map((conv, index) => {
+                const isActive = activeChatId === index.toString();
+                return (
+                  <button
+                    key={conv.id}
+                    onClick={() => handleTabClick(index.toString())}
+                    className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      isActive
+                        ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-950"
+                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                    }`}
+                  >
+                    <span className="truncate max-w-32">{conv.title}</span>
+                    <span className="ml-2 text-xs opacity-60">
+                      ({conv.messages.length})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* New Chat Button (Disabled) */}
+            <button
+              onClick={handleNewChat}
+              disabled={true}
+              className="flex-shrink-0 ml-4 p-2 text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Create new chat (coming soon)"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">

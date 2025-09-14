@@ -21,7 +21,7 @@ import { CoreMessage, CoreTool } from "ai";
  * AI SDK-specific configuration schema
  */
 export const AISDKConfigSchema = LLMConfigSchema.extend({
-  provider: z.enum(["openai", "anthropic", "google", "custom"]),
+  provider: z.enum(["anthropic"]),
   modelProvider: z.unknown().optional(), // The actual AI SDK provider instance
   customProvider: z
     .object({
@@ -66,18 +66,6 @@ export class AISDKAdapter extends LLMAdapter {
 
     // Provider-specific capabilities
     switch (this.config.provider) {
-      case "openai":
-        return {
-          ...baseCapabilities,
-          maxContextLength: 128000, // GPT-4 context
-          multiModal: true,
-          supportedModalities: ["text", "image"],
-          costPerToken: {
-            input: 0.00003,
-            output: 0.00006,
-          },
-        };
-
       case "anthropic":
         return {
           ...baseCapabilities,
@@ -87,18 +75,6 @@ export class AISDKAdapter extends LLMAdapter {
           costPerToken: {
             input: 0.000008,
             output: 0.000024,
-          },
-        };
-
-      case "google":
-        return {
-          ...baseCapabilities,
-          maxContextLength: 32768, // Gemini context
-          multiModal: true,
-          supportedModalities: ["text", "image", "audio"],
-          costPerToken: {
-            input: 0.000125,
-            output: 0.000375,
           },
         };
 

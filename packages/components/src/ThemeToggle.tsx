@@ -1,5 +1,5 @@
 import React from "react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Monitor } from "lucide-react";
 import { Button } from "./Button";
 import { cn } from "./lib/utils";
 import { Theme } from "@mcpconnect/schemas";
@@ -16,18 +16,33 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
   className,
 }) => {
   const handleToggle = () => {
-    // If system theme, default to light->dark toggle
-    if (theme === "system") {
+    // Cycle through themes: light -> dark -> system -> light
+    if (theme === "light") {
       onToggle?.("dark");
-      return;
+    } else if (theme === "dark") {
+      onToggle?.("system");
+    } else {
+      onToggle?.("light");
     }
-
-    const newTheme: Theme = theme === "light" ? "dark" : "light";
-    onToggle?.(newTheme);
   };
 
   const isDark = theme === "dark";
+  const isLight = theme === "light";
   const isSystem = theme === "system";
+
+  // Get the appropriate label for accessibility
+  const getAriaLabel = () => {
+    if (isLight) return "Switch to dark theme";
+    if (isDark) return "Switch to system theme";
+    return "Switch to light theme";
+  };
+
+  // Get the appropriate title for tooltip
+  const getTitle = () => {
+    if (isLight) return "Light theme (click for dark)";
+    if (isDark) return "Dark theme (click for system)";
+    return "System theme (click for light)";
+  };
 
   return (
     <Button
@@ -35,37 +50,50 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
       size="sm"
       onClick={handleToggle}
       className={cn(
-        "h-8 w-8 p-0 rounded-full relative",
+        "h-9 w-9 p-0 rounded-lg relative",
         "transition-all duration-200",
         "hover:bg-gray-100 dark:hover:bg-gray-700",
-        "border border-gray-200 dark:border-gray-600",
+        "border-2 border-gray-300 dark:border-gray-600",
         "bg-white dark:bg-gray-800",
+        "shadow-sm hover:shadow-md",
+        "focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
         className
       )}
-      aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
-      title={isSystem ? "System theme (click to toggle)" : `${theme} theme`}
+      aria-label={getAriaLabel()}
+      title={getTitle()}
     >
+      {/* Light theme icon */}
       <Sun
         className={cn(
-          "h-4 w-4 absolute transition-all duration-300",
-          "text-yellow-500",
-          isDark || isSystem
-            ? "rotate-90 scale-0 opacity-0"
-            : "rotate-0 scale-100 opacity-100"
+          "h-4 w-4 absolute inset-0 m-auto transition-all duration-300",
+          "text-yellow-600 dark:text-yellow-500",
+          isLight
+            ? "rotate-0 scale-100 opacity-100"
+            : "rotate-90 scale-0 opacity-0"
         )}
       />
+
+      {/* Dark theme icon */}
       <Moon
         className={cn(
-          "h-4 w-4 absolute transition-all duration-300",
-          "text-gray-700 dark:text-gray-300",
+          "h-4 w-4 absolute inset-0 m-auto transition-all duration-300",
+          "text-blue-600 dark:text-blue-400",
           isDark
             ? "rotate-0 scale-100 opacity-100"
             : "-rotate-90 scale-0 opacity-0"
         )}
       />
-      {isSystem && (
-        <div className="absolute inset-0 border-2 border-dashed border-gray-400 dark:border-gray-500 rounded-full opacity-50" />
-      )}
+
+      {/* System theme icon */}
+      <Monitor
+        className={cn(
+          "h-4 w-4 absolute inset-0 m-auto transition-all duration-300",
+          "text-gray-600 dark:text-gray-400",
+          isSystem
+            ? "rotate-0 scale-100 opacity-100"
+            : "rotate-90 scale-0 opacity-0"
+        )}
+      />
     </Button>
   );
 };

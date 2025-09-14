@@ -2,9 +2,12 @@ import { ConnectionStatus, ThemeToggle } from "@mcpconnect/components";
 import { ConnectionStatus as ConnectionStatusType } from "@mcpconnect/schemas";
 import { useTheme } from "../contexts/ThemeContext";
 import { Server, Settings } from "lucide-react";
+import { useState } from "react";
+import { SettingsModal } from "./SettingsModal";
 
 export const Header = () => {
   const { theme, toggleTheme } = useTheme();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Mock connection status using proper schema type
   const connectionStatus: ConnectionStatusType = {
@@ -15,27 +18,38 @@ export const Header = () => {
   };
 
   return (
-    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 transition-colors">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            {/* MCPConnect Logo/Brand */}
-            <div className="w-8 h-8 bg-gradient-to-br from-[#24BEE1] to-[#8F1AFE] rounded-md flex items-center justify-center">
-              <Server className="w-5 h-5 text-white" />
+    <>
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 transition-colors">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              {/* MCPConnect Logo/Brand */}
+              <div className="w-8 h-8 bg-gradient-to-br from-[#24BEE1] to-[#8F1AFE] rounded-md flex items-center justify-center">
+                <Server className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+                MCPConnect
+              </h1>
             </div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              MCPConnect
-            </h1>
+            <ConnectionStatus status={connectionStatus} />
           </div>
-          <ConnectionStatus status={connectionStatus} />
+          <div className="flex items-center gap-2">
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors">
-            <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-          </button>
-        </div>
-      </div>
-    </header>
+      </header>
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+    </>
   );
 };

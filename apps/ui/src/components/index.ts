@@ -6,3 +6,4 @@ export { ModeToggle } from "./ModeToggle";
 export { RconnectLogo } from "./RconnectLogo";
 export { ConnectionView } from "./ConnectionView";
 export { ResourceView } from "./ResourceView";
+export { SettingsModal } from "./SettingsModal";
