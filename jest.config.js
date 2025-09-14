@@ -1,6 +1,13 @@
 module.exports = {
   projects: [
     {
+      displayName: "schemas",
+      testMatch: ["<rootDir>/packages/schemas/**/*.test.ts"],
+      preset: "ts-jest",
+      testEnvironment: "node",
+      rootDir: ".",
+    },
+    {
       displayName: "cli",
       testMatch: ["<rootDir>/packages/cli/**/*.test.ts"],
       preset: "ts-jest",

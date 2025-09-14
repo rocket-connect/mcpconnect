@@ -29,12 +29,14 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "pnpm build:components && pnpm build:ui && pnpm build:server && pnpm build:cli",
+    "build": "pnpm build:schemas && pnpm build:components && pnpm build:ui && pnpm build:server && pnpm build:cli",
+    "build:schemas": "pnpm --filter @mcpconnect/schemas build",
     "build:cli": "pnpm --filter @mcpconnect/cli build",
     "build:components": "pnpm --filter @mcpconnect/components build",
     "build:ui": "pnpm --filter @mcpconnect/ui build",
     "build:server": "pnpm --filter @mcpconnect/server build",
     "dev": "pnpm -r --parallel dev",
+    "dev:schemas": "pnpm --filter @mcpconnect/schemas dev",
     "dev:ui": "pnpm --filter @mcpconnect/ui dev",
     "dev:server": "pnpm --filter @mcpconnect/server dev",
     "dev:cli": "pnpm --filter @mcpconnect/cli dev",
@@ -53,7 +55,7 @@
     "version:bump": "node scripts/version-bump.js",
     "prepare-publish": "node scripts/version-bump.js --prepare-publish",
     "restore-workspace-deps": "node scripts/restore-workspace-deps.js",
-    "publish:packages": "pnpm -r --filter '@mcpconnect/cli' --filter '@mcpconnect/components' --filter '@mcpconnect/server' --filter '@mcpconnect/ui' publish --access public --no-git-checks",
+    "publish:packages": "pnpm -r --filter '@mcpconnect/schemas' --filter '@mcpconnect/cli' --filter '@mcpconnect/components' --filter '@mcpconnect/server' --filter '@mcpconnect/ui' publish --access public --no-git-checks",
     "test": "echo 'Tests will be added in future versions'",
     "validate": "pnpm type-check && pnpm lint && pnpm build"
   },

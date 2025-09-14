@@ -36,6 +36,7 @@ function incrementVersion(version, type) {
 function replaceWorkspaceDeps(packagePath, version) {
   const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   const workspacePackages = [
+    "@mcpconnect/schemas",
     "@mcpconnect/components",
     "@mcpconnect/server",
     "@mcpconnect/ui",
@@ -70,6 +71,7 @@ function replaceWorkspaceDeps(packagePath, version) {
 function restoreWorkspaceDeps(packagePath) {
   const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   const workspacePackages = [
+    "@mcpconnect/schemas",
     "@mcpconnect/components",
     "@mcpconnect/server",
     "@mcpconnect/ui",
@@ -135,8 +137,9 @@ function main() {
   // Update root package.json
   updateVersion(rootPackagePath, newVersion);
 
-  // All publishable package paths
+  // All publishable package paths - INCLUDING schemas
   const packagePaths = [
+    "packages/schemas/package.json",
     "packages/cli/package.json",
     "packages/components/package.json",
     "apps/server/package.json",

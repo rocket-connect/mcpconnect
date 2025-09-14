@@ -6,6 +6,7 @@ const path = require("path");
 function restoreWorkspaceDeps(packagePath) {
   const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   const workspacePackages = [
+    "@mcpconnect/schemas",
     "@mcpconnect/components",
     "@mcpconnect/server",
     "@mcpconnect/ui",
@@ -42,6 +43,7 @@ function main() {
 
   // All publishable package paths
   const packagePaths = [
+    "packages/schemas/package.json",
     "packages/cli/package.json",
     "packages/components/package.json",
     "apps/server/package.json",
