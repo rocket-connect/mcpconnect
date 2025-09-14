@@ -1,0 +1,51 @@
+{
+  "name": "@mcpconnect/server",
+  "version": "0.0.0-alpha.1",
+  "private": true,
+  "description": "MCPConnect server application with integrated UI",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "pnpm build:ui && tsc",
+    "build:ui": "pnpm --filter @mcpconnect/ui build",
+    "dev": "concurrently \"pnpm dev:ui\" \"pnpm dev:server\"",
+    "dev:ui": "pnpm --filter @mcpconnect/ui dev",
+    "dev:server": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist && pnpm --filter @mcpconnect/ui clean",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "type-check": "tsc --noEmit",
+    "postbuild": "pnpm copy:ui",
+    "copy:ui": "mkdir -p dist && cp -r ../ui/dist/* dist/ || echo 'UI not built yet'"
+  },
+  "dependencies": {
+    "@mcpconnect/ui": "workspace:*",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "ws": "^8.14.2",
+    "zod": "^3.22.4",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^20.10.6",
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rocket-connect/mcpconnect.git",
+    "directory": "apps/server"
+  },
+  "license": "MIT"
+}

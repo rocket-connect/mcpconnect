@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+.next
+coverage
+*.log
+.env*
+.DS_Store
+.turbo
+pnpm-lock.yaml
+*.min.js
+*.min.css

@@ -1,0 +1,54 @@
+{
+  "name": "mcpconnect",
+  "version": "0.0.0-alpha.1",
+  "private": true,
+  "description": "Build and debug Model Context Protocol integrations with a browser-based interface",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rocket-connect/mcpconnect.git"
+  },
+  "license": "MIT",
+  "author": "rconnect.tech",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "build:cli": "pnpm --filter @mcpconnect/cli build",
+    "build:components": "pnpm --filter @mcpconnect/components build",
+    "build:ui": "pnpm --filter @mcpconnect/ui build",
+    "build:server": "pnpm --filter @mcpconnect/server build",
+    "dev": "pnpm -r --parallel dev",
+    "dev:ui": "pnpm --filter @mcpconnect/ui dev",
+    "dev:server": "pnpm --filter @mcpconnect/server dev",
+    "preview:ui": "pnpm --filter @mcpconnect/ui preview",
+    "lint": "pnpm -r lint",
+    "lint:fix": "pnpm -r lint:fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "pnpm -r type-check",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "@types/node": "^20.10.6",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "prettier": "^3.1.1",
+    "turbo": "^1.11.2",
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@8.15.1",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
