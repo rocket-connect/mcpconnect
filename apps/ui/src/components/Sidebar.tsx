@@ -1,11 +1,12 @@
 import { ConnectionItem, ToolItem, ResourceItem } from "@mcpconnect/components";
+import { Connection, Tool, Resource } from "@mcpconnect/schemas";
 import { RconnectLogo } from "./RconnectLogo";
 
 interface SidebarProps {
-  connections: any[];
-  tools: any[];
-  resources: any[];
-  onToolSelect: (tool: any) => void;
+  connections: Connection[];
+  tools: Tool[];
+  resources: Resource[];
+  onToolSelect: (tool: Tool) => void;
 }
 
 export const Sidebar = ({
@@ -28,7 +29,7 @@ export const Sidebar = ({
         </div>
         <div className="space-y-2">
           {connections.map((conn, idx) => (
-            <ConnectionItem key={idx} {...conn} />
+            <ConnectionItem key={`${conn.name}-${idx}`} {...conn} />
           ))}
         </div>
       </div>
@@ -40,7 +41,11 @@ export const Sidebar = ({
         </h2>
         <div className="space-y-2">
           {tools.map((tool, idx) => (
-            <ToolItem key={idx} {...tool} onClick={() => onToolSelect(tool)} />
+            <ToolItem 
+              key={`${tool.name}-${idx}`} 
+              {...tool} 
+              onClick={() => onToolSelect(tool)} 
+            />
           ))}
         </div>
       </div>
@@ -52,7 +57,7 @@ export const Sidebar = ({
         </h2>
         <div className="space-y-2">
           {resources.map((resource, idx) => (
-            <ResourceItem key={idx} {...resource} />
+            <ResourceItem key={`${resource.name}-${idx}`} {...resource} />
           ))}
         </div>
       </div>

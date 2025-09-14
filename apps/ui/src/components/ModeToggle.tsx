@@ -1,8 +1,9 @@
 import { MessageSquare, Server } from "lucide-react";
+import { UILayoutMode } from "@mcpconnect/schemas";
 
 interface ModeToggleProps {
-  activeMode: string;
-  onModeChange: (mode: string) => void;
+  activeMode: UILayoutMode;
+  onModeChange: (mode: UILayoutMode) => void;
 }
 
 export const ModeToggle = ({ activeMode, onModeChange }: ModeToggleProps) => (

@@ -1,8 +1,9 @@
 import { ChatMessage, Button } from "@mcpconnect/components";
+import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { Play } from "lucide-react";
 
 interface ChatInterfaceProps {
-  chatMessages: any[];
+  chatMessages: ChatMessageType[];
 }
 
 export const ChatInterface = ({ chatMessages }: ChatInterfaceProps) => (
@@ -19,8 +20,8 @@ export const ChatInterface = ({ chatMessages }: ChatInterfaceProps) => (
         </div>
 
         <div className="space-y-4">
-          {chatMessages.map((msg, idx) => (
-            <ChatMessage key={idx} {...msg} />
+          {chatMessages.map((msg) => (
+            <ChatMessage key={msg.id || `msg-${Math.random()}`} {...msg} />
           ))}
         </div>
       </div>
