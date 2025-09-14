@@ -1,4 +1,3 @@
-// apps/ui/src/data/mockData.ts - Updated with proper ID generation
 import {
   Connection,
   Tool,
@@ -60,21 +59,25 @@ const MESSAGE_IDS = {
  * All IDs are generated using nanoid for consistency and safety
  */
 
-// Single connection for testing
+// Single connection for testing - NOW WITH NANOID ID
 export const mockConnections: Connection[] = [
   {
-    name: "E-commerce Database",
+    id: CONNECTION_IDS.ecommerce, // Using nanoid instead of index-based approach
+    name: "Demo E-commerce Database",
     url: "ws://localhost:8080",
     isActive: true,
     isConnected: true,
     retryAttempts: 3,
     authType: "none",
+    timeout: 30000,
+    headers: {},
+    credentials: {},
   },
 ];
 
-// Tools for connection "0"
+// Tools for connection by ID (not index)
 export const mockTools: Record<string, Tool[]> = {
-  "0": [
+  [CONNECTION_IDS.ecommerce]: [
     {
       name: "query_orders",
       description: "Execute SQL queries on order database",
@@ -96,6 +99,14 @@ export const mockTools: Record<string, Tool[]> = {
       ],
       category: "database",
       tags: ["sql", "orders", "ecommerce"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+          limit: { type: "number" },
+        },
+        required: ["query"],
+      },
     },
     {
       name: "update_inventory",
@@ -117,6 +128,14 @@ export const mockTools: Record<string, Tool[]> = {
       ],
       category: "inventory",
       tags: ["products", "stock", "ecommerce"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          product_id: { type: "string" },
+          quantity: { type: "number" },
+        },
+        required: ["product_id", "quantity"],
+      },
     },
     {
       name: "get_customer_info",
@@ -132,13 +151,20 @@ export const mockTools: Record<string, Tool[]> = {
       ],
       category: "customer",
       tags: ["customer", "lookup", "profile"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          customer_id: { type: "string" },
+        },
+        required: ["customer_id"],
+      },
     },
   ],
 };
 
-// Resources for connection "0"
+// Resources for connection by ID (not index)
 export const mockResources: Record<string, Resource[]> = {
-  "0": [
+  [CONNECTION_IDS.ecommerce]: [
     {
       name: "order_tables",
       description: "E-commerce database table schemas",
@@ -351,9 +377,9 @@ const createCustomerServiceMessages = (): ChatMessage[] => [
   },
 ];
 
-// Conversations with proper structure using generated IDs
+// Conversations with proper structure using generated IDs - NOW KEYED BY CONNECTION ID
 export const mockConversations: Record<string, ChatConversation[]> = {
-  "0": [
+  [CONNECTION_IDS.ecommerce]: [
     // Chat 0 - Order Analysis
     {
       id: CHAT_IDS.orderAnalysis,
@@ -383,9 +409,9 @@ export const mockConversations: Record<string, ChatConversation[]> = {
   ],
 };
 
-// Tool executions with IDs that EXACTLY match chat message IDs
+// Tool executions with IDs that EXACTLY match chat message IDs - NOW KEYED BY CONNECTION ID
 export const mockToolExecutions: Record<string, ToolExecution[]> = {
-  "0": [
+  [CONNECTION_IDS.ecommerce]: [
     // Execution 1 - matches tool execution message
     {
       id: TOOL_EXECUTION_IDS.queryOrders1,
@@ -532,17 +558,17 @@ export function getAllToolExecutions(): ToolExecution[] {
   return Object.values(mockToolExecutions).flat();
 }
 
-// Helper function to get executions for a specific connection
+// Helper function to get executions for a specific connection BY ID
 export function getExecutionsForConnection(
   connectionId: string
 ): ToolExecution[] {
   return mockToolExecutions[connectionId] || [];
 }
 
-// Helper function to get executions for a specific chat
+// Helper function to get executions for a specific chat BY CONNECTION ID AND CHAT ID
 export function getExecutionsForChat(
   connectionId: string,
-  chatId: string // Now expects chat ID instead of chat index
+  chatId: string
 ): ToolExecution[] {
   const connectionExecutions = getExecutionsForConnection(connectionId);
   const conversations = mockConversations[connectionId] || [];
@@ -581,10 +607,11 @@ export function getExecutionsForChat(
 
 // Enhanced validation function with ID consistency checks
 export function validateMockData(): boolean {
-  const connectionExecutions = mockToolExecutions["0"] || [];
-  const conversations = mockConversations["0"] || [];
+  const connectionExecutions =
+    mockToolExecutions[CONNECTION_IDS.ecommerce] || [];
+  const conversations = mockConversations[CONNECTION_IDS.ecommerce] || [];
 
-  console.log("=== MOCK DATA VALIDATION WITH ID TRACKING ===");
+  console.log("=== MOCK DATA VALIDATION WITH NANOID TRACKING ===");
 
   // Check that every tool execution has a corresponding chat message
   for (const execution of connectionExecutions) {
@@ -594,7 +621,7 @@ export function validateMockData(): boolean {
 
     if (!found) {
       console.error(
-        `❌ Tool execution ${execution.id} has no matching chat message`
+        `⌛ Tool execution ${execution.id} has no matching chat message`
       );
       return false;
     } else {
@@ -609,7 +636,7 @@ export function validateMockData(): boolean {
         const found = connectionExecutions.some(exec => exec.id === message.id);
         if (!found) {
           console.error(
-            `❌ Tool message ${message.id} has no matching execution`
+            `⌛ Tool message ${message.id} has no matching execution`
           );
           return false;
         } else {
@@ -631,18 +658,30 @@ export function validateMockData(): boolean {
     (id, index) => allIds.indexOf(id) !== index
   );
   if (duplicateIds.length > 0) {
-    console.error(`❌ Duplicate IDs found: ${duplicateIds.join(", ")}`);
+    console.error(`⌛ Duplicate IDs found: ${duplicateIds.join(", ")}`);
     return false;
   }
 
   console.log(`✅ All ${allIds.length} IDs are unique`);
-  console.log("✅ Mock data validation passed with generated IDs");
+  console.log("✅ Mock data validation passed with nanoid IDs");
   return true;
 }
 
 // Helper function to generate new IDs during development/testing
 export function generateNewId(prefix?: string): string {
   return generateId(prefix);
+}
+
+// NEW: Function to get connection by ID (instead of by index)
+export function getConnectionById(
+  connectionId: string
+): Connection | undefined {
+  return mockConnections.find(conn => conn.id === connectionId);
+}
+
+// NEW: Function to find connection index by ID (for backward compatibility)
+export function getConnectionIndexById(connectionId: string): number {
+  return mockConnections.findIndex(conn => conn.id === connectionId);
 }
 
 // Export everything as default for easy importing
@@ -658,4 +697,6 @@ export default {
   getExecutionsForChat,
   validateMockData,
   generateNewId,
+  getConnectionById,
+  getConnectionIndexById,
 };

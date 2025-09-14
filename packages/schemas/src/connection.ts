@@ -4,12 +4,13 @@ import { z } from "zod";
  * Schema for MCP server connection configuration
  */
 export const ConnectionSchema = z.object({
+  id: z.string().min(1, "Connection ID is required"), // NEW: ID field for proper identification
   name: z.string().min(1, "Connection name is required"),
   url: z.string().url("Must be a valid URL"),
   isActive: z.boolean().optional().default(false),
   isConnected: z.boolean().optional().default(false),
-  headers: z.record(z.string(), z.string()).optional(),
-  timeout: z.number().positive().optional(),
+  headers: z.record(z.string(), z.string()).optional().default({}),
+  timeout: z.number().positive().optional().default(30000),
   retryAttempts: z.number().min(0).optional().default(3),
   authType: z
     .enum(["none", "bearer", "apiKey", "basic"])
@@ -22,7 +23,8 @@ export const ConnectionSchema = z.object({
       username: z.string().optional(),
       password: z.string().optional(),
     })
-    .optional(),
+    .optional()
+    .default({}),
 });
 
 /**

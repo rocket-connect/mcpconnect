@@ -5,5 +5,6 @@ export { ToolInterface } from "./ToolInterface";
 export { ModeToggle } from "./ModeToggle";
 export { RconnectLogo } from "./RconnectLogo";
 export { ConnectionView } from "./ConnectionView";
+export { ConnectionModal } from "./ConnectionModal";
 export { ResourceView } from "./ResourceView";
 export { SettingsModal } from "./SettingsModal";
