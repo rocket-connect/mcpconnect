@@ -21,19 +21,23 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Build
         run: pnpm build
 
       - name: Prepare for publishing
-        run: pnpm prepare-publish
-
-      - name: Build all packages
-        run: pnpm build
+        run: node scripts/version-bump.js ${{ steps.get_version.outputs.VERSION }} --prepare-publish
 
       - name: Publish packages
         run: pnpm publish:packages
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Restore workspace dependencies
+        run: pnpm restore-workspace-deps
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
@@ -50,7 +54,7 @@ jobs:
 
             ## Installation
             ```bash
-            npx mcpconnect@${{ github.ref_name }}
+            npx @mcpconnect/cli@${{ steps.get_version.outputs.VERSION }}
             ```
           draft: false
           prerelease: false

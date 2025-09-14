@@ -100,15 +100,18 @@ function restoreWorkspaceDeps(packagePath) {
 function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0) {
+  // Filter out flags
+  const shouldPreparePublish = args.includes("--prepare-publish");
+  const versionArg = args.find(arg => !arg.startsWith("--"));
+
+  if (!versionArg) {
     console.error(
       "Usage: node version-bump.js <patch|minor|major|version> [--prepare-publish]"
     );
+    console.error("Example: node version-bump.js patch");
+    console.error("Example: node version-bump.js 1.2.3 --prepare-publish");
     process.exit(1);
   }
-
-  const shouldPreparePublish = args.includes("--prepare-publish");
-  const versionArg = args.find(arg => !arg.startsWith("--"));
 
   const rootPackagePath = path.join(__dirname, "..", "package.json");
   const rootPackage = JSON.parse(fs.readFileSync(rootPackagePath, "utf8"));
