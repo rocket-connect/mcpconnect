@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 import { program } from "commander";
 import { startServer } from "@mcpconnect/server";
 import chalk from "chalk";

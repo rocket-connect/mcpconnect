@@ -12,7 +12,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "mcpconnect": "dist/cli.js"
+    "mcpconnect": "dist/cli.js",
+    "@mcpconnect/cli": "dist/cli.js"
   },
   "files": [
     "dist",

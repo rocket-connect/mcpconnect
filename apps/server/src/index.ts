@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "path";
 import { fileURLToPath } from "url";
+import { existsSync } from "fs";
 
 const app = express();
 
@@ -15,6 +16,45 @@ export interface ServerOptions {
   host?: string;
   cors?: boolean;
   helmet?: boolean;
+}
+
+function findUiBuildPath(): string {
+  // Possible UI build paths in order of preference
+  const possiblePaths = [
+    // When running from built CLI (most common case)
+    path.join(__dirname, "..", "node_modules", "@mcpconnect", "ui", "dist"),
+    // When running locally in monorepo
+    path.join(__dirname, "..", "..", "..", "apps", "ui", "dist"),
+    // When UI is a peer dependency
+    path.join(__dirname, "..", "..", "@mcpconnect", "ui", "dist"),
+    // Alternative monorepo structure
+    path.join(__dirname, "..", "..", "ui", "dist"),
+    // Try relative to current working directory
+    path.join(process.cwd(), "node_modules", "@mcpconnect", "ui", "dist"),
+    // Fallback: try to find UI package anywhere up the tree
+    path.join(
+      __dirname,
+      "..",
+      "..",
+      "..",
+      "node_modules",
+      "@mcpconnect",
+      "ui",
+      "dist"
+    ),
+  ];
+
+  for (const uiPath of possiblePaths) {
+    const indexPath = path.join(uiPath, "index.html");
+    if (existsSync(indexPath)) {
+      console.log(`Found UI build at: ${uiPath}`);
+      return uiPath;
+    }
+  }
+
+  throw new Error(
+    "UI build not found. Please run 'pnpm build' in the monorepo or install the @mcpconnect/ui package."
+  );
 }
 
 // @ts-ignore
@@ -61,15 +101,9 @@ export function createServer(options: ServerOptions = {}): {
     res.json({ status: "ok", message: "MCPConnect API running" });
   });
 
-  // Serve static files from UI build (via node_modules)
-  const uiBuildPath = path.join(
-    __dirname,
-    "..",
-    "node_modules",
-    "@mcpconnect",
-    "ui",
-    "dist"
-  );
+  // Serve static UI files or throw error if not found
+  const uiBuildPath = findUiBuildPath();
+
   app.use(express.static(uiBuildPath));
 
   // Catch-all handler for SPA routing
