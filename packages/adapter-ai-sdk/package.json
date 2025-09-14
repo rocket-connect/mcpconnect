@@ -1,6 +1,6 @@
 {
   "name": "@mcpconnect/adapter-ai-sdk",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "AI SDK adapter for MCPConnect - Vercel AI SDK integration for LLM providers",
   "keywords": [
     "mcp",
