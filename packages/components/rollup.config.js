@@ -16,6 +16,7 @@ export default [
         file: packageJson.main,
         format: "cjs",
         sourcemap: true,
+        exports: "named",
       },
       {
         file: packageJson.module,
@@ -25,21 +26,27 @@ export default [
     ],
     plugins: [
       peerDepsExternal(),
-      resolve({
-        browser: true,
-      }),
-      commonjs(),
       typescript({
         tsconfig: "./tsconfig.json",
-        exclude: ["**/*.stories.tsx"],
+        sourceMap: true,
+        inlineSources: false,
       }),
+      resolve({
+        browser: true,
+        extensions: [".js", ".jsx", ".ts", ".tsx"],
+      }),
+      commonjs(),
     ],
-    external: ["react", "react-dom"],
+    external: ["react", "react-dom", "lucide-react", "clsx"],
   },
   {
-    input: "dist/index.d.ts",
+    input: "src/index.ts",
     output: [{ file: "dist/index.d.ts", format: "esm" }],
-    plugins: [dts()],
-    external: [/\.css$/],
+    plugins: [
+      dts({
+        tsconfig: "./tsconfig.json",
+      }),
+    ],
+    external: ["react", "react-dom", "lucide-react", "clsx"],
   },
 ];

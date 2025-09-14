@@ -1,11 +1,25 @@
 {
   "name": "@mcpconnect/components",
-  "version": "0.0.0-alpha.1",
-  "description": "React components for MCPConnect",
+  "version": "0.0.1",
+  "description": "React components for building MCPConnect interfaces",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "react",
+    "components",
+    "ui"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "files": [
     "dist",
     "README.md"
@@ -16,7 +30,8 @@
     "clean": "rm -rf dist",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
     "react": "^18.0.0",
@@ -29,7 +44,7 @@
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-typescript": "^11.1.5",
+    "@rollup/plugin-typescript": "^12.1.4",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
@@ -39,7 +54,7 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "rollup": "^4.9.1",
+    "rollup": "^4.50.1",
     "rollup-plugin-dts": "^6.1.0",
     "rollup-plugin-peer-deps-external": "^2.2.4",
     "typescript": "^5.3.3"
@@ -52,5 +67,16 @@
     "url": "https://github.com/rocket-connect/mcpconnect.git",
     "directory": "packages/components"
   },
-  "license": "MIT"
+  "bugs": {
+    "url": "https://github.com/rocket-connect/mcpconnect/issues"
+  },
+  "homepage": "https://github.com/rocket-connect/mcpconnect#readme",
+  "author": {
+    "name": "rconnect.tech",
+    "url": "https://rconnect.tech"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

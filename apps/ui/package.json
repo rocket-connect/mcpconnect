@@ -1,12 +1,20 @@
 {
   "name": "@mcpconnect/ui",
-  "version": "0.0.0-alpha.1",
-  "private": true,
-  "description": "MCPConnect web interface",
+  "version": "0.0.1",
+  "description": "MCPConnect web interface - React app for debugging MCP integrations",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "react",
+    "ui",
+    "web",
+    "debugging"
+  ],
   "type": "module",
   "main": "dist/index.html",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc && vite build",
@@ -15,7 +23,8 @@
     "clean": "rm -rf dist .vite",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@mcpconnect/components": "workspace:*",
@@ -41,10 +50,25 @@
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/rocket-connect/mcpconnect.git",
     "directory": "apps/ui"
   },
-  "license": "MIT"
+  "bugs": {
+    "url": "https://github.com/rocket-connect/mcpconnect/issues"
+  },
+  "homepage": "https://github.com/rocket-connect/mcpconnect#readme",
+  "author": {
+    "name": "rconnect.tech",
+    "url": "https://rconnect.tech"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
 }

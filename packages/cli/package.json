@@ -1,7 +1,14 @@
 {
   "name": "mcpconnect",
-  "version": "0.0.0-alpha.1",
-  "description": "CLI tool for MCPConnect",
+  "version": "0.0.1",
+  "description": "CLI tool for MCPConnect - quickly start a server with UI for debugging MCP integrations",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cli",
+    "debugging",
+    "development"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -17,7 +24,9 @@
     "clean": "rm -rf dist",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "prepublishOnly": "pnpm build",
+    "postinstall": "node -e \"console.log('\\n📦 MCPConnect installed successfully!\\n🚀 Run: npx mcpconnect\\n')\""
   },
   "dependencies": {
     "@mcpconnect/server": "workspace:*",
@@ -43,5 +52,16 @@
     "url": "https://github.com/rocket-connect/mcpconnect.git",
     "directory": "packages/cli"
   },
-  "license": "MIT"
+  "bugs": {
+    "url": "https://github.com/rocket-connect/mcpconnect/issues"
+  },
+  "homepage": "https://github.com/rocket-connect/mcpconnect#readme",
+  "author": {
+    "name": "rconnect.tech",
+    "url": "https://rconnect.tech"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

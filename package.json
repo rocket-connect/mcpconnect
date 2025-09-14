@@ -1,29 +1,45 @@
 {
   "name": "mcpconnect",
-  "version": "0.0.0-alpha.1",
+  "version": "0.0.1",
   "private": true,
   "description": "Build and debug Model Context Protocol integrations with a browser-based interface",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "debugging",
+    "development",
+    "cli",
+    "react",
+    "components"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/rocket-connect/mcpconnect.git"
   },
+  "bugs": {
+    "url": "https://github.com/rocket-connect/mcpconnect/issues"
+  },
+  "homepage": "https://github.com/rocket-connect/mcpconnect#readme",
   "license": "MIT",
-  "author": "rconnect.tech",
+  "author": {
+    "name": "rconnect.tech",
+    "url": "https://rconnect.tech"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
-    "build": "pnpm -r build",
-    "build:cli": "pnpm --filter @mcpconnect/cli build",
+    "build": "pnpm build:components && pnpm build:ui && pnpm build:server && pnpm build:cli",
+    "build:cli": "pnpm --filter mcpconnect build",
     "build:components": "pnpm --filter @mcpconnect/components build",
     "build:ui": "pnpm --filter @mcpconnect/ui build",
     "build:server": "pnpm --filter @mcpconnect/server build",
     "dev": "pnpm -r --parallel dev",
     "dev:ui": "pnpm --filter @mcpconnect/ui dev",
     "dev:server": "pnpm --filter @mcpconnect/server dev",
-    "dev:cli": "pnpm --filter @mcpconnect/cli dev",
-    "start": "pnpm --filter @mcpconnect/cli tsx src/cli.ts",
+    "dev:cli": "pnpm --filter mcpconnect dev",
+    "start": "pnpm --filter mcpconnect tsx src/cli.ts",
     "preview:ui": "pnpm --filter @mcpconnect/ui preview",
     "lint": "pnpm -r lint",
     "lint:fix": "pnpm -r lint:fix",
@@ -31,12 +47,18 @@
     "format:check": "prettier --check .",
     "type-check": "pnpm -r type-check",
     "clean": "pnpm -r clean && rm -rf node_modules",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "version:patch": "pnpm version:bump patch",
+    "version:minor": "pnpm version:bump minor",
+    "version:major": "pnpm version:bump major",
+    "version:set": "pnpm version:bump",
+    "version:bump": "node scripts/version-bump.js",
+    "publish:all": "pnpm build && pnpm publish:packages",
+    "publish:packages": "pnpm -r --filter '{packages/*,apps/*}' publish --access public",
+    "publish:dry-run": "pnpm -r --filter '{packages/*,apps/*}' exec npm pack --dry-run",
+    "test": "echo 'Tests will be added in future versions'",
+    "validate": "pnpm type-check && pnpm lint && pnpm build"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.1",
     "@types/node": "^20.10.6",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
@@ -46,7 +68,8 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "prettier": "^3.1.1",
     "turbo": "^1.11.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "semver": "^7.5.4"
   },
   "packageManager": "pnpm@8.15.1",
   "engines": {

@@ -1,8 +1,14 @@
 {
   "name": "@mcpconnect/server",
-  "version": "0.0.0-alpha.1",
-  "private": true,
+  "version": "0.0.1",
   "description": "MCPConnect server application with integrated UI",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "server",
+    "express",
+    "api"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -12,21 +18,20 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
-    "build": "pnpm build:ui && tsc",
-    "build:ui": "pnpm --filter @mcpconnect/ui build",
+    "build": "tsc",
     "dev": "concurrently \"pnpm dev:ui\" \"pnpm dev:server\"",
     "dev:ui": "pnpm --filter @mcpconnect/ui dev",
     "dev:server": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "clean": "rm -rf dist && pnpm --filter @mcpconnect/ui clean",
+    "clean": "rm -rf dist",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "type-check": "tsc --noEmit",
-    "postbuild": "pnpm copy:ui",
-    "copy:ui": "mkdir -p dist && cp -r ../ui/dist/* dist/ || echo 'UI not built yet'"
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@mcpconnect/ui": "workspace:*",
@@ -51,10 +56,25 @@
     "tsx": "^4.6.2",
     "typescript": "^5.3.3"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/rocket-connect/mcpconnect.git",
     "directory": "apps/server"
   },
-  "license": "MIT"
+  "bugs": {
+    "url": "https://github.com/rocket-connect/mcpconnect/issues"
+  },
+  "homepage": "https://github.com/rocket-connect/mcpconnect#readme",
+  "author": {
+    "name": "rconnect.tech",
+    "url": "https://rconnect.tech"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
 }
