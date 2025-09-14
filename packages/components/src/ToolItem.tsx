@@ -2,10 +2,9 @@
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 import React from "react";
 import { LucideIcon } from "lucide-react";
+import { Tool } from "@mcpconnect/schemas";
 
-export interface ToolItemProps {
-  name: string;
-  description: string;
+export interface ToolItemProps extends Tool {
   icon?: LucideIcon;
   onClick?: () => void;
 }

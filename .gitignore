@@ -140,3 +140,4 @@ vite.config.ts.timestamp-*
 repomix-output.xml
 .rollup.cache
 .DS_Store
+tsconfig.tsbuildinfo

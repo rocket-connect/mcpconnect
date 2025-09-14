@@ -29,7 +29,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "pnpm build:schemas && pnpm build:components && pnpm build:ui && pnpm build:server && pnpm build:cli",
+    "build": "pnpm build:schemas && pnpm build:components && pnpm build:server && pnpm build:ui && pnpm build:cli",
     "build:schemas": "pnpm --filter @mcpconnect/schemas build",
     "build:cli": "pnpm --filter @mcpconnect/cli build",
     "build:components": "pnpm --filter @mcpconnect/components build",

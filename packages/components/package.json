@@ -27,7 +27,7 @@
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c --watch",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist && rm tsconfig.tsbuildinfo",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "type-check": "tsc --noEmit",
@@ -38,6 +38,7 @@
     "react-dom": "^18.0.0"
   },
   "dependencies": {
+    "@mcpconnect/schemas": "workspace:*",
     "clsx": "^2.0.0",
     "lucide-react": "^0.302.0"
   },

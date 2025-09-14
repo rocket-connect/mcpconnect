@@ -2,10 +2,11 @@ import React from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "./Button";
 import { cn } from "./lib/utils";
+import { Theme } from "@mcpconnect/schemas";
 
 export interface ThemeToggleProps {
-  theme?: "light" | "dark";
-  onToggle?: (theme: "light" | "dark") => void;
+  theme?: Theme;
+  onToggle?: (theme: Theme) => void;
   className?: string;
 }
 
@@ -15,11 +16,18 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
   className,
 }) => {
   const handleToggle = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
+    // If system theme, default to light->dark toggle
+    if (theme === "system") {
+      onToggle?.("dark");
+      return;
+    }
+
+    const newTheme: Theme = theme === "light" ? "dark" : "light";
     onToggle?.(newTheme);
   };
 
   const isDark = theme === "dark";
+  const isSystem = theme === "system";
 
   return (
     <Button
@@ -35,12 +43,13 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         className
       )}
       aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
+      title={isSystem ? "System theme (click to toggle)" : `${theme} theme`}
     >
       <Sun
         className={cn(
           "h-4 w-4 absolute transition-all duration-300",
           "text-yellow-500",
-          isDark
+          isDark || isSystem
             ? "rotate-90 scale-0 opacity-0"
             : "rotate-0 scale-100 opacity-100"
         )}
@@ -54,6 +63,9 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
             : "-rotate-90 scale-0 opacity-0"
         )}
       />
+      {isSystem && (
+        <div className="absolute inset-0 border-2 border-dashed border-gray-400 dark:border-gray-500 rounded-full opacity-50" />
+      )}
     </Button>
   );
 };

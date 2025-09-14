@@ -27,7 +27,7 @@
     "dev:ui": "pnpm --filter @mcpconnect/ui dev",
     "dev:server": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist && rm tsconfig.tsbuildinfo",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "type-check": "tsc --noEmit",

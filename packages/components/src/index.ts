@@ -14,7 +14,6 @@ export {
 export {
   NetworkInspector,
   type NetworkInspectorProps,
-  type ToolExecution,
 } from "./NetworkInspector";
 export { MCPLayout, type MCPLayoutProps } from "./MCPLayout";
 

@@ -11,17 +11,7 @@ import {
   CheckCircle,
   Copy,
 } from "lucide-react";
-
-export interface ToolExecution {
-  id: string;
-  tool: string;
-  status: "success" | "error" | "pending";
-  duration?: number;
-  timestamp: string;
-  request: any;
-  response?: any;
-  error?: string;
-}
+import { ToolExecution } from "@mcpconnect/schemas";
 
 export interface NetworkInspectorProps {
   executions?: ToolExecution[];

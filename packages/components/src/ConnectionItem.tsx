@@ -1,12 +1,13 @@
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 import React from "react";
+import { Connection } from "@mcpconnect/schemas";
 
-export interface ConnectionItemProps {
-  name: string;
-  url: string;
-  isActive?: boolean;
-  isConnected?: boolean;
+export interface ConnectionItemProps
+  extends Omit<
+    Connection,
+    "authType" | "credentials" | "headers" | "timeout" | "retryAttempts"
+  > {
   onClick?: () => void;
 }
 

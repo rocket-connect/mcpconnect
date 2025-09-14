@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc && chmod +x dist/cli.js",
     "dev": "tsx watch src/cli.ts",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist && rm tsconfig.tsbuildinfo",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "type-check": "tsc --noEmit",

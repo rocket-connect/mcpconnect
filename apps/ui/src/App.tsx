@@ -1,11 +1,7 @@
 import { useState } from "react";
-import {
-  NetworkInspector,
-  MCPLayout,
-  type ToolExecution,
-} from "@mcpconnect/components";
+import { NetworkInspector, MCPLayout } from "@mcpconnect/components";
 import { Database, Code, Server, FileText, BarChart3 } from "lucide-react";
-
+import { ToolExecution } from "@mcpconnect/schemas";
 import {
   Header,
   Sidebar,

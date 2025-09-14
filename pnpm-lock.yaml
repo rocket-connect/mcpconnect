@@ -114,6 +114,9 @@ importers:
       '@mcpconnect/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@mcpconnect/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       clsx:
         specifier: ^2.0.0
         version: 2.1.1
@@ -212,6 +215,9 @@ importers:
 
   packages/components:
     dependencies:
+      '@mcpconnect/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       clsx:
         specifier: ^2.0.0
         version: 2.1.1
