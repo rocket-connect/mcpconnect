@@ -1,6 +1,6 @@
 {
   "name": "mcpconnect",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "description": "CLI tool for MCPConnect - quickly start a server with UI for debugging MCP integrations",
   "keywords": [
     "mcp",
@@ -12,14 +12,14 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "mcpconnect": "./dist/cli.js"
+    "mcpconnect": "dist/cli.js"
   },
   "files": [
     "dist",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/cli.js",
     "dev": "tsx watch src/cli.ts",
     "clean": "rm -rf dist",
     "lint": "eslint src --ext .ts",

@@ -33,23 +33,92 @@ function incrementVersion(version, type) {
   return parts.join(".");
 }
 
+function replaceWorkspaceDeps(packagePath, version) {
+  const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+  const workspacePackages = [
+    "@mcpconnect/components",
+    "@mcpconnect/server",
+    "@mcpconnect/ui",
+    "mcpconnect",
+  ];
+
+  let modified = false;
+
+  ["dependencies", "devDependencies", "peerDependencies"].forEach(depType => {
+    if (packageJson[depType]) {
+      Object.keys(packageJson[depType]).forEach(dep => {
+        if (
+          workspacePackages.includes(dep) &&
+          packageJson[depType][dep] === "workspace:*"
+        ) {
+          packageJson[depType][dep] = `^${version}`;
+          modified = true;
+          console.log(`  Replaced workspace:* with ^${version} for ${dep}`);
+        }
+      });
+    }
+  });
+
+  if (modified) {
+    fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2) + "\n");
+    console.log(`Updated workspace dependencies in ${packagePath}`);
+  }
+
+  return modified;
+}
+
+function restoreWorkspaceDeps(packagePath) {
+  const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+  const workspacePackages = [
+    "@mcpconnect/components",
+    "@mcpconnect/server",
+    "@mcpconnect/ui",
+    "mcpconnect",
+  ];
+
+  let modified = false;
+
+  ["dependencies", "devDependencies", "peerDependencies"].forEach(depType => {
+    if (packageJson[depType]) {
+      Object.keys(packageJson[depType]).forEach(dep => {
+        if (
+          workspacePackages.includes(dep) &&
+          packageJson[depType][dep].startsWith("^")
+        ) {
+          packageJson[depType][dep] = "workspace:*";
+          modified = true;
+        }
+      });
+    }
+  });
+
+  if (modified) {
+    fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2) + "\n");
+  }
+}
+
 function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error("Usage: node version-bump.js <patch|minor|major|version>");
+    console.error(
+      "Usage: node version-bump.js <patch|minor|major|version> [--prepare-publish]"
+    );
     process.exit(1);
   }
+
+  const shouldPreparePublish = args.includes("--prepare-publish");
+  const versionArg = args.find(arg => !arg.startsWith("--"));
 
   const rootPackagePath = path.join(__dirname, "..", "package.json");
   const rootPackage = JSON.parse(fs.readFileSync(rootPackagePath, "utf8"));
 
   let newVersion;
 
-  if (["patch", "minor", "major"].includes(args[0])) {
-    newVersion = incrementVersion(rootPackage.version, args[0]);
+  if (["patch", "minor", "major"].includes(versionArg)) {
+    newVersion = incrementVersion(rootPackage.version, versionArg);
   } else {
-    newVersion = args[0];
+    newVersion = versionArg;
   }
 
   // Validate version format
@@ -76,17 +145,42 @@ function main() {
     const fullPath = path.join(__dirname, "..", packagePath);
     if (fs.existsSync(fullPath)) {
       updateVersion(fullPath, newVersion);
+
+      // Replace workspace:* with actual versions for publishing
+      if (shouldPreparePublish) {
+        replaceWorkspaceDeps(fullPath, newVersion);
+      }
     } else {
       console.warn(`Package not found: ${fullPath}`);
     }
   });
 
   console.log(`\nAll packages updated to ${newVersion}`);
-  console.log("Next steps:");
-  console.log(`  git add .`);
-  console.log(`  git commit -m "v${newVersion}"`);
-  console.log(`  git tag v${newVersion}`);
-  console.log(`  git push origin main --tags`);
+
+  if (shouldPreparePublish) {
+    console.log(
+      "\nWorkspace dependencies replaced with version numbers for publishing."
+    );
+    console.log(
+      "After publishing, run 'node scripts/restore-workspace-deps.js' to restore workspace:* dependencies"
+    );
+  } else {
+    console.log("Next steps:");
+    console.log(`  git add .`);
+    console.log(`  git commit -m "v${newVersion}"`);
+    console.log(`  git tag v${newVersion}`);
+    console.log(`  git push origin main --tags`);
+  }
 }
 
-main();
+// Export functions for use in other scripts
+if (require.main === module) {
+  main();
+} else {
+  module.exports = {
+    updateVersion,
+    incrementVersion,
+    replaceWorkspaceDeps,
+    restoreWorkspaceDeps,
+  };
+}

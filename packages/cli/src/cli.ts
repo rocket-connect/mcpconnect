@@ -8,7 +8,7 @@ import open from "open";
 program
   .name("mcpconnect")
   .description("MCPConnect CLI tool")
-  .version("0.0.0-alpha.1");
+  .version("0.0.0");
 
 program
   .command("start")

@@ -1,0 +1,62 @@
+name: Publish to NPM
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Authenticate with NPM
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Run linting
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Prepare for publishing
+        run: pnpm prepare-publish
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Publish packages
+        run: pnpm publish:packages
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            Release ${{ github.ref }}
+
+            ## Changes
+            See the [changelog](https://github.com/rocket-connect/mcpconnect/blob/main/CHANGELOG.md) for details.
+
+            ## Installation
+            ```bash
+            npx mcpconnect@${{ github.ref_name }}
+            ```
+          draft: false
+          prerelease: false
