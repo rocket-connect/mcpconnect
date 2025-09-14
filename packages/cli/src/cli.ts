@@ -5,10 +5,7 @@ import chalk from "chalk";
 import ora from "ora";
 import open from "open";
 
-program
-  .name("mcpconnect")
-  .description("MCPConnect CLI tool")
-  .version("0.0.0");
+program.name("mcpconnect").description("MCPConnect CLI tool").version("0.0.0");
 
 program
   .command("start")
