@@ -37,6 +37,9 @@ function replaceWorkspaceDeps(packagePath, version) {
   const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   const workspacePackages = [
     "@mcpconnect/schemas",
+    "@mcpconnect/base-adapters",
+    "@mcpconnect/adapter-localstorage",
+    "@mcpconnect/adapter-ai-sdk",
     "@mcpconnect/components",
     "@mcpconnect/server",
     "@mcpconnect/ui",
@@ -72,6 +75,9 @@ function restoreWorkspaceDeps(packagePath) {
   const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   const workspacePackages = [
     "@mcpconnect/schemas",
+    "@mcpconnect/base-adapters",
+    "@mcpconnect/adapter-localstorage",
+    "@mcpconnect/adapter-ai-sdk",
     "@mcpconnect/components",
     "@mcpconnect/server",
     "@mcpconnect/ui",
@@ -137,9 +143,12 @@ function main() {
   // Update root package.json
   updateVersion(rootPackagePath, newVersion);
 
-  // All publishable package paths - INCLUDING schemas
+  // All publishable package paths - INCLUDING all adapters
   const packagePaths = [
     "packages/schemas/package.json",
+    "packages/base-adapters/package.json",
+    "packages/adapter-localstorage/package.json",
+    "packages/adapter-ai-sdk/package.json",
     "packages/cli/package.json",
     "packages/components/package.json",
     "apps/server/package.json",
