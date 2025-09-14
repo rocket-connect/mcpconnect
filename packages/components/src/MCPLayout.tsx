@@ -13,19 +13,19 @@ export const MCPLayout: React.FC<MCPLayoutProps> = ({
   inspector,
   header,
 }) => (
-  <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors">
+  <div className="h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors">
     {header}
     <div className="flex-1 flex overflow-hidden">
       {sidebar && (
-        <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto transition-colors">
+        <div className="w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto transition-colors">
           {sidebar}
         </div>
       )}
-      <div className="flex-1 flex flex-col bg-white dark:bg-gray-900">
+      <div className="flex-1 flex flex-col bg-white dark:bg-gray-950">
         {children}
       </div>
       {inspector && (
-        <div className="w-96 border-l border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-y-auto transition-colors">
+        <div className="w-[600px] border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-y-auto transition-colors">
           {inspector}
         </div>
       )}
