@@ -20,8 +20,7 @@ Create these files in your repository:
 
 1. **scripts/version-bump.js** - Enhanced version bumping with workspace dependency handling
 2. **scripts/restore-workspace-deps.js** - Restores workspace:\* after publishing
-3. **scripts/publish-initial.js** - Initial deployment script
-4. **CHANGELOG.md** - Track changes between versions
+3. **CHANGELOG.md** - Track changes between versions
 
 Update these existing files:
 
@@ -29,24 +28,6 @@ Update these existing files:
 - **.github/workflows/publish.yml** - Enhanced publish workflow
 
 ## Publishing Workflow
-
-### Initial Setup (One Time)
-
-```bash
-# 1. Set your first version
-pnpm version:set 0.1.0
-
-# 2. Test the build locally
-pnpm validate
-
-# 3. Do a dry run of the publish process
-pnpm publish:initial:dry
-
-# 4. If everything looks good, do the initial publish
-pnpm publish:initial
-```
-
-### Subsequent Releases
 
 For each new release:
 
@@ -63,17 +44,6 @@ git push origin main --tags
 ```
 
 ## What Happens During Publishing
-
-### Local Publishing (`pnpm publish:initial`)
-
-1. Validates you're on main branch with clean working tree
-2. Pulls latest changes
-3. Installs dependencies and runs validation
-4. Temporarily replaces `workspace:*` with actual version numbers
-5. Builds all packages
-6. Publishes to NPM
-7. Creates and pushes git tag
-8. Restores `workspace:*` dependencies for local development
 
 ### GitHub Actions Publishing (on tag push)
 
@@ -113,11 +83,6 @@ pnpm version:patch              # Bump patch version (0.1.0 → 0.1.1)
 pnpm version:minor              # Bump minor version (0.1.0 → 0.2.0)
 pnpm version:major              # Bump major version (0.1.0 → 1.0.0)
 pnpm version:set 1.2.3          # Set specific version
-
-# Publishing
-pnpm publish:initial            # Initial publish (local)
-pnpm publish:initial:dry        # Dry run of initial publish
-pnpm publish:dry-run            # Test package creation
 
 # Development
 pnpm restore-workspace-deps     # Restore workspace:* (if needed)

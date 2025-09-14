@@ -55,8 +55,6 @@
     "restore-workspace-deps": "node scripts/restore-workspace-deps.js",
     "publish:dry-run": "pnpm -r --filter '{packages/*,apps/*}' exec npm pack --dry-run",
     "publish:packages": "pnpm -r --filter '{packages/*,apps/*}' publish --access public --no-git-checks",
-    "publish:initial": "node scripts/publish-initial.js",
-    "publish:initial:dry": "node scripts/publish-initial.js --dry-run",
     "test": "echo 'Tests will be added in future versions'",
     "validate": "pnpm type-check && pnpm lint && pnpm build"
   },
