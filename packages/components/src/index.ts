@@ -9,3 +9,7 @@ export {
   RequestInspector,
   MCPLayout,
 } from "./components";
+
+export { ThemeToggle, type ThemeToggleProps } from "./ThemeToggle";
+
+export { cn, formatDate, getInitials } from "./lib/utils";

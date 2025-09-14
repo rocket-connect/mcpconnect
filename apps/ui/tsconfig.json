@@ -24,10 +24,10 @@
     "paths": {
       "@/*": ["./src/*"],
       "@/components/*": ["./src/components/*"],
-      "@/lib/*": ["./src/lib/*"],
+      "@/lib/*": ["../../packages/components/src/lib/*"],
       "@/hooks/*": ["./src/hooks/*"]
     }
   },
-  "include": ["src", "index.html"],
+  "include": ["src", "index.html", "../../packages/components/src/lib"],
   "exclude": ["node_modules", "dist"]
 }

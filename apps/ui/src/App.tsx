@@ -8,7 +8,9 @@ import {
   RequestInspector,
   MCPLayout,
   Button,
+  ThemeToggle,
 } from "@mcpconnect/components";
+import { useTheme } from "./contexts/ThemeContext";
 import {
   Server,
   Database,
@@ -20,24 +22,37 @@ import {
   BarChart3,
 } from "lucide-react";
 
-// Header component
-const Header = () => (
-  <header className="bg-white border-b border-gray-200 px-6 py-4">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <h1 className="text-xl font-bold text-gray-900">MCPConnect</h1>
-        <ConnectionStatus isConnected={true} />
-      </div>
-      <div className="flex items-center gap-2">
-        <button className="p-2 hover:bg-gray-100 rounded-md">
-          <Settings className="w-5 h-5 text-gray-600" />
-        </button>
-      </div>
-    </div>
-  </header>
-);
+// Header component with complete dark mode styling and theme toggle
+const Header = () => {
+  const { theme, toggleTheme } = useTheme();
 
-// Sidebar component
+  return (
+    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 transition-colors">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {/* MCPConnect Logo/Brand */}
+            <div className="w-8 h-8 bg-gradient-to-br from-[#24BEE1] to-[#8F1AFE] rounded-md flex items-center justify-center">
+              <Server className="w-5 h-5 text-white" />
+            </div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+              MCPConnect
+            </h1>
+          </div>
+          <ConnectionStatus isConnected={true} />
+        </div>
+        <div className="flex items-center gap-2">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors">
+            <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+// Sidebar component with complete dark mode styling
 const Sidebar = ({
   connections,
   tools,
@@ -49,12 +64,14 @@ const Sidebar = ({
   resources: any[];
   onToolSelect: (tool: any) => void;
 }) => (
-  <div className="p-4">
+  <div className="p-4 bg-white dark:bg-gray-800 transition-colors">
     {/* Connections */}
     <div className="mb-6">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-gray-900">Connections</h2>
-        <button className="text-blue-600 hover:text-blue-700 text-sm">
+        <h2 className="font-semibold text-gray-900 dark:text-white">
+          Connections
+        </h2>
+        <button className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium transition-colors">
           + Add Connection
         </button>
       </div>
@@ -67,7 +84,7 @@ const Sidebar = ({
 
     {/* Tools */}
     <div className="mb-6">
-      <h2 className="font-semibold text-gray-900 mb-3">
+      <h2 className="font-semibold text-gray-900 dark:text-white mb-3">
         Tools ({tools.length})
       </h2>
       <div className="space-y-2">
@@ -79,7 +96,7 @@ const Sidebar = ({
 
     {/* Resources */}
     <div>
-      <h2 className="font-semibold text-gray-900 mb-3">
+      <h2 className="font-semibold text-gray-900 dark:text-white mb-3">
         Resources ({resources.length})
       </h2>
       <div className="space-y-2">
@@ -91,16 +108,18 @@ const Sidebar = ({
   </div>
 );
 
-// Main content area for chat mode
+// Main content area for chat mode with complete dark mode styling
 const ChatInterface = ({ chatMessages }: { chatMessages: any[] }) => (
-  <div className="flex-1 flex flex-col">
+  <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 transition-colors">
     <div className="flex-1 overflow-y-auto p-6">
       <div className="max-w-2xl mx-auto">
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Query Interface
           </h2>
-          <div className="text-sm text-blue-600">3 tools available</div>
+          <div className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+            3 tools available
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -111,13 +130,18 @@ const ChatInterface = ({ chatMessages }: { chatMessages: any[] }) => (
       </div>
     </div>
 
-    <div className="border-t border-gray-200 p-4">
+    <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-800 transition-colors">
       <div className="max-w-2xl mx-auto">
         <div className="flex gap-3">
           <input
             type="text"
             placeholder="Type a message..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg 
+                     bg-white dark:bg-gray-700
+                     text-gray-900 dark:text-white
+                     placeholder:text-gray-500 dark:placeholder:text-gray-400
+                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                     transition-colors"
           />
           <Button>
             <Play className="w-4 h-4" />
@@ -128,37 +152,48 @@ const ChatInterface = ({ chatMessages }: { chatMessages: any[] }) => (
   </div>
 );
 
-// Tool mode interface
+// Tool mode interface with complete dark mode styling
 const ToolInterface = ({ selectedTool }: { selectedTool: any }) => (
-  <div className="flex-1 overflow-y-auto p-6">
+  <div className="flex-1 overflow-y-auto p-6 bg-white dark:bg-gray-900 transition-colors">
     <div className="max-w-2xl mx-auto">
       {selectedTool ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 transition-colors">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             {selectedTool.name}
           </h2>
-          <p className="text-gray-600 mb-6">{selectedTool.description}</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            {selectedTool.description}
+          </p>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                 Query
               </label>
               <textarea
                 rows={4}
                 placeholder="SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '1 month'"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md 
+                         bg-white dark:bg-gray-700
+                         text-gray-900 dark:text-white
+                         placeholder:text-gray-500 dark:placeholder:text-gray-400
+                         focus:outline-none focus:ring-2 focus:ring-blue-500
+                         transition-colors resize-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                 Timeout (ms)
               </label>
               <input
                 type="number"
                 defaultValue="5000"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md 
+                         bg-white dark:bg-gray-700
+                         text-gray-900 dark:text-white
+                         focus:outline-none focus:ring-2 focus:ring-blue-500
+                         transition-colors"
               />
             </div>
 
@@ -170,11 +205,11 @@ const ToolInterface = ({ selectedTool }: { selectedTool: any }) => (
         </div>
       ) : (
         <div className="text-center py-12">
-          <Server className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
+          <Server className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
             Select a Tool
           </h3>
-          <p className="text-gray-600">
+          <p className="text-gray-600 dark:text-gray-400">
             Choose a tool from the sidebar to get started
           </p>
         </div>
@@ -183,7 +218,7 @@ const ToolInterface = ({ selectedTool }: { selectedTool: any }) => (
   </div>
 );
 
-// Mode toggle component
+// Mode toggle component with complete dark mode styling
 const ModeToggle = ({
   activeMode,
   onModeChange,
@@ -191,14 +226,14 @@ const ModeToggle = ({
   activeMode: string;
   onModeChange: (mode: string) => void;
 }) => (
-  <div className="bg-white border-b border-gray-200 px-6 py-3">
+  <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 transition-colors">
     <div className="flex gap-1">
       <button
         onClick={() => onModeChange("chat")}
         className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${
           activeMode === "chat"
-            ? "bg-blue-100 text-blue-700"
-            : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
         }`}
       >
         <MessageSquare className="w-4 h-4" />
@@ -208,8 +243,8 @@ const ModeToggle = ({
         onClick={() => onModeChange("tools")}
         className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${
           activeMode === "tools"
-            ? "bg-blue-100 text-blue-700"
-            : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
         }`}
       >
         <Server className="w-4 h-4" />
@@ -336,7 +371,7 @@ function App() {
         />
       }
       inspector={
-        <div className="p-4">
+        <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors">
           <RequestInspector execution={executionData} />
         </div>
       }
