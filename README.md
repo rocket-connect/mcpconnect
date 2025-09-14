@@ -3,7 +3,7 @@
 Build and debug Model Context Protocol integrations with a browser-based interface that connects directly to your MCP servers.
 
 ```bash
-npx mcpconnect
+npx @mcpconnect/cli
 ```
 
 ## Get Started
@@ -11,7 +11,7 @@ npx mcpconnect
 **Local development**
 
 ```bash
-npx mcpconnect
+npx @mcpconnect/cli
 ```
 
 Opens MCPConnect at `http://localhost:3000`

@@ -5,7 +5,7 @@ Command-line interface for MCPConnect - quickly start a server with UI for debug
 ## Quick Start
 
 ```bash
-npx mcpconnect
+npx @mcpconnect/cli
 ```
 
 This will:
@@ -20,23 +20,23 @@ This will:
 
 ```bash
 # Start server on default port 3001
-npx mcpconnect
+npx @mcpconnect/cli
 
 # Start on specific port
-npx mcpconnect 8080
+npx @mcpconnect/cli 8080
 
 # Start with options
-npx mcpconnect --host 0.0.0.0 --no-open
+npx @mcpconnect/cli --host 0.0.0.0 --no-open
 ```
 
 ### Explicit Start Command
 
 ```bash
 # Start with explicit command
-npx mcpconnect start
+npx @mcpconnect/cli start
 
 # With options
-npx mcpconnect start --port 8080 --host 0.0.0.0
+npx @mcpconnect/cli start --port 8080 --host 0.0.0.0
 ```
 
 ## Options
@@ -51,16 +51,16 @@ npx mcpconnect start --port 8080 --host 0.0.0.0
 
 ```bash
 # Basic usage
-npx mcpconnect
+npx @mcpconnect/cli
 
 # Custom port and host
-npx mcpconnect --port 8080 --host 0.0.0.0
+npx @mcpconnect/cli --port 8080 --host 0.0.0.0
 
 # Don't open browser automatically
-npx mcpconnect --no-open
+npx @mcpconnect/cli --no-open
 
 # Development mode (disable security features)
-npx mcpconnect --no-helmet --no-cors
+npx @mcpconnect/cli --no-helmet --no-cors
 ```
 
 ## Programmatic Usage

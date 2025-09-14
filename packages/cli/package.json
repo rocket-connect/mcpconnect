@@ -1,5 +1,5 @@
 {
-  "name": "mcpconnect",
+  "name": "@mcpconnect/cli",
   "version": "0.0.1",
   "description": "CLI tool for MCPConnect - quickly start a server with UI for debugging MCP integrations",
   "keywords": [
@@ -26,7 +26,7 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "type-check": "tsc --noEmit",
     "prepublishOnly": "pnpm build",
-    "postinstall": "node -e \"console.log('\\n📦 MCPConnect installed successfully!\\n🚀 Run: npx mcpconnect\\n')\""
+    "postinstall": "node -e \"console.log('\\n📦 MCPConnect installed successfully!\\n🚀 Run: npx @mcpconnect/cli\\n')\""
   },
   "dependencies": {
     "@mcpconnect/server": "workspace:*",

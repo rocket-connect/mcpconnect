@@ -103,7 +103,7 @@ Dependencies are handled automatically by pnpm, but the logical order is:
 1. `@mcpconnect/components` (no internal deps)
 2. `@mcpconnect/ui` (depends on components)
 3. `@mcpconnect/server` (depends on ui)
-4. `mcpconnect` (depends on server)
+4. `@mcpconnect/cli` (depends on server)
 
 ## Scripts Reference
 
