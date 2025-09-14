@@ -41,10 +41,10 @@ export const Sidebar = ({
         </h2>
         <div className="space-y-2">
           {tools.map((tool, idx) => (
-            <ToolItem 
-              key={`${tool.name}-${idx}`} 
-              {...tool} 
-              onClick={() => onToolSelect(tool)} 
+            <ToolItem
+              key={`${tool.name}-${idx}`}
+              {...tool}
+              onClick={() => onToolSelect(tool)}
             />
           ))}
         </div>

@@ -17,23 +17,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return "dark";
   });
 
-  const [systemTheme, setSystemTheme] = useState<Exclude<Theme, "system">>(() => {
-    if (typeof window !== "undefined") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
+  const [systemTheme, setSystemTheme] = useState<Exclude<Theme, "system">>(
+    () => {
+      if (typeof window !== "undefined") {
+        return window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      }
+      return "dark";
     }
-    return "dark";
-  });
+  );
 
-  const resolvedTheme: Exclude<Theme, "system"> = 
+  const resolvedTheme: Exclude<Theme, "system"> =
     theme === "system" ? systemTheme : theme;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    
+
     const handleSystemThemeChange = (e: MediaQueryListEvent) => {
       setSystemTheme(e.matches ? "dark" : "light");
     };

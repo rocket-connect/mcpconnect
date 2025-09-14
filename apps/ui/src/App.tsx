@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { NetworkInspector, MCPLayout } from "@mcpconnect/components";
-import { 
-  ToolExecution, 
-  Tool, 
-  Resource, 
-  Connection, 
-  ChatMessage 
+import {
+  ToolExecution,
+  Tool,
+  Resource,
+  Connection,
+  ChatMessage,
 } from "@mcpconnect/schemas";
 import {
   Header,

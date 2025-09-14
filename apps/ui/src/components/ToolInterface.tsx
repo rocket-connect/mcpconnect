@@ -19,25 +19,32 @@ export const ToolInterface = ({ selectedTool }: ToolInterfaceProps) => {
 
   const handleExecute = () => {
     if (!selectedTool) return;
-    
-    console.log('Executing tool:', selectedTool.name, 'with arguments:', arguments_);
+
+    console.log(
+      "Executing tool:",
+      selectedTool.name,
+      "with arguments:",
+      arguments_
+    );
     // TODO: Implement actual tool execution
   };
 
-  const renderParameterInput = (param: NonNullable<Tool['parameters']>[number]) => {
+  const renderParameterInput = (
+    param: NonNullable<Tool["parameters"]>[number]
+  ) => {
     if (!param) return null;
 
-    const value = arguments_[param.name] ?? param.default ?? '';
+    const value = arguments_[param.name] ?? param.default ?? "";
 
     switch (param.type) {
-      case 'string':
+      case "string":
         return (
           <textarea
             key={param.name}
-            rows={param.name === 'query' ? 4 : 1}
+            rows={param.name === "query" ? 4 : 1}
             placeholder={param.description || `Enter ${param.name}...`}
             value={value}
-            onChange={(e) => handleArgumentChange(param.name, e.target.value)}
+            onChange={e => handleArgumentChange(param.name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md 
                      bg-white dark:bg-gray-700
                      text-gray-900 dark:text-white
@@ -47,14 +54,16 @@ export const ToolInterface = ({ selectedTool }: ToolInterfaceProps) => {
           />
         );
 
-      case 'number':
+      case "number":
         return (
           <input
             key={param.name}
             type="number"
             placeholder={param.description || `Enter ${param.name}...`}
             value={value}
-            onChange={(e) => handleArgumentChange(param.name, parseInt(e.target.value) || 0)}
+            onChange={e =>
+              handleArgumentChange(param.name, parseInt(e.target.value) || 0)
+            }
             className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md 
                      bg-white dark:bg-gray-700
                      text-gray-900 dark:text-white
@@ -64,13 +73,13 @@ export const ToolInterface = ({ selectedTool }: ToolInterfaceProps) => {
           />
         );
 
-      case 'boolean':
+      case "boolean":
         return (
           <label key={param.name} className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={Boolean(value)}
-              onChange={(e) => handleArgumentChange(param.name, e.target.checked)}
+              onChange={e => handleArgumentChange(param.name, e.target.checked)}
               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -86,7 +95,7 @@ export const ToolInterface = ({ selectedTool }: ToolInterfaceProps) => {
             type="text"
             placeholder={param.description || `Enter ${param.name}...`}
             value={value}
-            onChange={(e) => handleArgumentChange(param.name, e.target.value)}
+            onChange={e => handleArgumentChange(param.name, e.target.value)}
             className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md 
                      bg-white dark:bg-gray-700
                      text-gray-900 dark:text-white
@@ -118,20 +127,20 @@ export const ToolInterface = ({ selectedTool }: ToolInterfaceProps) => {
             </div>
 
             <div className="space-y-4">
-              {selectedTool.parameters?.map((param) => (
+              {selectedTool.parameters?.map(param => (
                 <div key={param.name}>
                   <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                     {param.name}
-                    {param.required && <span className="text-red-500 ml-1">*</span>}
+                    {param.required && (
+                      <span className="text-red-500 ml-1">*</span>
+                    )}
                     {param.default !== undefined && (
                       <span className="text-gray-500 dark:text-gray-400 ml-2 font-normal">
                         (default: {String(param.default)})
                       </span>
                     )}
                   </label>
-                  <div className="mb-2">
-                    {renderParameterInput(param)}
-                  </div>
+                  <div className="mb-2">{renderParameterInput(param)}</div>
                   {param.description && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {param.description}
@@ -149,7 +158,7 @@ export const ToolInterface = ({ selectedTool }: ToolInterfaceProps) => {
             {selectedTool.tags && selectedTool.tags.length > 0 && (
               <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex flex-wrap gap-2">
-                  {selectedTool.tags.map((tag) => (
+                  {selectedTool.tags.map(tag => (
                     <span
                       key={tag}
                       className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"

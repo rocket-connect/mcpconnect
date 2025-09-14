@@ -20,7 +20,7 @@ export const ChatInterface = ({ chatMessages }: ChatInterfaceProps) => (
         </div>
 
         <div className="space-y-4">
-          {chatMessages.map((msg) => (
+          {chatMessages.map(msg => (
             <ChatMessage key={msg.id || `msg-${Math.random()}`} {...msg} />
           ))}
         </div>
