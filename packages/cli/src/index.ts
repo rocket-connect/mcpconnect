@@ -1,8 +1,6 @@
-export const startServer = () => {
-  console.log("MCPConnect server starting...");
-  return Promise.resolve();
-};
+// Re-export server functionality for programmatic use
+export { startServer, createServer } from "@mcpconnect/server";
+export type { ServerOptions } from "@mcpconnect/server";
 
-export const openBrowser = () => {
-  console.log("Opening browser...");
-};
+// CLI-specific exports
+export * from "./cli.js";

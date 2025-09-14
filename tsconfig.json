@@ -13,13 +13,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "baseUrl": ".",
-    "paths": {
-      "@mcpconnect/cli": ["./packages/cli/src"],
-      "@mcpconnect/components": ["./packages/components/src"],
-      "@mcpconnect/ui": ["./apps/ui/src"],
-      "@mcpconnect/server": ["./apps/server/src"]
-    }
+    "baseUrl": "."
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
   "exclude": ["node_modules", "dist", "build", ".next"]

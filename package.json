@@ -22,6 +22,8 @@
     "dev": "pnpm -r --parallel dev",
     "dev:ui": "pnpm --filter @mcpconnect/ui dev",
     "dev:server": "pnpm --filter @mcpconnect/server dev",
+    "dev:cli": "pnpm --filter @mcpconnect/cli dev",
+    "start": "pnpm --filter @mcpconnect/cli tsx src/cli.ts",
     "preview:ui": "pnpm --filter @mcpconnect/ui preview",
     "lint": "pnpm -r lint",
     "lint:fix": "pnpm -r lint:fix",

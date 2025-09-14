@@ -1,5 +1,5 @@
 {
-  "name": "@mcpconnect/cli",
+  "name": "mcpconnect",
   "version": "0.0.0-alpha.1",
   "description": "CLI tool for MCPConnect",
   "type": "module",

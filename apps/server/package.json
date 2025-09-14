@@ -5,6 +5,15 @@
   "description": "MCPConnect server application with integrated UI",
   "type": "module",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "pnpm build:ui && tsc",
     "build:ui": "pnpm --filter @mcpconnect/ui build",
