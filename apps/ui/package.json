@@ -29,6 +29,9 @@
   "dependencies": {
     "@mcpconnect/components": "workspace:*",
     "@mcpconnect/schemas": "workspace:*",
+    "@mcpconnect/base-adapters": "workspace:*",
+    "@mcpconnect/adapter-localstorage": "workspace:*",
+    "@mcpconnect/adapter-ai-sdk": "workspace:*",
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",
     "clsx": "^2.0.0",

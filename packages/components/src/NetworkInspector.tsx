@@ -19,73 +19,7 @@ export interface NetworkInspectorProps {
 }
 
 export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
-  executions = [
-    {
-      id: "1",
-      tool: "query_database",
-      status: "success",
-      duration: 142,
-      timestamp: "10:30:47",
-      request: {
-        tool: "query_database",
-        arguments: {
-          query:
-            "SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '1 month'",
-          timeout: 5000,
-        },
-      },
-      response: {
-        success: true,
-        result: { count: 47, execution_time: 142 },
-      },
-    },
-    {
-      id: "2",
-      tool: "get_schema",
-      status: "success",
-      duration: 89,
-      timestamp: "10:29:15",
-      request: {
-        tool: "get_schema",
-        arguments: { table: "users" },
-      },
-      response: {
-        success: true,
-        result: {
-          columns: [
-            { name: "id", type: "INTEGER", nullable: false },
-            { name: "email", type: "VARCHAR", nullable: false },
-            { name: "created_at", type: "TIMESTAMP", nullable: false },
-          ],
-        },
-      },
-    },
-    {
-      id: "3",
-      tool: "backup_data",
-      status: "error",
-      duration: 2341,
-      timestamp: "10:25:32",
-      request: {
-        tool: "backup_data",
-        arguments: { format: "sql", compress: true },
-      },
-      error: "Permission denied: insufficient privileges for backup operation",
-    },
-    {
-      id: "4",
-      tool: "query_database",
-      status: "pending",
-      timestamp: "10:30:50",
-      request: {
-        tool: "query_database",
-        arguments: {
-          query:
-            "SELECT * FROM orders WHERE status = 'pending' ORDER BY created_at DESC LIMIT 10",
-        },
-      },
-    },
-  ],
+  executions = [], // Now comes from storage context instead of hardcoded
   className = "",
 }) => {
   const [selectedExecution, setSelectedExecution] = useState<string | null>(
@@ -141,6 +75,35 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   };
 
   const selected = executions.find(e => e.id === selectedExecution);
+
+  // If no executions available, show empty state
+  if (executions.length === 0) {
+    return (
+      <div
+        className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex flex-col h-full ${className}`}
+      >
+        <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            <h3 className="font-medium text-gray-900 dark:text-white">
+              Request Inspector
+            </h3>
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            0 requests
+          </div>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <Database className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>No tool executions yet</p>
+            <p className="text-sm">Execute tools to see request details</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
