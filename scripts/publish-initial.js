@@ -27,6 +27,7 @@ function execSyncLog(command, options = {}) {
 function main() {
   const args = process.argv.slice(2);
   const isDryRun = args.includes("--dry-run");
+  let hasStashedChanges = false;
 
   console.log(`${isDryRun ? "DRY RUN: " : ""}Starting publish process...`);
 
