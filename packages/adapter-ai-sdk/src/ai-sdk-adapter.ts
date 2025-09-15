@@ -13,6 +13,7 @@ import {
   LLMCapabilities,
   AdapterError,
   AdapterStatus,
+  StorageAdapter,
 } from "@mcpconnect/base-adapters";
 import {
   Connection,
@@ -97,12 +98,19 @@ export interface ModelOption {
  */
 export class AISDKAdapter extends LLMAdapter {
   protected config: AISDKConfig;
-  private static readonly STORAGE_KEY = "mcpconnect-llm-settings";
+  private static storageAdapter: StorageAdapter | null = null;
 
   constructor(config: AISDKConfig) {
     const parsedConfig = AISDKConfigSchema.parse(config);
     super(parsedConfig);
     this.config = parsedConfig;
+  }
+
+  /**
+   * Set the storage adapter for static methods
+   */
+  static setStorageAdapter(adapter: StorageAdapter) {
+    this.storageAdapter = adapter;
   }
 
   async getCapabilities(): Promise<LLMCapabilities> {
@@ -798,34 +806,6 @@ export class AISDKAdapter extends LLMAdapter {
     return limits[model] || 200000;
   }
 
-  static saveSettings(settings: LLMSettings): void {
-    try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
-    } catch (error) {
-      console.error("Failed to save LLM settings:", error);
-    }
-  }
-
-  static loadSettings(): LLMSettings | null {
-    try {
-      const saved = localStorage.getItem(this.STORAGE_KEY);
-      if (saved) {
-        return JSON.parse(saved) as LLMSettings;
-      }
-    } catch (error) {
-      console.error("Failed to load LLM settings:", error);
-    }
-    return null;
-  }
-
-  static clearSettings(): void {
-    try {
-      localStorage.removeItem(this.STORAGE_KEY);
-    } catch (error) {
-      console.error("Failed to clear LLM settings:", error);
-    }
-  }
-
   static getApiKeyPlaceholder(): string {
     return "sk-ant-api03-...";
   }
@@ -880,5 +860,28 @@ export class AISDKAdapter extends LLMAdapter {
       return error.message;
     }
     return "An unexpected error occurred. Please try again.";
+  }
+
+  /**
+   * Store tool execution using the storage adapter
+   */
+  static async storeToolExecution(
+    connectionId: string,
+    execution: ToolExecution
+  ): Promise<void> {
+    if (!this.storageAdapter) {
+      console.warn("No storage adapter configured for AISDKAdapter");
+      return;
+    }
+
+    try {
+      await this.storageAdapter.addToolExecution(connectionId, execution);
+      console.log(
+        `[AISDKAdapter] Stored tool execution for ${connectionId}:`,
+        execution.id
+      );
+    } catch (error) {
+      console.error("Failed to store tool execution:", error);
+    }
   }
 }

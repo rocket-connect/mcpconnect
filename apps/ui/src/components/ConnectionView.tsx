@@ -1,4 +1,4 @@
-// apps/ui/src/components/ConnectionView.tsx - Refactored to use adapter pattern
+// apps/ui/src/components/ConnectionView.tsx - Using enhanced adapter methods
 import { ConnectionItem } from "@mcpconnect/components";
 import { Connection } from "@mcpconnect/schemas";
 import { useNavigate } from "react-router-dom";
@@ -50,7 +50,7 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
 
     if (confirmed) {
       try {
-        // Remove connection from adapter
+        // Remove connection using enhanced adapter method
         const updatedConnections = connections.filter(
           c => c.id !== connectionId
         );
@@ -62,7 +62,7 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         delete updatedConversations[connectionId];
         await updateConversations(updatedConversations);
 
-        // Remove all associated data using the adapter's helper method
+        // Remove all associated data using the adapter's optimized method
         await adapter.removeConnectionData(connectionId);
 
         // Refresh the page to reload data
@@ -111,17 +111,23 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
 
           finalConnection.isConnected = true;
 
-          // Store tools using adapter
+          // Store tools using enhanced adapter method
           if (introspectionResult.tools.length > 0) {
-            await adapter.setConnectionTools(connection.id, introspectionResult.tools);
+            await adapter.setConnectionTools(
+              connection.id,
+              introspectionResult.tools
+            );
             console.log(
               `[ConnectionView] Stored ${introspectionResult.tools.length} tools for ${connection.name}`
             );
           }
 
-          // Store resources using adapter
+          // Store resources using enhanced adapter method
           if (introspectionResult.resources.length > 0) {
-            await adapter.setConnectionResources(connection.id, introspectionResult.resources);
+            await adapter.setConnectionResources(
+              connection.id,
+              introspectionResult.resources
+            );
             console.log(
               `[ConnectionView] Stored ${introspectionResult.resources.length} resources for ${connection.name}`
             );
@@ -162,7 +168,7 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         c.id === finalConnection.id ? finalConnection : c
       );
 
-      // Save to adapter
+      // Save to adapter using enhanced method
       await adapter.setConnections(finalUpdatedConnections);
 
       console.log(

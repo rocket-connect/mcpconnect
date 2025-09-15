@@ -5,26 +5,28 @@ import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [themeAdapter] = useState(() => 
-    new LocalStorageAdapter({
-      name: "mcpconnect-theme-storage",
-      provider: "localstorage",
-      prefix: "mcpconnect:",
-      debug: false,
-      timeout: 30000,
-      retries: 3,
-      compression: false,
-      encryption: false,
-      autoCleanup: false,
-      maxSize: 1024 * 1024, // 1MB for theme storage
-      maxItemSize: 1024, // 1KB for theme data
-      simulateAsync: false,
-      cleanupInterval: 3600000, // 1 hour
-    })
+  const [themeAdapter] = useState(
+    () =>
+      new LocalStorageAdapter({
+        name: "mcpconnect-theme-storage",
+        provider: "localstorage",
+        prefix: "mcpconnect-theme:",
+        debug: false,
+        timeout: 30000,
+        retries: 3,
+        compression: false,
+        encryption: false,
+        autoCleanup: false,
+        maxSize: 1024 * 1024, // 1MB for theme storage
+        maxItemSize: 1024, // 1KB for theme data
+        simulateAsync: false,
+        cleanupInterval: 3600000, // 1 hour
+      })
   );
 
   const [theme, setTheme] = useState<Theme>("dark"); // Default to dark
-  const [systemTheme, setSystemTheme] = useState<Exclude<Theme, "system">>("dark");
+  const [systemTheme, setSystemTheme] =
+    useState<Exclude<Theme, "system">>("dark");
   const [isInitialized, setIsInitialized] = useState(false);
 
   const resolvedTheme: Exclude<Theme, "system"> =
@@ -35,20 +37,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const initializeTheme = async () => {
       try {
         await themeAdapter.initialize();
-        
-        // Load saved theme
+
+        // Load saved theme using adapter
         const savedTheme = await themeAdapter.getTheme();
         if (savedTheme && ["light", "dark", "system"].includes(savedTheme)) {
           setTheme(savedTheme);
         } else {
           // Default to system preference or dark
-          const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+          const prefersDark = window.matchMedia?.(
+            "(prefers-color-scheme: dark)"
+          ).matches;
           setTheme(prefersDark ? "dark" : "light");
         }
       } catch (error) {
         console.error("Failed to initialize theme storage:", error);
         // Fall back to system preference or dark
-        const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+        const prefersDark = window.matchMedia?.(
+          "(prefers-color-scheme: dark)"
+        ).matches;
         setTheme(prefersDark ? "dark" : "light");
       } finally {
         setIsInitialized(true);

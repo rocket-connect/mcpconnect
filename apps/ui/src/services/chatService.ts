@@ -1,4 +1,4 @@
-// apps/ui/src/services/chatService.ts - Refactored to use LocalStorage Adapter
+// apps/ui/src/services/chatService.ts - Refactored to use abstract StorageAdapter
 import { Connection, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import {
   AISDKAdapter,
@@ -6,7 +6,7 @@ import {
   ChatResponse,
 } from "@mcpconnect/adapter-ai-sdk";
 import { MCPService } from "./mcpService";
-import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
+import { StorageAdapter } from "@mcpconnect/base-adapters";
 import { nanoid } from "nanoid";
 
 // Local interface that matches what the UI needs
@@ -24,14 +24,17 @@ interface LLMSettings {
  */
 export class ChatService {
   private static adapter: AISDKAdapter | null = null;
-  private static storageAdapter: LocalStorageAdapter | null = null;
+  private static storageAdapter: StorageAdapter | null = null;
   private static currentSettings: LLMSettings | null = null;
 
   /**
    * Set the storage adapter to use
    */
-  static setStorageAdapter(adapter: LocalStorageAdapter) {
+  static setStorageAdapter(adapter: StorageAdapter) {
     this.storageAdapter = adapter;
+
+    // Also set it for the AISDKAdapter to use
+    AISDKAdapter.setStorageAdapter(adapter);
   }
 
   /**

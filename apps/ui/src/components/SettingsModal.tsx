@@ -324,7 +324,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onChange={e =>
                         handleSettingChange("apiKey", e.target.value)
                       }
-                      placeholder={ModelService.getApiKeyPlaceholder("anthropic")}
+                      placeholder={ModelService.getApiKeyPlaceholder(
+                        "anthropic"
+                      )}
                       className={`w-full px-3 py-2 pr-20 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         !isApiKeyFormatValid
                           ? "border-red-300 dark:border-red-600"
@@ -468,37 +470,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Connections:</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Connections:
+                  </span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {storageStats.connections}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Conversations:</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Conversations:
+                  </span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {storageStats.totalConversations}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Tools:</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Tools:
+                  </span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {storageStats.totalTools}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Resources:</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Resources:
+                  </span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {storageStats.totalResources}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Tool Executions:</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Tool Executions:
+                  </span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {storageStats.totalToolExecutions}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Storage Used:</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Storage Used:
+                  </span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {storageStats.storageUsed}
                   </span>

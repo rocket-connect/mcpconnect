@@ -10,6 +10,13 @@ import {
   AdapterError,
   AdapterStatus,
 } from "@mcpconnect/base-adapters";
+import {
+  Connection,
+  ChatConversation,
+  Tool,
+  Resource,
+  ToolExecution,
+} from "@mcpconnect/schemas";
 import { z } from "zod";
 
 /**
@@ -430,146 +437,157 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   // ===============================
-  // MCP-SPECIFIC HELPER METHODS
+  // ENHANCED MCP-SPECIFIC METHODS
   // ===============================
 
   /**
-   * Store theme preference
+   * Get connections array with proper typing
    */
-  async setTheme(theme: "light" | "dark" | "system"): Promise<void> {
-    await this.set("theme", theme);
-  }
-
-  /**
-   * Get theme preference
-   */
-  async getTheme(): Promise<"light" | "dark" | "system" | null> {
-    const item = await this.get("theme");
-    return item?.value as "light" | "dark" | "system" | null;
-  }
-
-  /**
-   * Store LLM settings
-   */
-  async setLLMSettings(settings: any): Promise<void> {
-    await this.set("llm-settings", settings);
-  }
-
-  /**
-   * Get LLM settings
-   */
-  async getLLMSettings(): Promise<any> {
-    const item = await this.get("llm-settings");
-    return item?.value || null;
-  }
-
-  /**
-   * Clear LLM settings
-   */
-  async clearLLMSettings(): Promise<void> {
-    await this.delete("llm-settings");
-  }
-
-  /**
-   * Store connections array
-   */
-  async setConnections(connections: any[]): Promise<void> {
-    await this.set("connections", connections);
-  }
-
-  /**
-   * Get connections array
-   */
-  async getConnections(): Promise<any[]> {
+  async getConnections(): Promise<Connection[]> {
     const item = await this.get("connections");
-    return item?.value as any[] || [];
+    return (item?.value as Connection[]) || [];
   }
 
   /**
-   * Store tools for a connection
+   * Store connections array with proper typing
    */
-  async setConnectionTools(connectionId: string, tools: any[]): Promise<void> {
+  async setConnections(connections: Connection[]): Promise<void> {
+    await this.set("connections", connections, {
+      type: "array",
+      tags: ["mcp", "connections"],
+      compress: true,
+      encrypt: false,
+    });
+  }
+
+  /**
+   * Get tools for a connection with proper typing
+   */
+  async getConnectionTools(connectionId: string): Promise<Tool[]> {
     const allTools = await this.get("tools");
-    const toolsData = allTools?.value as Record<string, any[]> || {};
-    toolsData[connectionId] = tools;
-    await this.set("tools", toolsData);
-  }
-
-  /**
-   * Get tools for a connection
-   */
-  async getConnectionTools(connectionId: string): Promise<any[]> {
-    const item = await this.get("tools");
-    const toolsData = item?.value as Record<string, any[]> || {};
+    const toolsData = (allTools?.value as Record<string, Tool[]>) || {};
     return toolsData[connectionId] || [];
   }
 
   /**
-   * Store resources for a connection
+   * Store tools for a connection with proper typing
    */
-  async setConnectionResources(connectionId: string, resources: any[]): Promise<void> {
-    const allResources = await this.get("resources");
-    const resourcesData = allResources?.value as Record<string, any[]> || {};
-    resourcesData[connectionId] = resources;
-    await this.set("resources", resourcesData);
+  async setConnectionTools(connectionId: string, tools: Tool[]): Promise<void> {
+    const allTools = await this.get("tools");
+    const toolsData = (allTools?.value as Record<string, Tool[]>) || {};
+    toolsData[connectionId] = tools;
+    await this.set("tools", toolsData, {
+      type: "object",
+      tags: ["mcp", "tools"],
+      compress: true,
+      encrypt: false,
+    });
   }
 
   /**
-   * Get resources for a connection
+   * Get resources for a connection with proper typing
    */
-  async getConnectionResources(connectionId: string): Promise<any[]> {
-    const item = await this.get("resources");
-    const resourcesData = item?.value as Record<string, any[]> || {};
+  async getConnectionResources(connectionId: string): Promise<Resource[]> {
+    const allResources = await this.get("resources");
+    const resourcesData =
+      (allResources?.value as Record<string, Resource[]>) || {};
     return resourcesData[connectionId] || [];
   }
 
   /**
-   * Store conversations for a connection
+   * Store resources for a connection with proper typing
    */
-  async setConnectionConversations(connectionId: string, conversations: any[]): Promise<void> {
-    const allConversations = await this.get("conversations");
-    const conversationsData = allConversations?.value as Record<string, any[]> || {};
-    conversationsData[connectionId] = conversations;
-    await this.set("conversations", conversationsData);
+  async setConnectionResources(
+    connectionId: string,
+    resources: Resource[]
+  ): Promise<void> {
+    const allResources = await this.get("resources");
+    const resourcesData =
+      (allResources?.value as Record<string, Resource[]>) || {};
+    resourcesData[connectionId] = resources;
+    await this.set("resources", resourcesData, {
+      type: "object",
+      tags: ["mcp", "resources"],
+      compress: true,
+      encrypt: false,
+    });
   }
 
   /**
-   * Get conversations for a connection
+   * Get conversations for a connection with proper typing
    */
-  async getConnectionConversations(connectionId: string): Promise<any[]> {
-    const item = await this.get("conversations");
-    const conversationsData = item?.value as Record<string, any[]> || {};
+  async getConnectionConversations(
+    connectionId: string
+  ): Promise<ChatConversation[]> {
+    const allConversations = await this.get("conversations");
+    const conversationsData =
+      (allConversations?.value as Record<string, ChatConversation[]>) || {};
     return conversationsData[connectionId] || [];
   }
 
   /**
-   * Store tool executions for a connection
+   * Store conversations for a connection with proper typing
    */
-  async setConnectionToolExecutions(connectionId: string, executions: any[]): Promise<void> {
-    const allExecutions = await this.get("toolExecutions");
-    const executionsData = allExecutions?.value as Record<string, any[]> || {};
-    executionsData[connectionId] = executions;
-    await this.set("toolExecutions", executionsData);
+  async setConnectionConversations(
+    connectionId: string,
+    conversations: ChatConversation[]
+  ): Promise<void> {
+    const allConversations = await this.get("conversations");
+    const conversationsData =
+      (allConversations?.value as Record<string, ChatConversation[]>) || {};
+    conversationsData[connectionId] = conversations;
+    await this.set("conversations", conversationsData, {
+      type: "object",
+      tags: ["mcp", "conversations"],
+      compress: true,
+      encrypt: false,
+    });
   }
 
   /**
-   * Get tool executions for a connection
+   * Get tool executions for a connection with proper typing
    */
-  async getConnectionToolExecutions(connectionId: string): Promise<any[]> {
-    const item = await this.get("toolExecutions");
-    const executionsData = item?.value as Record<string, any[]> || {};
+  async getConnectionToolExecutions(
+    connectionId: string
+  ): Promise<ToolExecution[]> {
+    const allExecutions = await this.get("toolExecutions");
+    const executionsData =
+      (allExecutions?.value as Record<string, ToolExecution[]>) || {};
     return executionsData[connectionId] || [];
   }
 
   /**
-   * Add a single tool execution to a connection
+   * Store tool executions for a connection with proper typing
    */
-  async addToolExecution(connectionId: string, execution: any): Promise<void> {
-    const currentExecutions = await this.getConnectionToolExecutions(connectionId);
-    
+  async setConnectionToolExecutions(
+    connectionId: string,
+    executions: ToolExecution[]
+  ): Promise<void> {
+    const allExecutions = await this.get("toolExecutions");
+    const executionsData =
+      (allExecutions?.value as Record<string, ToolExecution[]>) || {};
+    executionsData[connectionId] = executions;
+    await this.set("toolExecutions", executionsData, {
+      type: "object",
+      tags: ["mcp", "executions"],
+      compress: true,
+      encrypt: false,
+    });
+  }
+
+  /**
+   * Add a single tool execution to a connection (optimized)
+   */
+  async addToolExecution(
+    connectionId: string,
+    execution: ToolExecution
+  ): Promise<void> {
+    const currentExecutions =
+      await this.getConnectionToolExecutions(connectionId);
+
     // Update or add the execution
     const existingIndex = currentExecutions.findIndex(
-      (exec: any) => exec.id === execution.id
+      (exec: ToolExecution) => exec.id === execution.id
     );
 
     if (existingIndex !== -1) {
@@ -585,40 +603,52 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   /**
-   * Remove all data for a connection
+   * Remove all data for a connection (optimized)
    */
   async removeConnectionData(connectionId: string): Promise<void> {
+    // Use batch operations for efficiency
+    const updates: Array<Promise<void>> = [];
+
     // Remove from tools
     const allTools = await this.get("tools");
     if (allTools?.value) {
-      const toolsData = allTools.value as Record<string, any[]>;
+      const toolsData = allTools.value as Record<string, Tool[]>;
       delete toolsData[connectionId];
-      await this.set("tools", toolsData);
+      updates.push(this.set("tools", toolsData));
     }
 
     // Remove from resources
     const allResources = await this.get("resources");
     if (allResources?.value) {
-      const resourcesData = allResources.value as Record<string, any[]>;
+      const resourcesData = allResources.value as Record<string, Resource[]>;
       delete resourcesData[connectionId];
-      await this.set("resources", resourcesData);
+      updates.push(this.set("resources", resourcesData));
     }
 
     // Remove from conversations
     const allConversations = await this.get("conversations");
     if (allConversations?.value) {
-      const conversationsData = allConversations.value as Record<string, any[]>;
+      const conversationsData = allConversations.value as Record<
+        string,
+        ChatConversation[]
+      >;
       delete conversationsData[connectionId];
-      await this.set("conversations", conversationsData);
+      updates.push(this.set("conversations", conversationsData));
     }
 
     // Remove from tool executions
     const allExecutions = await this.get("toolExecutions");
     if (allExecutions?.value) {
-      const executionsData = allExecutions.value as Record<string, any[]>;
+      const executionsData = allExecutions.value as Record<
+        string,
+        ToolExecution[]
+      >;
       delete executionsData[connectionId];
-      await this.set("toolExecutions", executionsData);
+      updates.push(this.set("toolExecutions", executionsData));
     }
+
+    // Execute all updates
+    await Promise.all(updates);
   }
 
   /**
@@ -632,34 +662,48 @@ export class LocalStorageAdapter extends StorageAdapter {
     totalResources: number;
     storageUsed: string;
   }> {
-    const [connections, conversations, toolExecutions, tools, resources, stats] = await Promise.all([
+    const [
+      connections,
+      conversations,
+      toolExecutions,
+      tools,
+      resources,
+      stats,
+    ] = await Promise.all([
       this.getConnections(),
       this.get("conversations"),
       this.get("toolExecutions"),
       this.get("tools"),
       this.get("resources"),
-      this.stats()
+      this.stats(),
     ]);
 
-    const conversationsData = conversations?.value as Record<string, any[]> || {};
-    const executionsData = toolExecutions?.value as Record<string, any[]> || {};
-    const toolsData = tools?.value as Record<string, any[]> || {};
-    const resourcesData = resources?.value as Record<string, any[]> || {};
+    const conversationsData =
+      (conversations?.value as Record<string, ChatConversation[]>) || {};
+    const executionsData =
+      (toolExecutions?.value as Record<string, ToolExecution[]>) || {};
+    const toolsData = (tools?.value as Record<string, Tool[]>) || {};
+    const resourcesData =
+      (resources?.value as Record<string, Resource[]>) || {};
 
     const totalConversations = Object.values(conversationsData).reduce(
-      (total, convs) => total + convs.length, 0
+      (total, convs) => total + convs.length,
+      0
     );
-    
+
     const totalToolExecutions = Object.values(executionsData).reduce(
-      (total, execs) => total + execs.length, 0
+      (total, execs) => total + execs.length,
+      0
     );
-    
+
     const totalTools = Object.values(toolsData).reduce(
-      (total, tools) => total + tools.length, 0
+      (total, tools) => total + tools.length,
+      0
     );
-    
+
     const totalResources = Object.values(resourcesData).reduce(
-      (total, resources) => total + resources.length, 0
+      (total, resources) => total + resources.length,
+      0
     );
 
     const formatBytes = (bytes: number) => {

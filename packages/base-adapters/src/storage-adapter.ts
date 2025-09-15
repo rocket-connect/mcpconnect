@@ -51,14 +51,14 @@ export const StorageResultSchema = z.object({
 export type StorageResult = z.infer<typeof StorageResultSchema>;
 
 /**
- * Storage options schema
+ * Storage options schema - FIXED: compress and encrypt are now optional
  */
 export const StorageOptionsSchema = z.object({
   ttl: z.number().positive().optional(), // Time to live in milliseconds
   tags: z.array(z.string()).optional(),
   type: z.string().optional(),
-  compress: z.boolean().default(false),
-  encrypt: z.boolean().default(false),
+  compress: z.boolean().optional().default(false), // FIXED: Made optional
+  encrypt: z.boolean().optional().default(false), // FIXED: Made optional
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -216,6 +216,210 @@ export abstract class StorageAdapter {
   abstract transaction<T>(
     callback: (tx: StorageTransaction) => Promise<T>
   ): Promise<T>;
+
+  // ===============================
+  // MCP-SPECIFIC HELPER METHODS
+  // ===============================
+
+  /**
+   * Store theme preference
+   */
+  async setTheme(theme: "light" | "dark" | "system"): Promise<void> {
+    await this.set("theme", theme);
+  }
+
+  /**
+   * Get theme preference
+   */
+  async getTheme(): Promise<"light" | "dark" | "system" | null> {
+    const item = await this.get("theme");
+    return item?.value as "light" | "dark" | "system" | null;
+  }
+
+  /**
+   * Store LLM settings
+   */
+  async setLLMSettings(settings: any): Promise<void> {
+    await this.set("llm-settings", settings);
+  }
+
+  /**
+   * Get LLM settings
+   */
+  async getLLMSettings(): Promise<any> {
+    const item = await this.get("llm-settings");
+    return item?.value || null;
+  }
+
+  /**
+   * Clear LLM settings
+   */
+  async clearLLMSettings(): Promise<void> {
+    await this.delete("llm-settings");
+  }
+
+  /**
+   * Store connections array
+   */
+  async setConnections(connections: any[]): Promise<void> {
+    await this.set("connections", connections);
+  }
+
+  /**
+   * Get connections array
+   */
+  async getConnections(): Promise<any[]> {
+    const item = await this.get("connections");
+    return (item?.value as any[]) || [];
+  }
+
+  /**
+   * Store tools for a connection
+   */
+  async setConnectionTools(connectionId: string, tools: any[]): Promise<void> {
+    const allTools = await this.get("tools");
+    const toolsData = (allTools?.value as Record<string, any[]>) || {};
+    toolsData[connectionId] = tools;
+    await this.set("tools", toolsData);
+  }
+
+  /**
+   * Get tools for a connection
+   */
+  async getConnectionTools(connectionId: string): Promise<any[]> {
+    const item = await this.get("tools");
+    const toolsData = (item?.value as Record<string, any[]>) || {};
+    return toolsData[connectionId] || [];
+  }
+
+  /**
+   * Store resources for a connection
+   */
+  async setConnectionResources(
+    connectionId: string,
+    resources: any[]
+  ): Promise<void> {
+    const allResources = await this.get("resources");
+    const resourcesData = (allResources?.value as Record<string, any[]>) || {};
+    resourcesData[connectionId] = resources;
+    await this.set("resources", resourcesData);
+  }
+
+  /**
+   * Get resources for a connection
+   */
+  async getConnectionResources(connectionId: string): Promise<any[]> {
+    const item = await this.get("resources");
+    const resourcesData = (item?.value as Record<string, any[]>) || {};
+    return resourcesData[connectionId] || [];
+  }
+
+  /**
+   * Store conversations for a connection
+   */
+  async setConnectionConversations(
+    connectionId: string,
+    conversations: any[]
+  ): Promise<void> {
+    const allConversations = await this.get("conversations");
+    const conversationsData =
+      (allConversations?.value as Record<string, any[]>) || {};
+    conversationsData[connectionId] = conversations;
+    await this.set("conversations", conversationsData);
+  }
+
+  /**
+   * Get conversations for a connection
+   */
+  async getConnectionConversations(connectionId: string): Promise<any[]> {
+    const item = await this.get("conversations");
+    const conversationsData = (item?.value as Record<string, any[]>) || {};
+    return conversationsData[connectionId] || [];
+  }
+
+  /**
+   * Store tool executions for a connection
+   */
+  async setConnectionToolExecutions(
+    connectionId: string,
+    executions: any[]
+  ): Promise<void> {
+    const allExecutions = await this.get("toolExecutions");
+    const executionsData =
+      (allExecutions?.value as Record<string, any[]>) || {};
+    executionsData[connectionId] = executions;
+    await this.set("toolExecutions", executionsData);
+  }
+
+  /**
+   * Get tool executions for a connection
+   */
+  async getConnectionToolExecutions(connectionId: string): Promise<any[]> {
+    const item = await this.get("toolExecutions");
+    const executionsData = (item?.value as Record<string, any[]>) || {};
+    return executionsData[connectionId] || [];
+  }
+
+  /**
+   * Add a single tool execution to a connection
+   */
+  async addToolExecution(connectionId: string, execution: any): Promise<void> {
+    const currentExecutions =
+      await this.getConnectionToolExecutions(connectionId);
+
+    // Update or add the execution
+    const existingIndex = currentExecutions.findIndex(
+      (exec: any) => exec.id === execution.id
+    );
+
+    if (existingIndex !== -1) {
+      currentExecutions[existingIndex] = {
+        ...currentExecutions[existingIndex],
+        ...execution,
+      };
+    } else {
+      currentExecutions.push(execution);
+    }
+
+    await this.setConnectionToolExecutions(connectionId, currentExecutions);
+  }
+
+  /**
+   * Remove all data for a connection
+   */
+  async removeConnectionData(connectionId: string): Promise<void> {
+    // Remove from tools
+    const allTools = await this.get("tools");
+    if (allTools?.value) {
+      const toolsData = allTools.value as Record<string, any[]>;
+      delete toolsData[connectionId];
+      await this.set("tools", toolsData);
+    }
+
+    // Remove from resources
+    const allResources = await this.get("resources");
+    if (allResources?.value) {
+      const resourcesData = allResources.value as Record<string, any[]>;
+      delete resourcesData[connectionId];
+      await this.set("resources", resourcesData);
+    }
+
+    // Remove from conversations
+    const allConversations = await this.get("conversations");
+    if (allConversations?.value) {
+      const conversationsData = allConversations.value as Record<string, any[]>;
+      delete conversationsData[connectionId];
+      await this.set("conversations", conversationsData);
+    }
+
+    // Remove from tool executions
+    const allExecutions = await this.get("toolExecutions");
+    if (allExecutions?.value) {
+      const executionsData = allExecutions.value as Record<string, any[]>;
+      delete executionsData[connectionId];
+      await this.set("toolExecutions", executionsData);
+    }
+  }
 
   /**
    * Update configuration

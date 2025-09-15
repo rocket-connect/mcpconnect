@@ -25,7 +25,7 @@ interface StorageContextType {
   toolExecutions: Record<string, ToolExecution[]>;
   isLoading: boolean;
   error: string | null;
-  // Methods to update data and trigger reactive updates
+  // Optimized update methods using adapter
   updateConnections: (connections: Connection[]) => Promise<void>;
   updateConversations: (
     conversations: Record<string, ChatConversation[]>
@@ -78,7 +78,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("Refreshing all data from storage...");
 
-      // Use adapter methods instead of direct localStorage access
+      // Use enhanced adapter methods for better performance
       const [
         storedConnections,
         storedTools,
@@ -86,7 +86,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         storedConversations,
         storedExecutions,
       ] = await Promise.all([
-        adapter.getConnections(),
+        adapter.getConnections(), // Use enhanced method
         adapter.get("tools"),
         adapter.get("resources"),
         adapter.get("conversations"),
@@ -121,6 +121,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error("Failed to refresh data:", err);
+      setError(err instanceof Error ? err.message : String(err));
     }
   }, [adapter]);
 
@@ -141,7 +142,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const updateConnections = useCallback(
     async (newConnections: Connection[]) => {
       try {
-        await adapter.setConnections(newConnections);
+        await adapter.setConnections(newConnections); // Use enhanced method
         setConnections(newConnections);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -153,7 +154,12 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const updateConversations = useCallback(
     async (newConversations: Record<string, ChatConversation[]>) => {
       try {
-        await adapter.set("conversations", newConversations);
+        await adapter.set("conversations", newConversations, {
+          type: "object",
+          tags: ["mcp", "conversations"],
+          compress: true,
+          encrypt: false,
+        });
         setConversations(newConversations);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -197,31 +203,35 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
   const deleteConnection = useCallback(
     async (connectionId: string) => {
-      // Remove connection
-      const newConnections = connections.filter(
-        conn => conn.id !== connectionId
-      );
-      await updateConnections(newConnections);
+      try {
+        // Remove connection
+        const newConnections = connections.filter(
+          conn => conn.id !== connectionId
+        );
+        await updateConnections(newConnections);
 
-      // Remove associated data using adapter method
-      await adapter.removeConnectionData(connectionId);
+        // Remove associated data using adapter's optimized method
+        await adapter.removeConnectionData(connectionId);
 
-      // Update local state
-      const newConversations = { ...conversations };
-      delete newConversations[connectionId];
-      setConversations(newConversations);
+        // Update local state
+        const newConversations = { ...conversations };
+        delete newConversations[connectionId];
+        setConversations(newConversations);
 
-      const newTools = { ...tools };
-      delete newTools[connectionId];
-      setTools(newTools);
+        const newTools = { ...tools };
+        delete newTools[connectionId];
+        setTools(newTools);
 
-      const newResources = { ...resources };
-      delete newResources[connectionId];
-      setResources(newResources);
+        const newResources = { ...resources };
+        delete newResources[connectionId];
+        setResources(newResources);
 
-      const newToolExecutions = { ...toolExecutions };
-      delete newToolExecutions[connectionId];
-      setToolExecutions(newToolExecutions);
+        const newToolExecutions = { ...toolExecutions };
+        delete newToolExecutions[connectionId];
+        setToolExecutions(newToolExecutions);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     },
     [
       connections,
@@ -248,7 +258,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         ModelService.setAdapter(adapter);
         ChatService.setStorageAdapter(adapter);
 
-        // Load existing data (no mock data fallback)
+        // Load existing data
         await loadExistingData();
         setIsLoading(false);
       } catch (err) {
@@ -262,7 +272,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
     async function loadExistingData() {
       try {
-        // Use adapter methods for all data loading
+        // Use enhanced adapter methods for better performance
         const [
           storedConnections,
           storedTools,
@@ -270,14 +280,14 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           storedConversations,
           storedExecutions,
         ] = await Promise.all([
-          adapter.getConnections(),
+          adapter.getConnections(), // Enhanced method
           adapter.get("tools"),
           adapter.get("resources"),
           adapter.get("conversations"),
           adapter.get("toolExecutions"),
         ]);
 
-        // Load existing data into state (empty arrays/objects if nothing stored)
+        // Load existing data into state
         setConnections(storedConnections);
 
         if (storedTools?.value) {
@@ -305,6 +315,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         console.error("Failed to load existing data:", err);
+        setError(err instanceof Error ? err.message : String(err));
       }
     }
 

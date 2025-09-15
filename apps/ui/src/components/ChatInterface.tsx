@@ -54,7 +54,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   // Reload settings when settings modal closes
   const handleSettingsClose = useCallback(async () => {
     setIsSettingsOpen(false);
-    
+
     // Reload LLM settings after modal closes
     try {
       const settings = await ModelService.loadSettings();
@@ -165,12 +165,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     };
 
     createInitialChatIfNeeded();
-  }, [
-    connectionId,
-    chatId,
-    connectionConversations.length,
-    isCreatingChat,
-  ]);
+  }, [connectionId, chatId, connectionConversations.length, isCreatingChat]);
 
   // Delete a chat conversation
   const handleDeleteChat = async (
@@ -830,10 +825,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       </div>
 
       {/* Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={handleSettingsClose}
-      />
+      <SettingsModal isOpen={isSettingsOpen} onClose={handleSettingsClose} />
     </>
   );
 };
