@@ -1,3 +1,4 @@
+// apps/ui/src/App.tsx - Simplified version that always shows main UI
 import { useState, useEffect } from "react";
 import {
   BrowserRouter,
@@ -18,7 +19,6 @@ import {
 } from "./components";
 import { useStorage } from "./contexts/StorageContext";
 import { InspectorProvider, InspectorUI } from "./contexts/InspectorProvider";
-import mockData from "./data/mockData";
 
 function AppContent() {
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
@@ -84,7 +84,7 @@ function AppContent() {
     );
   }
 
-  // Helper component to redirect to first chat ID using connection ID
+  // Helper components
   const ConnectionChatRedirect = () => {
     const { connectionId } = useParams<{ connectionId: string }>();
 
@@ -107,7 +107,6 @@ function AppContent() {
     }
   };
 
-  // Helper component to load tool by ID within a connection context
   const ConnectionToolLoader = () => {
     const { connectionId, toolId } = useParams<{
       connectionId: string;
@@ -116,15 +115,14 @@ function AppContent() {
 
     useEffect(() => {
       if (connectionId && toolId) {
-        const tool = mockData.getToolById(connectionId, toolId);
+        const connectionTools = tools[connectionId] || [];
+        const tool = connectionTools.find(t => t.id === toolId);
         if (tool) {
           setSelectedTool(tool);
         } else {
-          // If tool not found, clear selection
           setSelectedTool(null);
         }
       } else {
-        // If no tool ID specified, clear selection
         setSelectedTool(null);
       }
     }, [connectionId, toolId]);
@@ -132,19 +130,14 @@ function AppContent() {
     return <ToolInterface selectedTool={selectedTool} />;
   };
 
-  // Helper component to handle tools overview page
   const ConnectionToolsOverview = () => {
-    const { connectionId } = useParams<{ connectionId: string }>();
-
     useEffect(() => {
-      // Clear selected tool when viewing tools overview
       setSelectedTool(null);
-    }, [connectionId]);
+    }, []);
 
     return <ToolInterface selectedTool={null} />;
   };
 
-  // Add debugging wrapper for routes that should have parameters
   const DebugRouteWrapper = ({ children }: { children: React.ReactNode }) => {
     return <>{children}</>;
   };
@@ -175,7 +168,7 @@ function AppContent() {
             element={<ConnectionView connections={connections} />}
           />
 
-          {/* Connection detail redirect to first chat using connection ID */}
+          {/* Connection detail redirect to first chat */}
           <Route
             path="/connections/:connectionId"
             element={
@@ -185,7 +178,7 @@ function AppContent() {
             }
           />
 
-          {/* Basic connection chat redirect to first chat using connection ID */}
+          {/* Basic connection chat redirect */}
           <Route
             path="/connections/:connectionId/chat"
             element={
@@ -195,7 +188,7 @@ function AppContent() {
             }
           />
 
-          {/* Specific chat within a connection - USING CHAT IDs */}
+          {/* Specific chat within a connection */}
           <Route
             path="/connections/:connectionId/chat/:chatId"
             element={
@@ -205,7 +198,7 @@ function AppContent() {
             }
           />
 
-          {/* Tool execution within a specific chat - USING CHAT IDs */}
+          {/* Tool execution within a specific chat */}
           <Route
             path="/connections/:connectionId/chat/:chatId/tools/:toolId"
             element={
@@ -215,7 +208,7 @@ function AppContent() {
             }
           />
 
-          {/* Connection-specific tools routes - NOW PROPERLY SCOPED TO CONNECTIONS */}
+          {/* Connection-specific tools routes */}
           <Route
             path="/connections/:connectionId/tools"
             element={
@@ -251,7 +244,7 @@ function AppContent() {
             }
           />
 
-          {/* Fallback - redirect any other path to connections */}
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/connections" replace />} />
         </Routes>
       </MCPLayout>
