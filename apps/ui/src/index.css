@@ -45,51 +45,51 @@
 }
 
 .dark {
-  /* Dark mode colors - significantly different from light mode */
+  /* Improved dark mode colors - less jarring, better readability */
   --accent: #24bee1;
-  --foreground: #ffffff;
+  --foreground: #f8fafc; /* Slightly softer white */
   --foreground-invert: #1a2735;
-  --background: #0f172a; /* Much darker background */
+  --background: #1e293b; /* Softer dark background instead of #0f172a */
   --background-invert: #ffffff;
-  --hover: #1e293b; /* Darker hover state */
+  --hover: #334155; /* More visible hover states */
   --hover-invert: #f1f6fa;
-  --border: #334155; /* More visible borders in dark mode */
+  --border: #475569; /* More visible borders */
   --border-invert: #e6e6ff;
-  --card: #1e293b; /* Darker card background */
+  --card: #334155; /* Cards more distinct from background */
   --card-invert: #f1f6fa;
-  --muted: #94a3b8; /* Lighter muted text for better contrast */
-  --success: #00a5aa;
-  --warning: #ffbf14;
+  --muted: #cbd5e1; /* Much more readable muted text */
+  --success: #10b981; /* Slightly brighter green for dark mode */
+  --warning: #f59e0b; /* Better contrast warning color */
   --error: #ef4444;
 
-  /* Shadcn-compatible variables for dark theme */
-  --border-shadcn: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
+  /* Improved Shadcn-compatible variables for dark theme */
+  --border-shadcn: 217.2 32.6% 25%; /* More visible borders */
+  --input: 217.2 32.6% 25%;
   --ring: 212.7 26.8% 83.9%;
-  --background-shadcn: 222.2 84% 4.9%;
+  --background-shadcn: 222.2 47% 11%; /* Less jarring background */
   --foreground-shadcn: 210 40% 98%;
   --primary: 210 40% 98%;
   --primary-foreground: 222.2 47.4% 11.2%;
-  --secondary: 217.2 32.6% 17.5%;
+  --secondary: 217.2 32.6% 25%; /* More visible secondary */
   --secondary-foreground: 210 40% 98%;
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 210 40% 98%;
-  --muted-shadcn: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent-shadcn: 217.2 32.6% 17.5%;
+  --muted-shadcn: 217.2 32.6% 25%;
+  --muted-foreground: 215 20.2% 75%; /* Much more readable muted text */
+  --accent-shadcn: 217.2 32.6% 25%;
   --accent-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
+  --popover: 222.2 47% 11%;
   --popover-foreground: 210 40% 98%;
-  --card-shadcn: 222.2 84% 4.9%;
+  --card-shadcn: 222.2 47% 15%; /* Cards more distinct */
   --card-foreground: 210 40% 98%;
 }
 
 * {
   border-color: hsl(var(--border-shadcn));
   transition:
-    background-color 0.3s ease,
-    color 0.3s ease,
-    border-color 0.3s ease;
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 body {
@@ -111,8 +111,8 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   transition:
-    background-color 0.3s ease,
-    color 0.3s ease;
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 /* Enhanced utility classes for better theme switching */
@@ -175,5 +175,116 @@ body {
 
   .border-invert {
     border-color: var(--border-invert);
+  }
+
+  /* Dark mode specific improvements */
+  .dark .text-gray-400 {
+    color: #94a3b8; /* More readable than default gray-400 in dark mode */
+  }
+
+  .dark .text-gray-500 {
+    color: #cbd5e1; /* Much more readable muted text */
+  }
+
+  .dark .text-gray-600 {
+    color: #e2e8f0; /* Ensure good readability */
+  }
+
+  .dark .bg-gray-900 {
+    background-color: #1e293b; /* Softer than default gray-900 */
+  }
+
+  .dark .bg-gray-800 {
+    background-color: #334155; /* More distinct from background */
+  }
+
+  .dark .bg-gray-950 {
+    background-color: #0f172a; /* Keep very dark for specific uses */
+  }
+
+  /* Inspector panel improvements */
+  .dark [data-inspector="true"] {
+    background-color: #1e293b;
+    border-color: #475569;
+  }
+
+  .dark [data-inspector="true"] .bg-gray-50 {
+    background-color: #334155;
+  }
+
+  .dark [data-inspector="true"] .bg-gray-100 {
+    background-color: #475569;
+  }
+
+  /* Code blocks and JSON display improvements */
+  .dark pre {
+    background-color: #0f172a !important;
+    color: #e2e8f0 !important;
+    border-color: #475569 !important;
+  }
+
+  .dark code {
+    background-color: #334155 !important;
+    color: #e2e8f0 !important;
+  }
+
+  /* Ensure buttons and interactive elements are visible */
+  .dark .opacity-0:hover {
+    opacity: 1;
+  }
+
+  .dark .group:hover .opacity-0 {
+    opacity: 1;
+  }
+
+  /* Status indicators */
+  .dark .text-green-600 {
+    color: #10b981;
+  }
+
+  .dark .text-red-600 {
+    color: #ef4444;
+  }
+
+  .dark .text-blue-600 {
+    color: #3b82f6;
+  }
+
+  .dark .text-orange-600 {
+    color: #f59e0b;
+  }
+
+  /* Improve hover states for better UX */
+  .dark .hover\:bg-gray-100:hover {
+    background-color: #475569;
+  }
+
+  .dark .hover\:bg-gray-50:hover {
+    background-color: #334155;
+  }
+
+  .dark .hover\:text-gray-900:hover {
+    color: #f8fafc;
+  }
+
+  /* Chat message improvements */
+  .dark .bg-blue-50 {
+    background-color: #1e40af20; /* Semi-transparent blue */
+  }
+
+  .dark .bg-green-50 {
+    background-color: #10b98120; /* Semi-transparent green */
+  }
+
+  .dark .bg-red-50 {
+    background-color: #ef444420; /* Semi-transparent red */
+  }
+
+  .dark .bg-orange-50 {
+    background-color: #f59e0b20; /* Semi-transparent orange */
+  }
+
+  .dark .bg-amber-50 {
+    background-color: #f59e0b20; /* Semi-transparent amber */
   }
 }
