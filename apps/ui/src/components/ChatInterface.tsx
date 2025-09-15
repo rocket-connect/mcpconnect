@@ -2,7 +2,7 @@ import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
 import { Send, ExternalLink, Plus, Loader, X } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
@@ -38,6 +38,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
   // Get the current connection and conversation using chat ID
   const currentConnection = connections.find(conn => conn.id === connectionId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectionConversations = connectionId
     ? conversations[connectionId] || []
     : [];
@@ -60,7 +61,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   };
 
   // Create a new chat conversation
-  const handleNewChat = async () => {
+  const handleNewChat = useCallback(async () => {
     if (!connectionId) return;
 
     try {
@@ -91,7 +92,24 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     } catch (error) {
       console.error("Failed to create new chat:", error);
     }
-  };
+  }, [
+    connectionId,
+    connectionConversations,
+    conversations,
+    navigate,
+    updateConversations,
+  ]);
+
+  useEffect(() => {
+    const createInitialChatIfNeeded = async () => {
+      if (connectionId && connectionConversations.length === 0) {
+        // No chats exist for this connection, create one
+        await handleNewChat();
+      }
+    };
+
+    createInitialChatIfNeeded();
+  }, [connectionId, connectionConversations.length, handleNewChat]);
 
   // Delete a chat conversation
   const handleDeleteChat = async (
