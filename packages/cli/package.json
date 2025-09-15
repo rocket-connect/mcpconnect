@@ -1,6 +1,6 @@
 {
   "name": "@mcpconnect/cli",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "CLI tool for MCPConnect - quickly start a server with UI for debugging MCP integrations",
   "keywords": [
     "mcp",
