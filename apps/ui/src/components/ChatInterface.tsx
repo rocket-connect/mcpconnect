@@ -1,3 +1,4 @@
+// apps/ui/src/components/ChatInterface.tsx - Fixed tool execution and state management
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
@@ -6,6 +7,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
+import { MCPIntrospectionService } from "../services/mcpIntrospectionService";
 import { nanoid } from "nanoid";
 
 interface ChatInterfaceProps {
@@ -15,7 +17,14 @@ interface ChatInterfaceProps {
 export const ChatInterface = (_args: ChatInterfaceProps) => {
   const { connectionId, chatId } = useParams();
   const navigate = useNavigate();
-  const { connections, conversations, updateConversations } = useStorage();
+  const {
+    connections,
+    tools,
+    conversations,
+    updateConversations,
+    toolExecutions,
+    refreshAll,
+  } = useStorage();
   const { expandedToolCall: inspectorExpandedTool, syncToolCallState } =
     useInspector();
 
@@ -38,7 +47,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
   // Get the current connection and conversation using chat ID
   const currentConnection = connections.find(conn => conn.id === connectionId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectionConversations = connectionId
     ? conversations[connectionId] || []
     : [];
@@ -49,6 +57,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     : connectionConversations[0];
 
   const currentMessages = currentConversation?.messages || [];
+  const connectionTools = connectionId ? tools[connectionId] || [] : [];
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -74,7 +83,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         updatedAt: new Date(),
       };
 
-      // Get current conversations and add new one
       const updatedConnectionConversations = [
         ...connectionConversations,
         newChat,
@@ -84,10 +92,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         [connectionId]: updatedConnectionConversations,
       };
 
-      // Update both storage and local state
       await updateConversations(updatedConversations);
-
-      // Navigate to the new chat using its ID
       navigate(`/connections/${connectionId}/chat/${newChatId}`);
     } catch (error) {
       console.error("Failed to create new chat:", error);
@@ -103,7 +108,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   useEffect(() => {
     const createInitialChatIfNeeded = async () => {
       if (connectionId && connectionConversations.length === 0) {
-        // No chats exist for this connection, create one
         await handleNewChat();
       }
     };
@@ -117,12 +121,11 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     event?: React.MouseEvent
   ) => {
     if (event) {
-      event.stopPropagation(); // Prevent tab click
+      event.stopPropagation();
     }
 
     if (!connectionId || !chatToDeleteId) return;
 
-    // Confirm deletion
     const chatToDelete = connectionConversations.find(
       conv => conv.id === chatToDeleteId
     );
@@ -134,28 +137,22 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     if (!confirmed) return;
 
     try {
-      // Remove the chat from conversations
       const updatedConnectionConversations = connectionConversations.filter(
         conv => conv.id !== chatToDeleteId
       );
-
       const updatedConversations = {
         ...conversations,
         [connectionId]: updatedConnectionConversations,
       };
 
-      // Update both storage and local state
       await updateConversations(updatedConversations);
 
-      // If we're currently viewing the deleted chat, navigate away
       if (chatId === chatToDeleteId) {
         if (updatedConnectionConversations.length > 0) {
-          // Navigate to the first remaining chat
           navigate(
             `/connections/${connectionId}/chat/${updatedConnectionConversations[0].id}`
           );
         } else {
-          // No chats left, go to connection overview
           navigate(`/connections/${connectionId}`);
         }
       }
@@ -164,7 +161,376 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     }
   };
 
-  // Send a message to Anthropic
+  // Execute MCP tool
+  const executeTool = async (
+    toolName: string,
+    toolArgs: Record<string, any>
+  ): Promise<any> => {
+    if (!currentConnection) {
+      throw new Error("No connection available");
+    }
+
+    try {
+      console.log(`Executing tool ${toolName} with args:`, toolArgs);
+
+      const result = await MCPIntrospectionService.executeTool(
+        currentConnection,
+        toolName,
+        toolArgs
+      );
+
+      return result;
+    } catch (error) {
+      console.error(`Tool execution failed for ${toolName}:`, error);
+      throw error;
+    }
+  };
+
+  // FIXED: Proper tool execution storage update
+  const updateToolExecutionInStorage = async (execution: any) => {
+    if (!connectionId) return;
+
+    try {
+      // Get current executions
+      const currentExecutions = toolExecutions[connectionId] || [];
+
+      // Update or add the execution
+      const existingIndex = currentExecutions.findIndex(
+        exec => exec.id === execution.id
+      );
+      let updatedExecutions;
+
+      if (existingIndex !== -1) {
+        // Update existing execution
+        updatedExecutions = [...currentExecutions];
+        updatedExecutions[existingIndex] = {
+          ...updatedExecutions[existingIndex],
+          ...execution,
+        };
+      } else {
+        // Add new execution
+        updatedExecutions = [...currentExecutions, execution];
+      }
+
+      // Update in localStorage with proper structure
+      const toolExecutionsData = {
+        ...toolExecutions,
+        [connectionId]: updatedExecutions,
+      };
+
+      localStorage.setItem(
+        "mcpconnect:toolExecutions",
+        JSON.stringify({
+          key: "toolExecutions",
+          value: toolExecutionsData,
+          metadata: {
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            size: JSON.stringify(toolExecutionsData).length,
+            type: "object",
+          },
+        })
+      );
+
+      // FIXED: Force refresh of all data to sync state
+      await refreshAll();
+    } catch (error) {
+      console.error("Failed to update tool execution:", error);
+    }
+  };
+
+  // FIXED: Enhanced Claude API call with proper tool execution tracking
+  const callClaudeWithTools = async (
+    messages: ChatMessageType[]
+  ): Promise<{ response: string; toolExecutions: ChatMessageType[] }> => {
+    if (!llmSettings) throw new Error("No LLM settings configured");
+
+    // Convert messages to Claude format - filter out tool execution messages for API
+    const claudeMessages = messages
+      .filter(
+        msg =>
+          msg.message &&
+          msg.message.trim() &&
+          !msg.executingTool &&
+          !msg.toolExecution
+      )
+      .map(msg => ({
+        role: msg.isUser ? "user" : ("assistant" as const),
+        content: msg.message || "",
+      }));
+
+    // Convert available tools to Claude format
+    const claudeTools = connectionTools.map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.inputSchema || {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    }));
+
+    const requestBody = {
+      model: llmSettings.model,
+      max_tokens: llmSettings.maxTokens,
+      temperature: llmSettings.temperature,
+      messages: claudeMessages,
+      ...(claudeTools.length > 0 && { tools: claudeTools }),
+    };
+
+    console.log("Sending request to Claude with tools:", {
+      messageCount: claudeMessages.length,
+      toolCount: claudeTools.length,
+    });
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+        "x-api-key": llmSettings.apiKey,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `API request failed: ${response.status} ${response.statusText}: ${errorText}`
+      );
+    }
+
+    const data = await response.json();
+    console.log("Claude response:", data);
+
+    const toolExecutionMessages: ChatMessageType[] = [];
+
+    // Handle tool use
+    if (data.content) {
+      let responseText = "";
+      const toolResults: any[] = [];
+
+      for (const content of data.content) {
+        if (content.type === "text") {
+          responseText += content.text;
+        } else if (content.type === "tool_use") {
+          // Execute the tool
+          const toolName = content.name;
+          const toolArgs = content.input;
+          const toolCallId = content.id;
+          const executionId = nanoid();
+
+          console.log(`Claude wants to use tool: ${toolName}`, toolArgs);
+
+          // FIXED: Create complete tool execution entry for storage
+          const baseExecution = {
+            id: executionId,
+            tool: toolName,
+            status: "pending" as const,
+            duration: 0,
+            timestamp: new Date().toLocaleTimeString(),
+            request: {
+              tool: toolName,
+              arguments: toolArgs,
+              timestamp: new Date().toISOString(),
+            },
+          };
+
+          try {
+            // Create tool execution message
+            const toolMessage: ChatMessageType = {
+              id: executionId,
+              isUser: false,
+              executingTool: toolName,
+              timestamp: new Date(),
+              toolExecution: {
+                toolName,
+                status: "pending",
+              },
+              isExecuting: true,
+            };
+
+            toolExecutionMessages.push(toolMessage);
+
+            // FIXED: Store the execution immediately with pending status
+            await updateToolExecutionInStorage(baseExecution);
+
+            const startTime = Date.now();
+
+            // Execute the tool
+            const toolResult = await executeTool(toolName, toolArgs);
+            const endTime = Date.now();
+            const duration = endTime - startTime;
+
+            // Extract the actual result text from MCP response
+            let resultText = "";
+            if (toolResult?.content?.[0]?.text) {
+              try {
+                const parsedResult = JSON.parse(toolResult.content[0].text);
+                resultText = JSON.stringify(parsedResult, null, 2);
+              } catch {
+                resultText = toolResult.content[0].text;
+              }
+            } else {
+              resultText = JSON.stringify(toolResult, null, 2);
+            }
+
+            // FIXED: Update with complete success execution data
+            const successExecution = {
+              ...baseExecution,
+              status: "success" as const,
+              duration,
+              response: {
+                success: true,
+                result: toolResult,
+                timestamp: new Date().toISOString(),
+              },
+            };
+
+            await updateToolExecutionInStorage(successExecution);
+
+            // Update the tool execution message with results
+            const completedToolMessage: ChatMessageType = {
+              ...toolMessage,
+              toolExecution: {
+                toolName,
+                status: "success",
+                result: toolResult,
+              },
+              isExecuting: false,
+            };
+
+            // Replace in the executions array
+            const execIndex = toolExecutionMessages.findIndex(
+              msg => msg.id === executionId
+            );
+            if (execIndex !== -1) {
+              toolExecutionMessages[execIndex] = completedToolMessage;
+            }
+
+            // Add tool result in the correct format for Anthropic
+            toolResults.push({
+              tool_use_id: toolCallId,
+              type: "tool_result",
+              content: resultText,
+            });
+          } catch (error) {
+            console.error(`Tool execution failed:`, error);
+            const endTime = Date.now();
+
+            // FIXED: Store error execution
+            const errorExecution = {
+              ...baseExecution,
+              status: "error" as const,
+              duration: endTime - Date.now(),
+              error: error instanceof Error ? error.message : String(error),
+            };
+
+            await updateToolExecutionInStorage(errorExecution);
+
+            // Create error message
+            const errorMessage: ChatMessageType = {
+              id: executionId,
+              isUser: false,
+              executingTool: toolName,
+              timestamp: new Date(),
+              toolExecution: {
+                toolName,
+                status: "error",
+                error: error instanceof Error ? error.message : String(error),
+              },
+              isExecuting: false,
+            };
+
+            // Replace in executions array
+            const execIndex = toolExecutionMessages.findIndex(
+              msg => msg.id === executionId
+            );
+            if (execIndex !== -1) {
+              toolExecutionMessages[execIndex] = errorMessage;
+            } else {
+              toolExecutionMessages.push(errorMessage);
+            }
+
+            toolResults.push({
+              tool_use_id: toolCallId,
+              type: "tool_result",
+              content: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            });
+          }
+        }
+      }
+
+      // If tools were used, send results back to Claude
+      if (toolResults.length > 0) {
+        console.log("Sending tool results back to Claude:", toolResults);
+
+        const followUpMessages = [
+          ...claudeMessages,
+          {
+            role: "assistant" as const,
+            content: data.content,
+          },
+          {
+            role: "user" as const,
+            content: toolResults,
+          },
+        ];
+
+        try {
+          const followUpResponse = await fetch(
+            "https://api.anthropic.com/v1/messages",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01",
+                "anthropic-dangerous-direct-browser-access": "true",
+                "x-api-key": llmSettings.apiKey,
+              },
+              body: JSON.stringify({
+                model: llmSettings.model,
+                max_tokens: llmSettings.maxTokens,
+                temperature: llmSettings.temperature,
+                messages: followUpMessages,
+                tools: claudeTools,
+              }),
+            }
+          );
+
+          if (followUpResponse.ok) {
+            const followUpData = await followUpResponse.json();
+            responseText =
+              followUpData.content?.[0]?.text ||
+              responseText ||
+              "Tool executed successfully.";
+          } else {
+            const errorText = await followUpResponse.text();
+            console.error("Follow-up request failed:", errorText);
+            responseText =
+              responseText ||
+              "Tool executed, but failed to get follow-up response.";
+          }
+        } catch (followUpError) {
+          console.error("Follow-up request error:", followUpError);
+          responseText = responseText || "Tool executed successfully.";
+        }
+      }
+
+      return {
+        response: responseText || "Tool executed successfully.",
+        toolExecutions: toolExecutionMessages,
+      };
+    }
+
+    return {
+      response: "No response received",
+      toolExecutions: [],
+    };
+  };
+
+  // FIXED: Enhanced message sending with proper state management
   const handleSendMessage = async () => {
     if (
       !messageInput.trim() ||
@@ -196,9 +562,10 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const updatedMessages = [...currentMessages, userMessage];
       await updateConversationMessages(updatedMessages);
 
-      // Create assistant thinking message
+      // Create assistant thinking message with unique ID
+      const thinkingMessageId = nanoid();
       const thinkingMessage: ChatMessageType = {
-        id: nanoid(),
+        id: thinkingMessageId,
         message: "",
         isUser: false,
         timestamp: new Date(),
@@ -208,26 +575,42 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const messagesWithThinking = [...updatedMessages, thinkingMessage];
       await updateConversationMessages(messagesWithThinking);
 
-      // Call Anthropic API
-      const response = await callAnthropicAPI(
-        updatedMessages.filter(m => m.message)
+      // Call Claude with tool support - pass only the actual conversation messages
+      const conversationMessages = updatedMessages.filter(
+        m => m.message && !m.isExecuting
       );
+      const { response, toolExecutions } =
+        await callClaudeWithTools(conversationMessages);
 
-      // Replace thinking message with response
+      // FIXED: Remove thinking message and build final message array
+      let finalMessages = [...updatedMessages]; // Start with user message only
+
+      // Add all tool execution messages (safely check if array exists)
+      if (
+        toolExecutions &&
+        Array.isArray(toolExecutions) &&
+        toolExecutions.length > 0
+      ) {
+        finalMessages = [...finalMessages, ...toolExecutions];
+      }
+
+      // Add final assistant response (not the thinking message)
       const assistantMessage: ChatMessageType = {
-        id: thinkingMessage.id,
+        id: nanoid(), // New ID for the actual response
         message: response,
         isUser: false,
         timestamp: new Date(),
         isExecuting: false,
       };
 
-      const finalMessages = [...updatedMessages, assistantMessage];
+      finalMessages.push(assistantMessage);
+
+      // Save all messages at once - this removes the thinking message
       await updateConversationMessages(finalMessages);
     } catch (error) {
       console.error("Failed to send message:", error);
 
-      // Replace thinking message with error
+      // FIXED: Replace thinking message with error, don't add to existing messages
       const errorMessage: ChatMessageType = {
         id: nanoid(),
         message:
@@ -237,7 +620,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         isExecuting: false,
       };
 
-      const errorMessages = [...currentMessages, userMessage, errorMessage];
+      // Remove any thinking messages and add error
+      const cleanMessages = [...currentMessages, userMessage];
+      const errorMessages = [...cleanMessages, errorMessage];
       await updateConversationMessages(errorMessages);
     } finally {
       setIsLoading(false);
@@ -254,7 +639,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       updatedAt: new Date(),
     };
 
-    // Find the conversation by ID and update it
     const updatedConnectionConversations = connectionConversations.map(conv =>
       conv.id === currentConversation.id ? updatedConversation : conv
     );
@@ -264,45 +648,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       [connectionId]: updatedConnectionConversations,
     };
 
-    // Use the updateConversations function from StorageContext
     await updateConversations(allConversations);
-  };
-
-  // Call Anthropic API
-  const callAnthropicAPI = async (
-    messages: ChatMessageType[]
-  ): Promise<string> => {
-    if (!llmSettings) throw new Error("No LLM settings configured");
-
-    const anthropicMessages = messages.map(msg => ({
-      role: msg.isUser ? "user" : ("assistant" as const),
-      content: msg.message || "",
-    }));
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-        "x-api-key": llmSettings.apiKey,
-      },
-      body: JSON.stringify({
-        model: llmSettings.model,
-        max_tokens: llmSettings.maxTokens,
-        temperature: llmSettings.temperature,
-        messages: anthropicMessages,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `API request failed: ${response.status} ${response.statusText}`
-      );
-    }
-
-    const data = await response.json();
-    return data.content?.[0]?.text || "No response received";
   };
 
   const handleTabClick = (selectedChatId: string) => {
@@ -322,9 +668,13 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       message.toolExecution || message.isExecuting || message.executingTool;
     const toolName = message.executingTool || message.toolExecution?.toolName;
 
+    // FIXED: Don't render messages that are just thinking without content
+    if (message.isExecuting && !message.message && !hasToolExecution) {
+      return null; // Skip empty thinking messages
+    }
+
     return (
       <div className="group relative">
-        {/* Clean Message Display */}
         <div
           className={`flex gap-4 mb-6 ${message.isUser ? "flex-row-reverse" : ""}`}
         >
@@ -350,7 +700,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             <div
               className={`text-sm text-gray-900 dark:text-gray-100 ${message.isUser ? "text-right" : ""}`}
             >
-              {message.isExecuting && !message.message ? (
+              {message.isExecuting && !message.message && !hasToolExecution ? (
                 <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                   <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
                   <span>Claude is thinking...</span>
@@ -366,7 +716,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                   ) : message.toolExecution?.status === "error" ? (
                     <div className="text-gray-600 dark:text-gray-400">
                       <div className="font-medium">Tool execution failed</div>
-                      <div className="text-xs mt-1 text-gray-500 dark:text-gray-500">
+                      <div className="text-xs mt-1 text-gray-500">
                         {toolName}: {message.toolExecution.error}
                       </div>
                     </div>
@@ -375,7 +725,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                       <div className="font-medium">
                         Tool executed successfully
                       </div>
-                      <div className="text-xs mt-1 text-gray-500 dark:text-gray-500">
+                      <div className="text-xs mt-1 text-gray-500">
                         {toolName} completed
                       </div>
                     </div>
@@ -398,7 +748,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                   className={`text-xs px-2 py-1 rounded border transition-colors ${
                     isExpanded
                       ? "border-gray-400 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-                      : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-500 dark:text-gray-500"
+                      : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-500"
                   }`}
                 >
                   {isExpanded ? "Collapse" : "Expand"} Details
@@ -469,7 +819,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                       <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-1">
                         Error:
                       </h5>
-                      <div className="text-gray-800 dark:text-gray-200 text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
+                      <div className="text-gray-800 dark:text-gray-200 text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded border">
                         {message.toolExecution.error}
                       </div>
                     </div>
@@ -512,9 +862,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const showApiWarning = !llmSettings?.apiKey;
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-gray-950 transition-colors">
-      {/* Header with Connection Info */}
-      <div className="border-b border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-950 transition-colors">
+      {/* Fixed Header with Connection Info */}
+      <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -522,6 +872,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             </h2>
             <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
               <span>{currentMessages.length} messages</span>
+              <span>{connectionTools.length} tools available</span>
               {currentConnection && (
                 <>
                   <span>•</span>
@@ -552,9 +903,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         </div>
       </div>
 
-      {/* Chat Tabs with Delete Buttons */}
+      {/* Fixed Chat Tabs with Delete Buttons */}
       {connectionConversations.length > 0 && (
-        <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+        <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center px-6">
             <div className="flex overflow-x-auto scrollbar-hide">
               {connectionConversations.map(conv => {
@@ -575,7 +926,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                       </span>
                     </button>
 
-                    {/* Delete Button - Only show on hover and when there's more than 1 chat */}
                     {connectionConversations.length > 1 && (
                       <button
                         onClick={e => handleDeleteChat(conv.id, e)}
@@ -594,7 +944,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               })}
             </div>
 
-            {/* New Chat Button */}
             <button
               onClick={handleNewChat}
               className="flex-shrink-0 ml-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
@@ -606,9 +955,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         </div>
       )}
 
-      {/* API Key Warning */}
+      {/* Fixed API Key Warning */}
       {showApiWarning && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3">
+        <div className="flex-shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3">
           <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
             <div className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center">
               <span className="text-xs text-amber-900">!</span>
@@ -621,43 +970,57 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         </div>
       )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          {currentMessages.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                <ExternalLink className="w-8 h-8" />
+      {/* Scrollable Messages Container - This is the key fix */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="h-full">
+          <div className="max-w-4xl mx-auto px-6 py-8 min-h-full">
+            {currentMessages.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                    <ExternalLink className="w-8 h-8" />
+                  </div>
+                  <p className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
+                    {showApiWarning
+                      ? "Configure Claude API"
+                      : "Start a conversation"}
+                  </p>
+                  <p className="text-sm">
+                    {showApiWarning
+                      ? "Add your Anthropic API key in Settings to begin chatting"
+                      : `Start chatting with Claude about ${currentConnection?.name}. ${connectionTools.length} tools are available.`}
+                  </p>
+                </div>
               </div>
-              <p className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
-                {showApiWarning
-                  ? "Configure Claude API"
-                  : "Start a conversation"}
-              </p>
-              <p className="text-sm">
-                {showApiWarning
-                  ? "Add your Anthropic API key in Settings to begin chatting"
-                  : `Start chatting with Claude about ${currentConnection?.name}`}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {Array.isArray(currentMessages) &&
-                currentMessages.map((msg, index) => (
-                  <CleanChatMessage
-                    key={msg.id || `msg-${index}`}
-                    message={msg}
-                    index={index}
-                  />
-                ))}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
+            ) : (
+              <div className="space-y-6">
+                {Array.isArray(currentMessages) &&
+                  currentMessages
+                    .filter(
+                      msg =>
+                        !(
+                          msg.isExecuting &&
+                          !msg.message &&
+                          !msg.executingTool &&
+                          !msg.toolExecution
+                        )
+                    ) // Filter out empty thinking messages
+                    .map((msg, index) => (
+                      <CleanChatMessage
+                        key={msg.id || `msg-${index}`}
+                        message={msg}
+                        index={index}
+                      />
+                    ))}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Input */}
-      <div className="border-t border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
+      {/* Fixed Input */}
+      <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-3">
             <input
@@ -666,7 +1029,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 showApiWarning
                   ? "Configure API key to start chatting..."
                   : currentConnection
-                    ? `Message Claude about ${currentConnection.name}...`
+                    ? `Message Claude about ${currentConnection.name}... (${connectionTools.length} tools available)`
                     : "Type a message..."
               }
               value={messageInput}

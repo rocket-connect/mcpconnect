@@ -1,8 +1,8 @@
-// packages/components/src/NetworkInspector.tsx - Fixed table alignment and 40/60 layout
+// packages/components/src/NetworkInspector.tsx - Fixed real-time sync and tool name display
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 /* eslint-disable jsx-a11y/no-static-element-interactions */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -43,6 +43,27 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       : internalSelectedExecution;
 
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const prevExecutionsRef = useRef<ToolExecution[]>([]);
+
+  // Auto-select most recent execution when new ones arrive
+  useEffect(() => {
+    if (executions.length > prevExecutionsRef.current.length) {
+      // New execution(s) added
+      const newExecutions = executions.slice(prevExecutionsRef.current.length);
+      const mostRecentExecution = newExecutions[newExecutions.length - 1];
+
+      if (mostRecentExecution && externalSelectedExecution === undefined) {
+        setInternalSelectedExecution(mostRecentExecution.id);
+        console.log(
+          "Auto-selected new execution:",
+          mostRecentExecution.id,
+          mostRecentExecution.tool
+        );
+      }
+    }
+
+    prevExecutionsRef.current = executions;
+  }, [executions, externalSelectedExecution]);
 
   useEffect(() => {
     if (
@@ -106,6 +127,19 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     }
   };
 
+  const getStatusCode = (status: string) => {
+    switch (status) {
+      case "success":
+        return "200";
+      case "error":
+        return "500";
+      case "pending":
+        return "...";
+      default:
+        return "—";
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard?.writeText(text);
   };
@@ -119,6 +153,14 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   };
 
   const selected = executions.find(e => e.id === selectedExecution);
+
+  // Sort executions by timestamp (newest first) for display
+  const sortedExecutions = [...executions].sort((a, b) => {
+    // Try to parse timestamp for sorting, fallback to creation order
+    const aTime = new Date(a.request?.timestamp || Date.now()).getTime();
+    const bTime = new Date(b.request?.timestamp || Date.now()).getTime();
+    return bTime - aTime; // Newest first
+  });
 
   if (executions.length === 0) {
     return (
@@ -192,7 +234,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
 
           {/* Fixed Table Body */}
           <div className="overflow-y-auto flex-1">
-            {executions.map(execution => (
+            {sortedExecutions.map(execution => (
               <div
                 key={execution.id}
                 className={`px-4 py-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 ${
@@ -207,7 +249,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   <div className="col-span-4 flex items-center gap-2 min-w-0">
                     {getStatusIcon(execution.status)}
                     <span className="text-gray-900 dark:text-gray-100 truncate font-mono text-sm">
-                      {execution.tool}
+                      {execution.tool || "Unknown Tool"}
                     </span>
                   </div>
 
@@ -215,11 +257,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   <div
                     className={`col-span-2 text-center font-medium text-sm ${getStatusColor(execution.status)}`}
                   >
-                    {execution.status === "pending"
-                      ? "..."
-                      : execution.status === "success"
-                        ? "200"
-                        : "500"}
+                    {getStatusCode(execution.status)}
                   </div>
 
                   {/* Duration */}
@@ -229,7 +267,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
 
                   {/* Timestamp */}
                   <div className="col-span-2 text-center text-gray-500 dark:text-gray-400 text-sm">
-                    {execution.timestamp}
+                    {execution.timestamp || "—"}
                   </div>
                 </div>
               </div>
@@ -247,7 +285,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   <div className="flex items-center gap-4">
                     {getStatusIcon(selected.status)}
                     <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">
-                      {selected.tool}
+                      {selected.tool || "Unknown Tool"}
                     </h4>
                     <span
                       className={`text-sm font-medium ${getStatusColor(selected.status)}`}
@@ -260,7 +298,8 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                     </span>
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {selected.timestamp} • {formatDuration(selected.duration)}
+                    {selected.timestamp || "—"} •{" "}
+                    {formatDuration(selected.duration)}
                   </div>
                 </div>
               </div>

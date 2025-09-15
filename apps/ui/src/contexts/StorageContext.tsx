@@ -1,3 +1,4 @@
+// apps/ui/src/contexts/StorageContext.tsx - Fixed state management and refresh
 import React, {
   createContext,
   useContext,
@@ -33,6 +34,7 @@ interface StorageContextType {
   ) => Promise<void>;
   refreshConversations: () => Promise<void>;
   refreshAll: () => Promise<void>;
+  forceRefresh: () => Promise<void>; // NEW: Force complete refresh
   // Connection management methods
   addConnection: (connection: Connection) => Promise<void>;
   updateConnection: (connection: Connection) => Promise<void>;
@@ -73,12 +75,108 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // FIXED: Enhanced refresh function that properly syncs all state
+  const refreshAll = useCallback(async () => {
+    try {
+      console.log("🔄 Refreshing all data from storage...");
+
+      const [
+        storedConnections,
+        storedTools,
+        storedResources,
+        storedConversations,
+        storedExecutions,
+      ] = await Promise.all([
+        adapter.get("connections"),
+        adapter.get("tools"),
+        adapter.get("resources"),
+        adapter.get("conversations"),
+        adapter.get("toolExecutions"),
+      ]);
+
+      // Update all state atomically
+      if (storedConnections?.value) {
+        const connectionsArray = storedConnections.value as Connection[];
+        const connectionsWithIds = connectionsArray.map(conn => ({
+          ...conn,
+          id: conn.id || ConnectionService.createConnection(conn).id,
+        }));
+        setConnections(connectionsWithIds);
+        console.log("✅ Updated connections:", connectionsWithIds.length);
+      }
+
+      if (storedTools?.value) {
+        setTools(storedTools.value as Record<string, Tool[]>);
+        console.log("✅ Updated tools:", Object.keys(storedTools.value).length);
+      }
+
+      if (storedResources?.value) {
+        setResources(storedResources.value as Record<string, Resource[]>);
+        console.log(
+          "✅ Updated resources:",
+          Object.keys(storedResources.value).length
+        );
+      }
+
+      if (storedConversations?.value) {
+        const conversationsData = storedConversations.value as Record<
+          string,
+          ChatConversation[]
+        >;
+        setConversations(conversationsData);
+        console.log(
+          "✅ Updated conversations:",
+          Object.keys(conversationsData).length
+        );
+      }
+
+      if (storedExecutions?.value) {
+        const executionsData = storedExecutions.value as Record<
+          string,
+          ToolExecution[]
+        >;
+        setToolExecutions(executionsData);
+        console.log(
+          "✅ Updated tool executions:",
+          Object.keys(executionsData).length
+        );
+
+        // Log execution details for debugging
+        Object.entries(executionsData).forEach(([connectionId, executions]) => {
+          console.log(
+            `📊 Connection ${connectionId}: ${executions.length} executions`
+          );
+        });
+      }
+
+      console.log("✅ All data refreshed successfully");
+    } catch (err) {
+      console.error("❌ Failed to refresh data:", err);
+    }
+  }, [adapter]);
+
+  // NEW: Force refresh that clears state first
+  const forceRefresh = useCallback(async () => {
+    console.log("🔄 Force refreshing all data...");
+
+    // Clear all state first
+    setConnections([]);
+    setTools({});
+    setResources({});
+    setConversations({});
+    setToolExecutions({});
+
+    // Then refresh
+    await refreshAll();
+  }, [refreshAll]);
+
   // Method to update connections both in storage and state
   const updateConnections = useCallback(
     async (newConnections: Connection[]) => {
       try {
         await adapter.set("connections", newConnections);
         setConnections(newConnections);
+        console.log("✅ Updated connections in storage and state");
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -86,12 +184,13 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [adapter]
   );
 
-  // Method to update conversations both in storage and state
+  // FIXED: Enhanced conversation update with immediate state sync
   const updateConversations = useCallback(
     async (newConversations: Record<string, ChatConversation[]>) => {
       try {
         await adapter.set("conversations", newConversations);
         setConversations(newConversations);
+        console.log("✅ Updated conversations in storage and state");
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -109,50 +208,10 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           ChatConversation[]
         >;
         setConversations(conversationsData);
+        console.log("✅ Refreshed conversations from storage");
       }
     } catch (err) {
       console.error("Failed to refresh conversations:", err);
-    }
-  }, [adapter]);
-
-  // Method to refresh all data from storage
-  const refreshAll = useCallback(async () => {
-    try {
-      const [
-        storedConnections,
-        storedTools,
-        storedResources,
-        storedConversations,
-        storedExecutions,
-      ] = await Promise.all([
-        adapter.get("connections"),
-        adapter.get("tools"),
-        adapter.get("resources"),
-        adapter.get("conversations"),
-        adapter.get("toolExecutions"),
-      ]);
-
-      if (storedConnections?.value) {
-        setConnections(storedConnections.value as Connection[]);
-      }
-      if (storedTools?.value) {
-        setTools(storedTools.value as Record<string, Tool[]>);
-      }
-      if (storedResources?.value) {
-        setResources(storedResources.value as Record<string, Resource[]>);
-      }
-      if (storedConversations?.value) {
-        setConversations(
-          storedConversations.value as Record<string, ChatConversation[]>
-        );
-      }
-      if (storedExecutions?.value) {
-        setToolExecutions(
-          storedExecutions.value as Record<string, ToolExecution[]>
-        );
-      }
-    } catch (err) {
-      console.error("Failed to refresh data:", err);
     }
   }, [adapter]);
 
@@ -220,6 +279,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
     async function initializeStorage() {
       try {
+        console.log("🚀 Initializing storage...");
         await adapter.initialize();
 
         if (!mounted) return;
@@ -229,12 +289,15 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
         // Only load mock data if no existing data found
         if (!hasExistingData) {
+          console.log("📦 No existing data found, loading mock data...");
           await loadMockData();
         }
 
         setIsLoading(false);
+        console.log("✅ Storage initialization complete");
       } catch (err) {
         if (mounted) {
+          console.error("❌ Storage initialization failed:", err);
           setError(err instanceof Error ? err.message : String(err));
           setIsLoading(false);
         }
@@ -266,9 +329,11 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           storedExecutions?.value;
 
         if (!hasData) {
-          console.log("No existing data found, will load mock data");
+          console.log("📭 No existing data found");
           return false;
         }
+
+        console.log("📦 Loading existing data...");
 
         // Load existing data into state
         if (storedConnections?.value) {
@@ -279,14 +344,17 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
             id: conn.id || ConnectionService.createConnection(conn).id,
           }));
           setConnections(connectionsWithIds);
+          console.log("✅ Loaded connections:", connectionsWithIds.length);
         }
 
         if (storedTools?.value) {
           setTools(storedTools.value as Record<string, Tool[]>);
+          console.log("✅ Loaded tools");
         }
 
         if (storedResources?.value) {
           setResources(storedResources.value as Record<string, Resource[]>);
+          console.log("✅ Loaded resources");
         }
 
         if (storedConversations?.value) {
@@ -295,17 +363,30 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
             ChatConversation[]
           >;
           setConversations(conversationsData);
+          console.log("✅ Loaded conversations");
         }
 
         if (storedExecutions?.value) {
-          setToolExecutions(
-            storedExecutions.value as Record<string, ToolExecution[]>
+          const executionsData = storedExecutions.value as Record<
+            string,
+            ToolExecution[]
+          >;
+          setToolExecutions(executionsData);
+          console.log("✅ Loaded tool executions");
+
+          // Debug log executions
+          Object.entries(executionsData).forEach(
+            ([connectionId, executions]) => {
+              console.log(
+                `📊 Connection ${connectionId}: ${executions.length} executions`
+              );
+            }
           );
         }
 
         return true;
       } catch (err) {
-        console.error("Failed to load existing data:", err);
+        console.error("❌ Failed to load existing data:", err);
         return false;
       }
     }
@@ -317,27 +398,43 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           throw new Error("Mock data validation failed");
         }
 
+        console.log("📦 Loading mock data...");
+
         // Load connections with proper IDs
         await adapter.set("connections", mockData.connections);
         setConnections(mockData.connections);
+        console.log("✅ Loaded mock connections:", mockData.connections.length);
 
         // Load tools (keyed by connection ID, not index)
         await adapter.set("tools", mockData.tools);
         setTools(mockData.tools);
+        console.log("✅ Loaded mock tools");
 
         // Load resources (keyed by connection ID, not index)
         await adapter.set("resources", mockData.resources);
         setResources(mockData.resources);
+        console.log("✅ Loaded mock resources");
 
         // Load conversations (keyed by connection ID, not index)
         await adapter.set("conversations", mockData.conversations);
         setConversations(mockData.conversations);
+        console.log("✅ Loaded mock conversations");
 
         // Load tool executions (keyed by connection ID, not index)
         await adapter.set("toolExecutions", mockData.toolExecutions);
         setToolExecutions(mockData.toolExecutions);
+        console.log("✅ Loaded mock tool executions");
+
+        // Debug log executions
+        Object.entries(mockData.toolExecutions).forEach(
+          ([connectionId, executions]) => {
+            console.log(
+              `📊 Mock connection ${connectionId}: ${executions.length} executions`
+            );
+          }
+        );
       } catch (err) {
-        console.error("Failed to load mock data:", err);
+        console.error("❌ Failed to load mock data:", err);
         setError(err instanceof Error ? err.message : String(err));
       }
     }
@@ -362,6 +459,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     updateConversations,
     refreshConversations,
     refreshAll,
+    forceRefresh,
     addConnection,
     updateConnection,
     deleteConnection,
