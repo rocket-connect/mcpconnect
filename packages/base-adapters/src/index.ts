@@ -52,6 +52,7 @@ export {
   type MCPMessage,
   type MCPConnectionResult,
   type MCPToolExecutionResult,
+  type MCPSSEEvent,
   MCPCapabilitiesSchema,
   MCPServerInfoSchema,
   MCPInitializationSchema,

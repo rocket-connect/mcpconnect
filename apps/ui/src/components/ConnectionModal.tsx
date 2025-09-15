@@ -1,4 +1,4 @@
-// apps/ui/src/components/ConnectionModal.tsx - Updated to use adapters only
+// apps/ui/src/components/ConnectionModal.tsx - Updated to use MCPService
 import React, { useState, useEffect } from "react";
 import {
   X,
@@ -17,7 +17,7 @@ import {
   Radio,
 } from "lucide-react";
 import { Connection, ConnectionType } from "@mcpconnect/schemas";
-import { MCPAdapter } from "@mcpconnect/base-adapters";
+import { MCPService } from "@mcpconnect/adapter-ai-sdk";
 
 interface ConnectionModalProps {
   isOpen: boolean;
@@ -189,7 +189,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       return;
     }
 
-    if (!MCPAdapter.validateConnectionUrl(formData.url)) {
+    if (!MCPService.validateConnectionUrl(formData.url)) {
       setTestError(
         "Please enter a valid URL (http://, https://, ws://, or wss://)"
       );
@@ -215,31 +215,9 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         retryAttempts: formData.retryAttempts,
       };
 
-      // Create a temporary MCP adapter for testing
-      const tempAdapter = new (class extends MCPAdapter {
-        async initialize(): Promise<void> {
-          // No-op for testing
-        }
-        async cleanup(): Promise<void> {
-          // No-op for testing
-        }
-      })({
-        name: "temp-test-adapter",
-        provider: "mcp",
-        protocolVersion: "2024-11-05",
-        debug: false,
-        timeout: 30000,
-        retries: 3,
-        clientInfo: {
-          name: "MCPConnect",
-          version: "0.0.11",
-          description: "MCPConnect browser-based MCP client",
-        },
-      });
-
       console.log("[ConnectionModal] Starting full introspection...");
       const introspectionResult =
-        await tempAdapter.connectAndIntrospect(testConnection);
+        await MCPService.connectAndIntrospect(testConnection);
 
       if (introspectionResult.isConnected) {
         setTestStatus("success");
@@ -275,7 +253,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       return;
     }
 
-    if (!MCPAdapter.validateConnectionUrl(formData.url)) {
+    if (!MCPService.validateConnectionUrl(formData.url)) {
       setTestError("Please enter a valid URL");
       return;
     }
@@ -310,10 +288,10 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         retryAttempts: formData.retryAttempts,
       };
 
-      // If creating new, generate ID using MCPAdapter
+      // If creating new, generate ID using MCPService
       const finalConnection = connection?.id
         ? connectionData
-        : MCPAdapter.createConnection(connectionData);
+        : MCPService.createConnection(connectionData);
 
       onSave(finalConnection);
       onClose();

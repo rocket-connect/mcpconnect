@@ -1,4 +1,4 @@
-// apps/ui/src/components/ConnectionView.tsx - Updated to use adapters only
+// apps/ui/src/components/ConnectionView.tsx - Updated to use MCPService
 import { ConnectionItem } from "@mcpconnect/components";
 import { Connection, Resource, Tool } from "@mcpconnect/schemas";
 import { useNavigate } from "react-router-dom";
@@ -6,7 +6,7 @@ import { Plus, Server, Settings, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { ConnectionModal } from "./ConnectionModal";
 import { useStorage } from "../contexts/StorageContext";
-import { MCPAdapter } from "@mcpconnect/base-adapters";
+import { MCPService } from "@mcpconnect/adapter-ai-sdk";
 
 interface ConnectionViewProps {
   connections: Connection[];
@@ -87,42 +87,20 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         // Add new connection - ensure it has a unique ID
         const connectionWithId = {
           ...connection,
-          id: connection.id || MCPAdapter.createConnection(connection).id,
+          id: connection.id || MCPService.createConnection(connection).id,
         };
         updatedConnections = [...connections, connectionWithId];
       }
 
-      // Test connection and discover tools/resources using adapter
+      // Test connection and discover tools/resources using MCPService
       let finalConnection = { ...connection };
 
       try {
         console.log(`[ConnectionView] Testing connection: ${connection.name}`);
 
-        // Create a temporary MCP adapter for testing
-        const tempAdapter = new (class extends MCPAdapter {
-          async initialize(): Promise<void> {
-            // No-op for testing
-          }
-          async cleanup(): Promise<void> {
-            // No-op for testing
-          }
-        })({
-          name: "temp-introspection-adapter",
-          provider: "mcp",
-          protocolVersion: "2024-11-05",
-          debug: false,
-          timeout: 30000,
-          retries: 3,
-          clientInfo: {
-            name: "MCPConnect",
-            version: "0.0.11",
-            description: "MCPConnect browser-based MCP client",
-          },
-        });
-
-        // Use full introspection instead of just testing
+        // Use MCPService for full introspection
         const introspectionResult =
-          await tempAdapter.connectAndIntrospect(connection);
+          await MCPService.connectAndIntrospect(connection);
 
         if (introspectionResult.isConnected) {
           console.log(`[ConnectionView] Connection test successful`);
