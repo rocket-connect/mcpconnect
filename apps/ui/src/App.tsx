@@ -1,6 +1,11 @@
-// apps/ui/src/App.tsx - Updated routing for chat IDs
-import { useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useParams,
+} from "react-router-dom";
 import { MCPLayout } from "@mcpconnect/components";
 import { Tool, Resource } from "@mcpconnect/schemas";
 import {
@@ -13,6 +18,7 @@ import {
 } from "./components";
 import { useStorage } from "./contexts/StorageContext";
 import { InspectorProvider, InspectorUI } from "./contexts/InspectorProvider";
+import mockData from "./data/mockData";
 
 function AppContent() {
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
@@ -78,12 +84,14 @@ function AppContent() {
     );
   }
 
-  // Helper component to redirect to first chat ID
-  const ConnectionChatRedirect = ({
-    connectionId,
-  }: {
-    connectionId: string;
-  }) => {
+  // Helper component to redirect to first chat ID using connection ID
+  const ConnectionChatRedirect = () => {
+    const { connectionId } = useParams<{ connectionId: string }>();
+
+    if (!connectionId) {
+      return <Navigate to="/connections" replace />;
+    }
+
     const connectionChats = conversations[connectionId] || [];
     const firstChatId = connectionChats[0]?.id;
 
@@ -97,6 +105,48 @@ function AppContent() {
     } else {
       return <Navigate to={`/connections/${connectionId}`} replace />;
     }
+  };
+
+  // Helper component to load tool by ID within a connection context
+  const ConnectionToolLoader = () => {
+    const { connectionId, toolId } = useParams<{
+      connectionId: string;
+      toolId: string;
+    }>();
+
+    useEffect(() => {
+      if (connectionId && toolId) {
+        const tool = mockData.getToolById(connectionId, toolId);
+        if (tool) {
+          setSelectedTool(tool);
+        } else {
+          // If tool not found, clear selection
+          setSelectedTool(null);
+        }
+      } else {
+        // If no tool ID specified, clear selection
+        setSelectedTool(null);
+      }
+    }, [connectionId, toolId]);
+
+    return <ToolInterface selectedTool={selectedTool} />;
+  };
+
+  // Helper component to handle tools overview page
+  const ConnectionToolsOverview = () => {
+    const { connectionId } = useParams<{ connectionId: string }>();
+
+    useEffect(() => {
+      // Clear selected tool when viewing tools overview
+      setSelectedTool(null);
+    }, [connectionId]);
+
+    return <ToolInterface selectedTool={null} />;
+  };
+
+  // Add debugging wrapper for routes that should have parameters
+  const DebugRouteWrapper = ({ children }: { children: React.ReactNode }) => {
+    return <>{children}</>;
   };
 
   return (
@@ -125,79 +175,83 @@ function AppContent() {
             element={<ConnectionView connections={connections} />}
           />
 
-          {/* Connection detail redirect to first chat */}
+          {/* Connection detail redirect to first chat using connection ID */}
           <Route
-            path="/connections/:id"
+            path="/connections/:connectionId"
             element={
-              <ConnectionChatRedirect
-                connectionId={window.location.pathname.split("/")[2]}
-              />
+              <DebugRouteWrapper>
+                <ConnectionChatRedirect />
+              </DebugRouteWrapper>
             }
           />
 
-          {/* Basic connection chat redirect to first chat */}
+          {/* Basic connection chat redirect to first chat using connection ID */}
           <Route
-            path="/connections/:id/chat"
+            path="/connections/:connectionId/chat"
             element={
-              <ConnectionChatRedirect
-                connectionId={window.location.pathname.split("/")[2]}
-              />
+              <DebugRouteWrapper>
+                <ConnectionChatRedirect />
+              </DebugRouteWrapper>
             }
           />
 
-          {/* Specific chat within a connection - NOW USING CHAT IDs */}
+          {/* Specific chat within a connection - USING CHAT IDs */}
           <Route
-            path="/connections/:id/chat/:chatId"
-            element={<ChatInterface />}
+            path="/connections/:connectionId/chat/:chatId"
+            element={
+              <DebugRouteWrapper>
+                <ChatInterface />
+              </DebugRouteWrapper>
+            }
           />
 
-          {/* Tool execution within a specific chat - NOW USING CHAT IDs */}
+          {/* Tool execution within a specific chat - USING CHAT IDs */}
           <Route
-            path="/connections/:id/chat/:chatId/tools/:toolId"
-            element={<ChatInterface expandedToolCall={true} />}
+            path="/connections/:connectionId/chat/:chatId/tools/:toolId"
+            element={
+              <DebugRouteWrapper>
+                <ChatInterface expandedToolCall={true} />
+              </DebugRouteWrapper>
+            }
           />
 
-          {/* Connection-specific tools routes */}
+          {/* Connection-specific tools routes - NOW PROPERLY SCOPED TO CONNECTIONS */}
           <Route
-            path="/connections/:id/tools"
-            element={<ToolInterface selectedTool={selectedTool} />}
+            path="/connections/:connectionId/tools"
+            element={
+              <DebugRouteWrapper>
+                <ConnectionToolsOverview />
+              </DebugRouteWrapper>
+            }
           />
           <Route
-            path="/connections/:id/tools/:toolName"
-            element={<ToolInterface selectedTool={selectedTool} />}
+            path="/connections/:connectionId/tools/:toolId"
+            element={
+              <DebugRouteWrapper>
+                <ConnectionToolLoader />
+              </DebugRouteWrapper>
+            }
           />
 
           {/* Connection-specific resources routes */}
           <Route
-            path="/connections/:id/resources"
-            element={<ResourceView selectedResource={selectedResource} />}
+            path="/connections/:connectionId/resources"
+            element={
+              <DebugRouteWrapper>
+                <ResourceView selectedResource={selectedResource} />
+              </DebugRouteWrapper>
+            }
           />
           <Route
-            path="/connections/:id/resources/:resourceId"
-            element={<ResourceView selectedResource={selectedResource} />}
+            path="/connections/:connectionId/resources/:resourceId"
+            element={
+              <DebugRouteWrapper>
+                <ResourceView selectedResource={selectedResource} />
+              </DebugRouteWrapper>
+            }
           />
 
-          {/* Global tool routes */}
-          <Route
-            path="/tools"
-            element={<ToolInterface selectedTool={selectedTool} />}
-          />
-          <Route
-            path="/tools/:toolName"
-            element={<ToolInterface selectedTool={selectedTool} />}
-          />
-
-          {/* Global resources routes */}
-          <Route
-            path="/resources"
-            element={<ResourceView selectedResource={selectedResource} />}
-          />
-          <Route
-            path="/resources/:id"
-            element={<ResourceView selectedResource={selectedResource} />}
-          />
-
-          {/* Fallback */}
+          {/* Fallback - redirect any other path to connections */}
           <Route path="*" element={<Navigate to="/connections" replace />} />
         </Routes>
       </MCPLayout>

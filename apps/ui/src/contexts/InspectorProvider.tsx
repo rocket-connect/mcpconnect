@@ -1,11 +1,8 @@
-// apps/ui/src/contexts/InspectorProvider.tsx - Updated for chat ID support
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { NetworkInspector } from "@mcpconnect/components";
 import { useStorage } from "./StorageContext";
-import mockData from "../data/mockData";
 import { createContext, useContext, useState, useEffect } from "react";
 
-// Create context for shared inspector state
 interface InspectorContextType {
   selectedToolCall: string | null;
   expandedToolCall: string | null;
@@ -26,78 +23,69 @@ export function useInspector() {
   return context;
 }
 
-// Context Provider Component (no UI rendering)
 export function InspectorProvider({ children }: { children: React.ReactNode }) {
   const params = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Shared state for tool call selection and expansion
   const [selectedToolCall, setSelectedToolCall] = useState<string | null>(null);
   const [expandedToolCall, setExpandedToolCall] = useState<string | null>(null);
 
-  // Extract parameters with proper defaults
-  let connectionId: string = params.id || "";
-  let chatId: string = params.chatId || "";
-  let toolId: string = params.toolId || "";
+  const connectionId = params.connectionId || "";
+  const chatId = params.chatId || "";
+  const toolId = params.toolId || "";
 
-  // If params are empty, try to extract from pathname
-  if (!connectionId && location.pathname.includes("/connections/")) {
-    const pathParts = location.pathname.split("/");
-    const connectionsIndex = pathParts.indexOf("connections");
-    if (connectionsIndex !== -1 && pathParts[connectionsIndex + 1]) {
-      connectionId = pathParts[connectionsIndex + 1];
+  const urlParts = location.pathname.split("/");
 
-      const chatIndex = pathParts.indexOf("chat");
-      if (chatIndex !== -1 && pathParts[chatIndex + 1]) {
-        chatId = pathParts[chatIndex + 1];
-      }
+  // Manual extraction as fallback
+  let manualConnectionId = "";
+  let manualChatId = "";
+  let manualToolId = "";
 
-      const toolsIndex = pathParts.indexOf("tools");
-      if (toolsIndex !== -1 && pathParts[toolsIndex + 1]) {
-        toolId = pathParts[toolsIndex + 1];
+  const connectionsIndex = urlParts.findIndex(part => part === "connections");
+  if (connectionsIndex !== -1 && urlParts[connectionsIndex + 1]) {
+    manualConnectionId = urlParts[connectionsIndex + 1];
+
+    const chatIndex = urlParts.findIndex(part => part === "chat");
+    if (chatIndex !== -1 && urlParts[chatIndex + 1]) {
+      manualChatId = urlParts[chatIndex + 1];
+
+      const toolsIndex = urlParts.findIndex(part => part === "tools");
+      if (toolsIndex !== -1 && urlParts[toolsIndex + 1]) {
+        manualToolId = urlParts[toolsIndex + 1];
       }
     }
   }
 
-  console.log("=== NETWORK INSPECTOR DEBUG ===");
-  console.log("Current URL:", location.pathname);
-  console.log("Extracted connectionId:", connectionId);
-  console.log("Extracted chatId:", chatId);
-  console.log("Extracted toolId:", toolId);
+  const finalConnectionId = connectionId || manualConnectionId;
+  const finalChatId = chatId || manualChatId;
+  const finalToolId = toolId || manualToolId;
 
-  // Sync expanded state with URL parameters
   useEffect(() => {
-    if (toolId) {
-      setSelectedToolCall(toolId);
-      setExpandedToolCall(toolId);
+    if (finalToolId) {
+      setSelectedToolCall(finalToolId);
+      setExpandedToolCall(finalToolId);
     } else {
       setExpandedToolCall(null);
     }
-  }, [toolId]);
+  }, [finalToolId]);
 
-  // Function to sync tool call state between chat and inspector
   const syncToolCallState = (toolCallId: string, isExpanded: boolean) => {
-    console.log("syncToolCallState called:", { toolCallId, isExpanded });
-
     if (isExpanded) {
       setSelectedToolCall(toolCallId);
       setExpandedToolCall(toolCallId);
 
-      // Update URL to include tool call - now using chat ID instead of index
-      if (connectionId && chatId) {
+      if (finalConnectionId && finalChatId) {
         navigate(
-          `/connections/${connectionId}/chat/${chatId}/tools/${toolCallId}`
+          `/connections/${finalConnectionId}/chat/${finalChatId}/tools/${toolCallId}`
         );
       }
     } else {
-      // Collapse tool call
       if (expandedToolCall === toolCallId) {
         setExpandedToolCall(null);
 
-        // Remove tool call from URL - now using chat ID instead of index
-        if (connectionId && chatId) {
-          navigate(`/connections/${connectionId}/chat/${chatId}`);
+        if (finalConnectionId && finalChatId) {
+          navigate(`/connections/${finalConnectionId}/chat/${finalChatId}`);
         }
       }
     }
@@ -125,27 +113,25 @@ export function InspectorUI() {
   const { connections, conversations, toolExecutions } = useStorage();
   const { selectedToolCall, syncToolCallState } = useInspector();
 
-  // Extract parameters with proper defaults
-  let connectionId: string = params.id || "";
-  let chatId: string = params.chatId || "";
+  // Manual URL parsing as backup (same logic as above)
+  const urlParts = location.pathname.split("/");
+  const connectionsIndex = urlParts.findIndex(part => part === "connections");
+  let manualConnectionId = "";
+  let manualChatId = "";
 
-  // If params are empty, try to extract from pathname
-  if (!connectionId && location.pathname.includes("/connections/")) {
-    const pathParts = location.pathname.split("/");
-    const connectionsIndex = pathParts.indexOf("connections");
-    if (connectionsIndex !== -1 && pathParts[connectionsIndex + 1]) {
-      connectionId = pathParts[connectionsIndex + 1];
-
-      const chatIndex = pathParts.indexOf("chat");
-      if (chatIndex !== -1 && pathParts[chatIndex + 1]) {
-        chatId = pathParts[chatIndex + 1];
-      }
+  if (connectionsIndex !== -1 && urlParts[connectionsIndex + 1]) {
+    manualConnectionId = urlParts[connectionsIndex + 1];
+    const chatIndex = urlParts.findIndex(part => part === "chat");
+    if (chatIndex !== -1 && urlParts[chatIndex + 1]) {
+      manualChatId = urlParts[chatIndex + 1];
     }
   }
 
+  const connectionId = params.connectionId || manualConnectionId || "";
+  const chatId = params.chatId || manualChatId || "";
+
   // Early return if no connection is selected
   if (!connectionId) {
-    console.log("No connectionId - showing empty state");
     return (
       <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors h-full">
         <NetworkInspector
@@ -160,78 +146,34 @@ export function InspectorUI() {
     );
   }
 
-  // Parse connection index
-  const connectionIndex = parseInt(connectionId);
-  if (isNaN(connectionIndex)) {
-    console.log("Invalid connectionId - not a number:", connectionId);
-    return (
-      <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors h-full">
-        <NetworkInspector
-          executions={[]}
-          connectionId={connectionId}
-          connectionName="Invalid connection"
-          chatId=""
-          chatTitle=""
-          onToolCallClick={() => {}}
-        />
-      </div>
-    );
-  }
-
-  // Get connection data
-  const currentConnection = connections[connectionIndex] || null;
+  // Get connection data by ID (not index)
+  const currentConnection =
+    connections.find(conn => conn.id === connectionId) || null;
   const currentConversations = conversations[connectionId] || [];
   const connectionExecutions = toolExecutions[connectionId] || [];
 
-  console.log("currentConnection:", currentConnection);
-  console.log("currentConversations length:", currentConversations.length);
-  console.log("connectionExecutions length:", connectionExecutions.length);
-
-  // Find current chat by ID instead of index
   const currentChat = chatId
     ? currentConversations.find(conv => conv.id === chatId)
     : currentConversations[0];
 
-  console.log("chatId (ID):", chatId);
-  console.log(
-    "currentChat:",
-    currentChat
-      ? `${currentChat.title} (${currentChat.messages.length} messages)`
-      : "null"
-  );
-
-  // Determine which executions to show based on context
   let executionsToShow = connectionExecutions;
 
-  if (currentChat) {
-    // For chat ID based filtering, we need to get executions for the specific chat
-    const chatSpecificExecutions = mockData.getExecutionsForChat(
-      connectionId,
-      chatId // Now passing the chat ID instead of index
+  if (currentChat && chatId) {
+    const toolMessageIds = currentChat.messages
+      .filter(msg => Boolean(msg.executingTool) || Boolean(msg.toolExecution))
+      .map(msg => msg.id)
+      .filter(Boolean) as string[];
+
+    const chatSpecificExecutions = connectionExecutions.filter(execution =>
+      toolMessageIds.includes(execution.id)
     );
 
-    console.log("Using chat-specific filtering");
-    console.log(
-      "Chat tool message IDs:",
-      currentChat.messages
-        .filter(msg => Boolean(msg.executingTool) || Boolean(msg.toolExecution))
-        .map(msg => ({
-          id: msg.id,
-          tool: msg.executingTool || msg.toolExecution?.toolName,
-        }))
-    );
-
-    if (chatSpecificExecutions.length > 0) {
-      executionsToShow = chatSpecificExecutions;
-    }
+    executionsToShow = chatSpecificExecutions;
+  } else {
+    console.log("No specific chat selected, showing all connection executions");
   }
 
-  console.log("Final executionsToShow:", executionsToShow.length);
-  console.log("=== END DEBUG ===");
-
-  // Handle tool call navigation from inspector
   const handleToolCallClick = (toolCallId: string) => {
-    console.log("handleToolCallClick called with:", toolCallId);
     syncToolCallState(toolCallId, true);
   };
 

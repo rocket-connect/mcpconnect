@@ -1,8 +1,7 @@
-import { ConnectionItem, ToolItem, ResourceItem } from "@mcpconnect/components";
+import { ConnectionItem, ToolItem } from "@mcpconnect/components";
 import { Connection, Tool, Resource } from "@mcpconnect/schemas";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { RconnectLogo } from "./RconnectLogo";
-import { MessageSquare } from "lucide-react";
 import { useStorage } from "../contexts/StorageContext";
 
 interface SidebarProps {
@@ -17,9 +16,7 @@ interface SidebarProps {
 export const Sidebar = ({
   connections,
   tools,
-  resources,
   onToolSelect,
-  onResourceSelect,
   selectedTool,
 }: SidebarProps) => {
   const navigate = useNavigate();
@@ -27,265 +24,99 @@ export const Sidebar = ({
   const params = useParams();
   const { conversations } = useStorage();
 
-  // Get current connection ID from URL params
-  const currentConnectionId = params.id;
-  const currentChatId = params.chatId;
+  // Manual URL parsing as backup since useParams seems to be failing
+  const urlParts = location.pathname.split("/");
+  const connectionsIndex = urlParts.findIndex(part => part === "connections");
 
-  const handleConnectionClick = (_connection: Connection, index: number) => {
-    // Navigate to connection chat - will use first chat's ID if available
-    const connectionChats = conversations[index.toString()] || [];
+  let manualConnectionId = "";
+  let manualChatId = "";
+  let manualToolId = "";
+
+  if (connectionsIndex !== -1 && urlParts[connectionsIndex + 1]) {
+    manualConnectionId = urlParts[connectionsIndex + 1];
+
+    const chatIndex = urlParts.findIndex(part => part === "chat");
+    if (chatIndex !== -1 && urlParts[chatIndex + 1]) {
+      manualChatId = urlParts[chatIndex + 1];
+    }
+
+    const toolsIndex = urlParts.findIndex(part => part === "tools");
+    if (toolsIndex !== -1 && urlParts[toolsIndex + 1]) {
+      manualToolId = urlParts[toolsIndex + 1];
+    }
+  }
+
+  // Get current connection ID from URL params - use manual parsing as fallback
+  const currentConnectionId = params.connectionId || manualConnectionId;
+  const currentToolId = params.toolId || manualToolId;
+
+  const handleConnectionClick = (connection: Connection) => {
+    // Use the connection's actual ID (nanoid), not array index
+    const connectionChats = conversations[connection.id] || [];
     const firstChatId = connectionChats[0]?.id || "new";
-    navigate(`/connections/${index}/chat/${firstChatId}`);
-  };
-
-  const handleChatClick = (connectionIndex: number, chatId: string) => {
-    navigate(`/connections/${connectionIndex}/chat/${chatId}`);
+    navigate(`/connections/${connection.id}/chat/${firstChatId}`);
   };
 
   const handleToolClick = (tool: Tool) => {
     onToolSelect(tool);
+    // Always navigate to connection-specific tool page when a connection is selected
     if (currentConnectionId) {
-      navigate(`/connections/${currentConnectionId}/tools`);
-    } else {
-      navigate("/tools");
+      navigate(`/connections/${currentConnectionId}/tools/${tool.id}`);
     }
   };
 
-  const handleResourceClick = (resource: Resource, index: number) => {
-    if (onResourceSelect) {
-      onResourceSelect(resource);
-    }
-    if (currentConnectionId) {
-      navigate(`/connections/${currentConnectionId}/resources/${index}`);
-    } else {
-      navigate(`/resources/${index}`);
-    }
-  };
-
-  // Determine which tools and resources to show
+  // Only show tools when a connection is selected
   const toolsToShow = currentConnectionId
     ? tools[currentConnectionId] || []
     : [];
-  const resourcesToShow = currentConnectionId
-    ? resources[currentConnectionId] || []
-    : [];
-  const chatsToShow = currentConnectionId
-    ? conversations[currentConnectionId] || []
-    : [];
-
-  // Show all tools if not in connection context
-  const allTools = currentConnectionId
-    ? toolsToShow
-    : Object.values(tools).flat();
-  const allResources = currentConnectionId
-    ? resourcesToShow
-    : Object.values(resources).flat();
 
   // Helper function to check if a tool is selected
   const isToolSelected = (tool: Tool): boolean => {
-    return selectedTool?.name === tool.name;
+    return currentToolId === tool.id || selectedTool?.id === tool.id;
   };
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-800 transition-colors">
       <div className="flex-1 p-4 overflow-y-auto">
-        {/* Connection Context Header */}
-        {currentConnectionId && (
-          <div className="mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-2">
-              <div
-                className={`w-2 h-2 rounded-full ${connections[parseInt(currentConnectionId)]?.isConnected ? "bg-green-500" : "bg-red-500"}`}
-              />
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
-                {connections[parseInt(currentConnectionId)]?.name ||
-                  "Connection"}
-              </h2>
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {connections[parseInt(currentConnectionId)]?.url}
-            </p>
-            <button
-              onClick={() => navigate("/connections")}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors mt-2"
-            >
-              ← All Connections
-            </button>
-          </div>
-        )}
-
-        {/* Conversations/Chats Section */}
-        {currentConnectionId && chatsToShow.length > 0 && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-gray-900 dark:text-white">
-                Chats ({chatsToShow.length})
-              </h2>
-            </div>
-            <div className="space-y-2">
-              {chatsToShow.map(chat => (
-                <div key={chat.id} className="group relative">
-                  <button
-                    onClick={() =>
-                      handleChatClick(parseInt(currentConnectionId), chat.id)
-                    }
-                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                      currentChatId === chat.id
-                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <MessageSquare className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                          {chat.title}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {chat.messages.length} messages
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Connections */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 dark:text-white">
-              {currentConnectionId ? "Other Connections" : "Connections"}
+              Connections
             </h2>
-            <button
-              onClick={() => navigate("/connections")}
-              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium transition-colors"
-            >
-              View All
-            </button>
           </div>
           <div className="space-y-2">
-            {connections
-              .filter((_, idx) =>
-                currentConnectionId
-                  ? idx.toString() !== currentConnectionId
-                  : true
-              )
-              .slice(0, 3)
-              .map(conn => {
-                const displayIdx = connections.findIndex(c => c === conn);
-
-                return (
-                  <ConnectionItem
-                    key={`${conn.name}-${displayIdx}`}
-                    {...conn}
-                    onClick={() => handleConnectionClick(conn, displayIdx)}
-                    isActive={location.pathname.includes(
-                      `/connections/${displayIdx}`
-                    )}
-                  />
-                );
-              })}
-          </div>
-        </div>
-
-        {/* Tools */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 dark:text-white">
-              {currentConnectionId ? "Connection Tools" : "All Tools"} (
-              {allTools.length})
-            </h2>
-            {currentConnectionId ? (
-              <button
-                onClick={() =>
-                  navigate(`/connections/${currentConnectionId}/tools`)
-                }
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium transition-colors"
-              >
-                View All
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate("/tools")}
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium transition-colors"
-              >
-                View All
-              </button>
-            )}
-          </div>
-          <div className="space-y-2">
-            {allTools.slice(0, 5).map((tool, idx) => (
-              <ToolItem
-                key={`${tool.name}-${idx}`}
-                {...tool}
-                onClick={() => handleToolClick(tool)}
-                isSelected={isToolSelected(tool)}
+            {connections.map(conn => (
+              <ConnectionItem
+                key={conn.id}
+                {...conn}
+                onClick={() => handleConnectionClick(conn)}
+                isActive={location.pathname.includes(`/connections/${conn.id}`)}
               />
             ))}
-            {allTools.length > 5 && (
-              <button
-                onClick={() =>
-                  currentConnectionId
-                    ? navigate(`/connections/${currentConnectionId}/tools`)
-                    : navigate("/tools")
-                }
-                className="w-full text-left px-3 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                +{allTools.length - 5} more tools
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Resources */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 dark:text-white">
-              {currentConnectionId ? "Connection Resources" : "All Resources"} (
-              {allResources.length})
-            </h2>
-            {currentConnectionId ? (
-              <button
-                onClick={() =>
-                  navigate(`/connections/${currentConnectionId}/resources`)
-                }
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium transition-colors"
-              >
-                View All
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate("/resources")}
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium transition-colors"
-              >
-                View All
-              </button>
-            )}
+        {/* Tools - Only show when a connection is selected */}
+        {currentConnectionId && toolsToShow.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-900 dark:text-white">
+                Tools
+              </h2>
+            </div>
+            <div className="space-y-2">
+              {toolsToShow.map((tool, idx) => (
+                <ToolItem
+                  key={`${tool.id}-${idx}`}
+                  {...tool}
+                  onClick={() => handleToolClick(tool)}
+                  isSelected={isToolSelected(tool)}
+                />
+              ))}
+            </div>
           </div>
-          <div className="space-y-2">
-            {allResources.slice(0, 5).map((resource, idx) => (
-              <ResourceItem
-                key={`${resource.name}-${idx}`}
-                {...resource}
-                onClick={() => handleResourceClick(resource, idx)}
-              />
-            ))}
-            {allResources.length > 5 && (
-              <button
-                onClick={() =>
-                  currentConnectionId
-                    ? navigate(`/connections/${currentConnectionId}/resources`)
-                    : navigate("/resources")
-                }
-                className="w-full text-left px-3 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                +{allResources.length - 5} more resources
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* RconnectLogo at bottom */}

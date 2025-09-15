@@ -112,32 +112,6 @@ export class ConnectionService {
         return response.ok;
       }
 
-      // For WebSocket, try to connect briefly
-      if (url.protocol === "ws:" || url.protocol === "wss:") {
-        return new Promise(resolve => {
-          try {
-            const ws = new WebSocket(connection.url);
-            const timeout = setTimeout(() => {
-              ws.close();
-              resolve(false);
-            }, 5000);
-
-            ws.onopen = () => {
-              clearTimeout(timeout);
-              ws.close();
-              resolve(true);
-            };
-
-            ws.onerror = () => {
-              clearTimeout(timeout);
-              resolve(false);
-            };
-          } catch {
-            resolve(false);
-          }
-        });
-      }
-
       return false;
     } catch (error) {
       console.error("Connection test failed:", error);
@@ -346,7 +320,8 @@ export class ConnectionService {
   static validateConnectionUrl(url: string): boolean {
     try {
       const parsedUrl = new URL(url);
-      return ["http:", "https:", "ws:", "wss:"].includes(parsedUrl.protocol);
+      // Only support HTTP/HTTPS for now
+      return ["http:", "https:"].includes(parsedUrl.protocol);
     } catch {
       return false;
     }

@@ -13,7 +13,7 @@ interface ChatInterfaceProps {
 }
 
 export const ChatInterface = (_args: ChatInterfaceProps) => {
-  const { id: connectionId, chatId } = useParams();
+  const { connectionId, chatId } = useParams();
   const navigate = useNavigate();
   const { connections, conversations, updateConversations } = useStorage();
   const { expandedToolCall: inspectorExpandedTool, syncToolCallState } =
@@ -37,9 +37,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   }, [conversations]);
 
   // Get the current connection and conversation using chat ID
-  const currentConnection = connectionId
-    ? connections[parseInt(connectionId)]
-    : null;
+  const currentConnection = connections.find(conn => conn.id === connectionId);
   const connectionConversations = connectionId
     ? conversations[connectionId] || []
     : [];
@@ -56,14 +54,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     return inspectorExpandedTool === messageId;
   };
 
-  const handleToolCallExpand = (messageId: string, toolName?: string) => {
+  const handleToolCallExpand = (messageId: string, _toolName?: string) => {
     const isCurrentlyExpanded = isToolCallExpanded(messageId);
-    console.log("ChatInterface.handleToolCallExpand:", {
-      messageId,
-      toolName,
-      isCurrentlyExpanded,
-      willExpand: !isCurrentlyExpanded,
-    });
     syncToolCallState(messageId, !isCurrentlyExpanded);
   };
 
@@ -96,8 +88,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
       // Navigate to the new chat using its ID
       navigate(`/connections/${connectionId}/chat/${newChatId}`);
-
-      console.log("Created new chat:", newChat.title, "with ID:", newChatId);
     } catch (error) {
       console.error("Failed to create new chat:", error);
     }
@@ -151,8 +141,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           navigate(`/connections/${connectionId}`);
         }
       }
-
-      console.log("Deleted chat:", chatToDelete.title);
     } catch (error) {
       console.error("Failed to delete chat:", error);
     }

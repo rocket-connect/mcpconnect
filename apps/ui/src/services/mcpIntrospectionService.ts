@@ -15,6 +15,7 @@ export interface MCPMessage {
 }
 
 export interface MCPToolDefinition {
+  id: string;
   name: string;
   description: string;
   inputSchema: {
@@ -398,6 +399,7 @@ export class MCPIntrospectionService {
     }
 
     return {
+      id: nanoid(),
       name: mcpTool.name,
       description: mcpTool.description,
       inputSchema: mcpTool.inputSchema,

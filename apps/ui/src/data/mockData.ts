@@ -28,6 +28,12 @@ const CHAT_IDS = {
   customerService: generateId("chat"),
 };
 
+const TOOL_IDS = {
+  queryOrders: generateId("tool"),
+  updateInventory: generateId("tool"),
+  getCustomer: generateId("tool"),
+};
+
 const TOOL_EXECUTION_IDS = {
   queryOrders1: generateId("exec"),
   getCustomer1: generateId("exec"),
@@ -75,10 +81,11 @@ export const mockConnections: Connection[] = [
   },
 ];
 
-// Tools for connection by ID (not index)
+// Tools for connection by ID (not index) - NOW WITH UNIQUE TOOL IDS
 export const mockTools: Record<string, Tool[]> = {
   [CONNECTION_IDS.ecommerce]: [
     {
+      id: TOOL_IDS.queryOrders, // Unique tool ID
       name: "query_orders",
       description: "Execute SQL queries on order database",
       deprecated: false,
@@ -109,6 +116,7 @@ export const mockTools: Record<string, Tool[]> = {
       },
     },
     {
+      id: TOOL_IDS.updateInventory, // Unique tool ID
       name: "update_inventory",
       description: "Update product inventory levels",
       deprecated: false,
@@ -138,6 +146,7 @@ export const mockTools: Record<string, Tool[]> = {
       },
     },
     {
+      id: TOOL_IDS.getCustomer, // Unique tool ID
       name: "get_customer_info",
       description: "Retrieve customer information by ID",
       deprecated: false,
@@ -549,6 +558,7 @@ export const mockToolExecutions: Record<string, ToolExecution[]> = {
 export const ID_CONSTANTS = {
   CONNECTIONS: CONNECTION_IDS,
   CHATS: CHAT_IDS,
+  TOOLS: TOOL_IDS,
   EXECUTIONS: TOOL_EXECUTION_IDS,
   MESSAGES: MESSAGE_IDS,
 };
@@ -577,32 +587,58 @@ export function getExecutionsForChat(
   const currentChat = conversations.find(conv => conv.id === chatId);
 
   if (!currentChat) {
-    console.log(
-      `Chat with ID ${chatId} not found in connection ${connectionId}`
-    );
     return [];
   }
-
-  console.log(
-    `Found chat: ${currentChat.title} with ${currentChat.messages.length} messages`
-  );
 
   const toolMessageIds = currentChat.messages
     .filter(msg => Boolean(msg.executingTool) || Boolean(msg.toolExecution))
     .map(msg => msg.id)
     .filter(Boolean) as string[];
 
-  console.log(`Tool message IDs for chat ${chatId}:`, toolMessageIds);
-
   const matchingExecutions = connectionExecutions.filter(execution =>
     toolMessageIds.includes(execution.id)
   );
 
-  console.log(
-    `Found ${matchingExecutions.length} matching executions for chat ${chatId}`
-  );
-
   return matchingExecutions;
+}
+
+// ENHANCED: Function to get tool by ID - NOW SEARCHES ALL CONNECTIONS
+export function getToolById(
+  connectionId: string,
+  toolId: string
+): Tool | undefined {
+  const connectionTools = mockTools[connectionId] || [];
+  return connectionTools.find(tool => tool.id === toolId);
+}
+
+// NEW: Function to get tool by ID globally (search all connections)
+export function getToolByIdGlobal(toolId: string): Tool | undefined {
+  for (const [_, connectionTools] of Object.entries(mockTools)) {
+    const tool = connectionTools.find(t => t.id === toolId);
+    if (tool) {
+      return tool;
+    }
+  }
+  return undefined;
+}
+
+// NEW: Function to get tool by name (for backward compatibility)
+export function getToolByName(
+  connectionId: string,
+  toolName: string
+): Tool | undefined {
+  const connectionTools = mockTools[connectionId] || [];
+  return connectionTools.find(tool => tool.name === toolName);
+}
+
+// NEW: Function to find which connection a tool belongs to
+export function findToolConnectionId(toolId: string): string | null {
+  for (const [connectionId, connectionTools] of Object.entries(mockTools)) {
+    if (connectionTools.some(t => t.id === toolId)) {
+      return connectionId;
+    }
+  }
+  return null;
 }
 
 // Enhanced validation function with ID consistency checks
@@ -610,8 +646,6 @@ export function validateMockData(): boolean {
   const connectionExecutions =
     mockToolExecutions[CONNECTION_IDS.ecommerce] || [];
   const conversations = mockConversations[CONNECTION_IDS.ecommerce] || [];
-
-  console.log("=== MOCK DATA VALIDATION WITH NANOID TRACKING ===");
 
   // Check that every tool execution has a corresponding chat message
   for (const execution of connectionExecutions) {
@@ -621,7 +655,7 @@ export function validateMockData(): boolean {
 
     if (!found) {
       console.error(
-        `⌛ Tool execution ${execution.id} has no matching chat message`
+        `❌ Tool execution ${execution.id} has no matching chat message`
       );
       return false;
     } else {
@@ -636,7 +670,7 @@ export function validateMockData(): boolean {
         const found = connectionExecutions.some(exec => exec.id === message.id);
         if (!found) {
           console.error(
-            `⌛ Tool message ${message.id} has no matching execution`
+            `❌ Tool message ${message.id} has no matching execution`
           );
           return false;
         } else {
@@ -650,6 +684,7 @@ export function validateMockData(): boolean {
   const allIds = [
     ...Object.values(CONNECTION_IDS),
     ...Object.values(CHAT_IDS),
+    ...Object.values(TOOL_IDS),
     ...Object.values(TOOL_EXECUTION_IDS),
     ...Object.values(MESSAGE_IDS),
   ];
@@ -658,7 +693,7 @@ export function validateMockData(): boolean {
     (id, index) => allIds.indexOf(id) !== index
   );
   if (duplicateIds.length > 0) {
-    console.error(`⌛ Duplicate IDs found: ${duplicateIds.join(", ")}`);
+    console.error(`❌ Duplicate IDs found: ${duplicateIds.join(", ")}`);
     return false;
   }
 
@@ -695,6 +730,10 @@ export default {
   getAllToolExecutions,
   getExecutionsForConnection,
   getExecutionsForChat,
+  getToolById,
+  getToolByIdGlobal,
+  getToolByName,
+  findToolConnectionId,
   validateMockData,
   generateNewId,
   getConnectionById,

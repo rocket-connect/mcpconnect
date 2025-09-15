@@ -77,12 +77,9 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const updateConnections = useCallback(
     async (newConnections: Connection[]) => {
       try {
-        console.log("Updating connections:", newConnections);
         await adapter.set("connections", newConnections);
         setConnections(newConnections);
-        console.log("Connections updated successfully");
       } catch (err) {
-        console.error("Failed to update connections:", err);
         setError(err instanceof Error ? err.message : String(err));
       }
     },
@@ -93,12 +90,9 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const updateConversations = useCallback(
     async (newConversations: Record<string, ChatConversation[]>) => {
       try {
-        console.log("Updating conversations:", newConversations);
         await adapter.set("conversations", newConversations);
         setConversations(newConversations);
-        console.log("Conversations updated successfully");
       } catch (err) {
-        console.error("Failed to update conversations:", err);
         setError(err instanceof Error ? err.message : String(err));
       }
     },
@@ -115,11 +109,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           ChatConversation[]
         >;
         setConversations(conversationsData);
-        console.log(
-          "Refreshed conversations from storage:",
-          Object.keys(conversationsData).length,
-          "connections"
-        );
       }
     } catch (err) {
       console.error("Failed to refresh conversations:", err);
@@ -162,8 +151,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           storedExecutions.value as Record<string, ToolExecution[]>
         );
       }
-
-      console.log("Refreshed all data from storage");
     } catch (err) {
       console.error("Failed to refresh data:", err);
     }
@@ -256,8 +243,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
     async function loadExistingData(): Promise<boolean> {
       try {
-        console.log("=== LOADING EXISTING DATA ===");
-
         const [
           storedConnections,
           storedTools,
@@ -285,8 +270,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           return false;
         }
 
-        console.log("Found existing data, loading from storage");
-
         // Load existing data into state
         if (storedConnections?.value) {
           const connectionsArray = storedConnections.value as Connection[];
@@ -296,29 +279,14 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
             id: conn.id || ConnectionService.createConnection(conn).id,
           }));
           setConnections(connectionsWithIds);
-          console.log(
-            "Loaded existing connections:",
-            connectionsWithIds.length
-          );
         }
 
         if (storedTools?.value) {
           setTools(storedTools.value as Record<string, Tool[]>);
-          console.log(
-            "Loaded existing tools:",
-            Object.keys(storedTools.value as Record<string, Tool[]>).length,
-            "connection(s)"
-          );
         }
 
         if (storedResources?.value) {
           setResources(storedResources.value as Record<string, Resource[]>);
-          console.log(
-            "Loaded existing resources:",
-            Object.keys(storedResources.value as Record<string, Resource[]>)
-              .length,
-            "connection(s)"
-          );
         }
 
         if (storedConversations?.value) {
@@ -327,31 +295,14 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
             ChatConversation[]
           >;
           setConversations(conversationsData);
-          console.log("Loaded existing conversations:");
-          Object.entries(conversationsData).forEach(([connId, chats]) => {
-            console.log(`  Connection ${connId}: ${chats.length} chat(s)`);
-            chats.forEach(chat => {
-              console.log(
-                `    Chat ${chat.id} (${chat.title}): ${chat.messages.length} messages`
-              );
-            });
-          });
         }
 
         if (storedExecutions?.value) {
           setToolExecutions(
             storedExecutions.value as Record<string, ToolExecution[]>
           );
-          console.log(
-            "Loaded existing tool executions:",
-            Object.keys(
-              storedExecutions.value as Record<string, ToolExecution[]>
-            ).length,
-            "connection(s)"
-          );
         }
 
-        console.log("=== EXISTING DATA LOADING COMPLETE ===");
         return true;
       } catch (err) {
         console.error("Failed to load existing data:", err);
@@ -361,8 +312,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
     async function loadMockData() {
       try {
-        console.log("=== LOADING MOCK DATA (FIRST TIME ONLY) ===");
-
         // Validate mock data before loading
         if (!mockData.validateMockData()) {
           throw new Error("Mock data validation failed");
@@ -371,51 +320,22 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         // Load connections with proper IDs
         await adapter.set("connections", mockData.connections);
         setConnections(mockData.connections);
-        console.log("Loaded mock connections:", mockData.connections.length);
 
         // Load tools (keyed by connection ID, not index)
         await adapter.set("tools", mockData.tools);
         setTools(mockData.tools);
-        console.log(
-          "Loaded mock tools:",
-          Object.keys(mockData.tools).length,
-          "connection(s)"
-        );
 
         // Load resources (keyed by connection ID, not index)
         await adapter.set("resources", mockData.resources);
         setResources(mockData.resources);
-        console.log(
-          "Loaded mock resources:",
-          Object.keys(mockData.resources).length,
-          "connection(s)"
-        );
 
         // Load conversations (keyed by connection ID, not index)
         await adapter.set("conversations", mockData.conversations);
         setConversations(mockData.conversations);
-        console.log("Loaded mock conversations:");
-        Object.entries(mockData.conversations).forEach(([connId, chats]) => {
-          console.log(`  Connection ${connId}: ${chats.length} chat(s)`);
-          chats.forEach(chat => {
-            const toolMessages = chat.messages.filter(
-              msg => Boolean(msg.executingTool) || Boolean(msg.toolExecution)
-            );
-            console.log(
-              `    Chat ${chat.id} (${chat.title}): ${chat.messages.length} messages, ${toolMessages.length} tool messages`
-            );
-          });
-        });
 
         // Load tool executions (keyed by connection ID, not index)
         await adapter.set("toolExecutions", mockData.toolExecutions);
         setToolExecutions(mockData.toolExecutions);
-        console.log("Loaded mock tool executions:");
-        Object.entries(mockData.toolExecutions).forEach(([connId, execs]) => {
-          console.log(`  Connection ${connId}: ${execs.length} execution(s)`);
-        });
-
-        console.log("=== MOCK DATA LOADING COMPLETE ===");
       } catch (err) {
         console.error("Failed to load mock data:", err);
         setError(err instanceof Error ? err.message : String(err));

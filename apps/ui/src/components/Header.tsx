@@ -1,5 +1,4 @@
-import { ConnectionStatus, ThemeToggle } from "@mcpconnect/components";
-import { ConnectionStatus as ConnectionStatusType } from "@mcpconnect/schemas";
+import { ThemeToggle } from "@mcpconnect/components";
 import { useTheme } from "../contexts/ThemeContext";
 import { Server, Settings } from "lucide-react";
 import { useState } from "react";
@@ -8,14 +7,6 @@ import { SettingsModal } from "./SettingsModal";
 export const Header = () => {
   const { theme, toggleTheme } = useTheme();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Mock connection status using proper schema type
-  const connectionStatus: ConnectionStatusType = {
-    connectionId: "database-server",
-    isConnected: true,
-    lastConnected: new Date(),
-    latency: 45,
-  };
 
   return (
     <>
@@ -31,7 +22,6 @@ export const Header = () => {
                 MCPConnect
               </h1>
             </div>
-            <ConnectionStatus status={connectionStatus} />
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle theme={theme} onToggle={toggleTheme} />

@@ -21,10 +21,8 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
   );
 
   const handleConnectionClick = (connection: Connection) => {
-    // Navigate to connection chat - will use first chat's ID if available
-    const connectionChats = conversations[connection.id] || [];
-    const firstChatId = connectionChats[0]?.id || "new";
-    navigate(`/connections/${connection.id}/chat/${firstChatId}`);
+    // Navigate to connection overview
+    navigate(`/connections/${connection.id}`);
   };
 
   const handleCreateConnection = () => {
@@ -117,28 +115,31 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
           c.id === editingConnection.id ? connection : c
         );
       } else {
-        // Add new connection
-        updatedConnections = [...connections, connection];
+        // Add new connection - ensure it has a unique ID
+        const connectionWithId = {
+          ...connection,
+          id:
+            connection.id || ConnectionService.createConnection(connection).id,
+        };
+        updatedConnections = [...connections, connectionWithId];
       }
 
       // Test connection and perform introspection if successful
       let finalConnection = { ...connection };
 
       try {
-        console.log("Testing connection...");
         const isConnected = await ConnectionService.testConnection(connection);
 
         if (isConnected) {
           finalConnection.isConnected = true;
-          console.log("Connection successful, performing introspection...");
 
           try {
             const introspectionResult =
               await ConnectionService.introspectConnection(connection);
-            console.log("Introspection successful:", introspectionResult);
 
             // Convert MCP tools to our tool format
             const convertedTools = introspectionResult.tools.map(tool => ({
+              id: `${connection.id}_${tool.name}`, // Create unique tool ID
               name: tool.name,
               description: tool.description,
               inputSchema: tool.inputSchema,
@@ -191,10 +192,6 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
               "mcpconnect:resources",
               JSON.stringify(resourcesData)
             );
-
-            console.log(
-              `Introspected ${convertedTools.length} tools and ${convertedResources.length} resources`
-            );
           } catch (introspectionError) {
             console.warn(
               "Introspection failed, but connection is valid:",
@@ -204,7 +201,6 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
           }
         } else {
           finalConnection.isConnected = false;
-          console.log("Connection test failed");
         }
       } catch (testError) {
         console.error("Connection test failed:", testError);
@@ -335,28 +331,6 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
                       </button>
                     </div>
                   </div>
-
-                  {/* Connection status indicator */}
-                  <div className="absolute bottom-3 left-3">
-                    <div className="flex items-center gap-2 text-xs">
-                      <div
-                        className={`w-2 h-2 rounded-full ${
-                          connection.isConnected
-                            ? "bg-green-500"
-                            : connection.isActive
-                              ? "bg-yellow-500"
-                              : "bg-gray-400"
-                        }`}
-                      />
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {connection.isConnected
-                          ? "Connected"
-                          : connection.isActive
-                            ? "Active"
-                            : "Inactive"}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               ))}
             </div>
@@ -369,11 +343,7 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
             </h3>
             <div className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
               <p>
-                • <strong>WebSocket:</strong> ws://localhost:8080 or
-                wss://api.example.com/mcp
-              </p>
-              <p>
-                • <strong>HTTP:</strong> http://localhost:3000/mcp or
+                • <strong>HTTP MCP:</strong> http://localhost:3000/mcp or
                 https://api.example.com/mcp
               </p>
               <p>
@@ -390,25 +360,23 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
           {/* Example Connection */}
           <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
             <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-              Example Connection (from your request)
+              Example Connection
             </h4>
             <div className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 p-3 rounded border">
               <div>
-                <strong>Name:</strong> Toma MCP Remote
+                <strong>Name:</strong> My MCP Server
               </div>
               <div>
-                <strong>URL:</strong>{" "}
-                https://mcp-11091-8cbb542e-54v4dsiu.onporter.run/mcp
+                <strong>URL:</strong> https://my-mcp-endpoint/mcp
               </div>
               <div>
                 <strong>Auth:</strong> Bearer Token
               </div>
               <div>
-                <strong>Token:</strong> fz6u4MLK4mMTiZD8wF88Yv
+                <strong>Token:</strong> my-token
               </div>
               <div>
-                <strong>Headers:</strong> Authorization: Bearer
-                fz6u4MLK4mMTiZD8wF88Yv
+                <strong>Headers:</strong> Authorization: Bearer my-token
               </div>
             </div>
           </div>

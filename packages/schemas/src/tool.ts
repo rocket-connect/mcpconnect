@@ -4,6 +4,7 @@ import { z } from "zod";
  * Schema for MCP tool definition
  */
 export const ToolSchema = z.object({
+  id: z.string().min(1, "Tool ID is required"),
   name: z.string().min(1, "Tool name is required"),
   description: z.string().min(1, "Tool description is required"),
   inputSchema: z.record(z.string(), z.unknown()).optional(),
