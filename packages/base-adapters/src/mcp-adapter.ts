@@ -692,68 +692,6 @@ export abstract class MCPAdapter {
   }
 
   /**
-   * Store tool execution in localStorage for tracking
-   */
-  static async storeToolExecution(
-    connectionId: string,
-    execution: ToolExecution
-  ): Promise<void> {
-    try {
-      // Get current executions
-      const toolExecutionsItem = localStorage.getItem(
-        "mcpconnect:toolExecutions"
-      );
-      const toolExecutionsData = toolExecutionsItem
-        ? JSON.parse(toolExecutionsItem)
-        : { value: {} };
-
-      // Initialize connection executions if needed
-      if (!toolExecutionsData.value[connectionId]) {
-        toolExecutionsData.value[connectionId] = [];
-      }
-
-      const currentExecutions = toolExecutionsData.value[connectionId];
-
-      // Update or add the execution
-      const existingIndex = currentExecutions.findIndex(
-        (exec: ToolExecution) => exec.id === execution.id
-      );
-
-      if (existingIndex !== -1) {
-        // Update existing execution
-        currentExecutions[existingIndex] = {
-          ...currentExecutions[existingIndex],
-          ...execution,
-        };
-      } else {
-        // Add new execution
-        currentExecutions.push(execution);
-      }
-
-      // Update metadata
-      toolExecutionsData.metadata = {
-        ...toolExecutionsData.metadata,
-        updatedAt: new Date(),
-        size: JSON.stringify(toolExecutionsData.value).length,
-        type: "object",
-      };
-
-      // Store back to localStorage
-      localStorage.setItem(
-        "mcpconnect:toolExecutions",
-        JSON.stringify(toolExecutionsData)
-      );
-
-      console.log(
-        `[MCP] Stored tool execution for ${connectionId}:`,
-        execution.id
-      );
-    } catch (error) {
-      console.error("Failed to store tool execution:", error);
-    }
-  }
-
-  /**
    * Handle errors consistently
    */
   protected handleError(error: unknown, context: string): never {

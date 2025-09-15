@@ -1,5 +1,6 @@
 // apps/ui/src/services/mcpService.ts
 import { Connection, Tool, Resource, ToolExecution } from "@mcpconnect/schemas";
+import { StorageAdapter } from "@mcpconnect/base-adapters";
 import { nanoid } from "nanoid";
 
 export interface MCPCapabilities {
@@ -78,6 +79,14 @@ export interface MCPToolExecutionResult {
  */
 export class MCPService {
   private static requestId = 1;
+  private static storageAdapter: StorageAdapter | null = null;
+
+  /**
+   * Set the storage adapter for tool execution storage
+   */
+  static setStorageAdapter(adapter: StorageAdapter) {
+    this.storageAdapter = adapter;
+  }
 
   /**
    * Generate a unique request ID
@@ -604,5 +613,28 @@ export class MCPService {
       authType: connectionData.authType || "none",
       credentials: connectionData.credentials,
     };
+  }
+
+  /**
+   * Store tool execution using the storage adapter instead of localStorage
+   */
+  static async storeToolExecution(
+    connectionId: string,
+    execution: ToolExecution
+  ): Promise<void> {
+    if (!this.storageAdapter) {
+      console.warn("No storage adapter configured for MCPService");
+      return;
+    }
+
+    try {
+      await this.storageAdapter.addToolExecution(connectionId, execution);
+      console.log(
+        `[MCP] Stored tool execution for ${connectionId}:`,
+        execution.id
+      );
+    } catch (error) {
+      console.error("Failed to store tool execution:", error);
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { MCPAdapter, MCPConfig } from "@mcpconnect/base-adapters";
-import { Connection, ToolExecution } from "@mcpconnect/schemas";
+import { Connection } from "@mcpconnect/schemas";
 
 /**
  * Concrete implementation of MCP Service
@@ -111,15 +111,5 @@ export class MCPService extends MCPAdapter {
    */
   static createConnection(connectionData: Omit<Connection, "id">): Connection {
     return MCPAdapter.createConnection(connectionData);
-  }
-
-  /**
-   * Store tool execution in localStorage for tracking
-   */
-  static async storeToolExecution(
-    connectionId: string,
-    execution: ToolExecution
-  ): Promise<void> {
-    return MCPAdapter.storeToolExecution(connectionId, execution);
   }
 }
