@@ -76,17 +76,47 @@ export function createServer(options: ServerOptions = {}): {
         contentSecurityPolicy: {
           directives: {
             defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: [
+              "'self'",
+              "'unsafe-inline'",
+              "https://fonts.googleapis.com",
+            ],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
             scriptSrc: ["'self'"],
             imgSrc: ["'self'", "data:", "https:"],
+            // CRITICAL: Allow connections to local MCP servers and external APIs
+            connectSrc: [
+              "'self'",
+              "http://localhost:*",
+              "https://localhost:*",
+              "ws://localhost:*",
+              "wss://localhost:*",
+              "http://127.0.0.1:*",
+              "https://127.0.0.1:*",
+              "ws://127.0.0.1:*",
+              "wss://127.0.0.1:*",
+              // Allow Anthropic API
+              "https://api.anthropic.com",
+              // Allow other common MCP endpoints
+              "http://*:*",
+              "https://*:*",
+              "ws://*:*",
+              "wss://*:*",
+            ],
           },
         },
+        crossOriginEmbedderPolicy: false, // Disable for better compatibility
       })
     );
   }
 
   if (enableCors) {
-    app.use(cors());
+    app.use(
+      cors({
+        origin: true, // Allow all origins in development
+        credentials: true,
+      })
+    );
   }
 
   app.use(express.json());
