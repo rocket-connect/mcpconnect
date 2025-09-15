@@ -29,16 +29,10 @@ export const Sidebar = ({
   const connectionsIndex = urlParts.findIndex(part => part === "connections");
 
   let manualConnectionId = "";
-  let manualChatId = "";
   let manualToolId = "";
 
   if (connectionsIndex !== -1 && urlParts[connectionsIndex + 1]) {
     manualConnectionId = urlParts[connectionsIndex + 1];
-
-    const chatIndex = urlParts.findIndex(part => part === "chat");
-    if (chatIndex !== -1 && urlParts[chatIndex + 1]) {
-      manualChatId = urlParts[chatIndex + 1];
-    }
 
     const toolsIndex = urlParts.findIndex(part => part === "tools");
     if (toolsIndex !== -1 && urlParts[toolsIndex + 1]) {
