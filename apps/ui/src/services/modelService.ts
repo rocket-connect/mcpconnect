@@ -1,9 +1,10 @@
-// apps/ui/src/services/modelService.ts - Refactored to use AISDKAdapter
+// apps/ui/src/services/modelService.ts - Refactored to use LocalStorage Adapter
 import {
   AISDKAdapter,
   ModelOption,
   AnthropicProvider,
 } from "@mcpconnect/adapter-ai-sdk";
+import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
 
 export type ModelProvider = "anthropic";
 
@@ -21,6 +22,15 @@ export interface LLMSettings {
 export type { ModelOption };
 
 export class ModelService {
+  private static adapter: LocalStorageAdapter | null = null;
+
+  /**
+   * Set the storage adapter to use
+   */
+  static setAdapter(adapter: LocalStorageAdapter) {
+    this.adapter = adapter;
+  }
+
   /**
    * Get default settings for a provider
    */
@@ -91,24 +101,54 @@ export class ModelService {
   }
 
   /**
-   * Save settings to localStorage
+   * Save settings using the adapter
    */
-  static saveSettings(settings: LLMSettings): void {
-    AISDKAdapter.saveSettings(settings);
+  static async saveSettings(settings: LLMSettings): Promise<void> {
+    if (!this.adapter) {
+      console.warn("No storage adapter configured for ModelService");
+      return;
+    }
+
+    try {
+      await this.adapter.setLLMSettings(settings);
+    } catch (error) {
+      console.error("Failed to save LLM settings:", error);
+      throw error;
+    }
   }
 
   /**
-   * Load settings from localStorage
+   * Load settings using the adapter
    */
-  static loadSettings(): LLMSettings | null {
-    return AISDKAdapter.loadSettings();
+  static async loadSettings(): Promise<LLMSettings | null> {
+    if (!this.adapter) {
+      console.warn("No storage adapter configured for ModelService");
+      return null;
+    }
+
+    try {
+      return await this.adapter.getLLMSettings();
+    } catch (error) {
+      console.error("Failed to load LLM settings:", error);
+      return null;
+    }
   }
 
   /**
-   * Clear saved settings
+   * Clear saved settings using the adapter
    */
-  static clearSettings(): void {
-    AISDKAdapter.clearSettings();
+  static async clearSettings(): Promise<void> {
+    if (!this.adapter) {
+      console.warn("No storage adapter configured for ModelService");
+      return;
+    }
+
+    try {
+      await this.adapter.clearLLMSettings();
+    } catch (error) {
+      console.error("Failed to clear LLM settings:", error);
+      throw error;
+    }
   }
 
   /**

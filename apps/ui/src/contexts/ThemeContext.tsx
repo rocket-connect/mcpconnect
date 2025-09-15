@@ -1,36 +1,64 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Theme, ThemeContextType } from "@mcpconnect/schemas";
+import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("mcpconnect-theme") as Theme;
-      if (stored && ["light", "dark", "system"].includes(stored)) return stored;
-
-      // Default to dark theme like Rocket Connect
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
-    }
-    return "dark";
-  });
-
-  const [systemTheme, setSystemTheme] = useState<Exclude<Theme, "system">>(
-    () => {
-      if (typeof window !== "undefined") {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      return "dark";
-    }
+  const [themeAdapter] = useState(() => 
+    new LocalStorageAdapter({
+      name: "mcpconnect-theme-storage",
+      provider: "localstorage",
+      prefix: "mcpconnect:",
+      debug: false,
+      timeout: 30000,
+      retries: 3,
+      compression: false,
+      encryption: false,
+      autoCleanup: false,
+      maxSize: 1024 * 1024, // 1MB for theme storage
+      maxItemSize: 1024, // 1KB for theme data
+      simulateAsync: false,
+      cleanupInterval: 3600000, // 1 hour
+    })
   );
+
+  const [theme, setTheme] = useState<Theme>("dark"); // Default to dark
+  const [systemTheme, setSystemTheme] = useState<Exclude<Theme, "system">>("dark");
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const resolvedTheme: Exclude<Theme, "system"> =
     theme === "system" ? systemTheme : theme;
 
+  // Initialize adapter and load theme
+  useEffect(() => {
+    const initializeTheme = async () => {
+      try {
+        await themeAdapter.initialize();
+        
+        // Load saved theme
+        const savedTheme = await themeAdapter.getTheme();
+        if (savedTheme && ["light", "dark", "system"].includes(savedTheme)) {
+          setTheme(savedTheme);
+        } else {
+          // Default to system preference or dark
+          const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+          setTheme(prefersDark ? "dark" : "light");
+        }
+      } catch (error) {
+        console.error("Failed to initialize theme storage:", error);
+        // Fall back to system preference or dark
+        const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+        setTheme(prefersDark ? "dark" : "light");
+      } finally {
+        setIsInitialized(true);
+      }
+    };
+
+    initializeTheme();
+  }, [themeAdapter]);
+
+  // Monitor system theme changes
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -48,8 +76,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Apply theme to document when resolved theme changes
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!isInitialized || typeof window === "undefined") return;
 
     const root = window.document.documentElement;
 
@@ -58,10 +87,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     // Add the resolved theme class
     root.classList.add(resolvedTheme);
+  }, [resolvedTheme, isInitialized]);
 
-    // Store in localStorage (but not "system" resolution)
-    localStorage.setItem("mcpconnect-theme", theme);
-  }, [theme, resolvedTheme]);
+  // Save theme when it changes (only after initialization)
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const saveTheme = async () => {
+      try {
+        await themeAdapter.setTheme(theme);
+      } catch (error) {
+        console.error("Failed to save theme:", error);
+      }
+    };
+
+    saveTheme();
+  }, [theme, themeAdapter, isInitialized]);
 
   const toggleTheme = () => {
     setTheme(prev => {
@@ -71,11 +112,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const handleSetTheme = (newTheme: Theme) => {
+    setTheme(newTheme);
+  };
+
   const contextValue: ThemeContextType = {
     theme,
     systemTheme,
     resolvedTheme,
-    setTheme,
+    setTheme: handleSetTheme,
     toggleTheme,
   };
 

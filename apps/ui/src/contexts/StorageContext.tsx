@@ -6,7 +6,6 @@ import React, {
   useCallback,
 } from "react";
 import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
-import { StorageAdapter } from "@mcpconnect/base-adapters";
 import {
   Connection,
   Tool,
@@ -14,9 +13,11 @@ import {
   ToolExecution,
   ChatConversation,
 } from "@mcpconnect/schemas";
+import { ModelService } from "../services/modelService";
+import { ChatService } from "../services/chatService";
 
 interface StorageContextType {
-  adapter: StorageAdapter;
+  adapter: LocalStorageAdapter;
   connections: Connection[];
   tools: Record<string, Tool[]>;
   resources: Record<string, Resource[]>;
@@ -77,6 +78,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("Refreshing all data from storage...");
 
+      // Use adapter methods instead of direct localStorage access
       const [
         storedConnections,
         storedTools,
@@ -84,7 +86,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         storedConversations,
         storedExecutions,
       ] = await Promise.all([
-        adapter.get("connections"),
+        adapter.getConnections(),
         adapter.get("tools"),
         adapter.get("resources"),
         adapter.get("conversations"),
@@ -92,10 +94,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       // Update all state atomically
-      if (storedConnections?.value) {
-        const connectionsArray = storedConnections.value as Connection[];
-        setConnections(connectionsArray);
-      }
+      setConnections(storedConnections);
 
       if (storedTools?.value) {
         setTools(storedTools.value as Record<string, Tool[]>);
@@ -142,7 +141,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const updateConnections = useCallback(
     async (newConnections: Connection[]) => {
       try {
-        await adapter.set("connections", newConnections);
+        await adapter.setConnections(newConnections);
         setConnections(newConnections);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -204,24 +203,24 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       );
       await updateConnections(newConnections);
 
-      // Remove associated data
+      // Remove associated data using adapter method
+      await adapter.removeConnectionData(connectionId);
+
+      // Update local state
       const newConversations = { ...conversations };
       delete newConversations[connectionId];
-      await updateConversations(newConversations);
+      setConversations(newConversations);
 
       const newTools = { ...tools };
       delete newTools[connectionId];
-      await adapter.set("tools", newTools);
       setTools(newTools);
 
       const newResources = { ...resources };
       delete newResources[connectionId];
-      await adapter.set("resources", newResources);
       setResources(newResources);
 
       const newToolExecutions = { ...toolExecutions };
       delete newToolExecutions[connectionId];
-      await adapter.set("toolExecutions", newToolExecutions);
       setToolExecutions(newToolExecutions);
     },
     [
@@ -232,7 +231,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       toolExecutions,
       adapter,
       updateConnections,
-      updateConversations,
     ]
   );
 
@@ -245,6 +243,10 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         await adapter.initialize();
 
         if (!mounted) return;
+
+        // Set the adapter for services that need it
+        ModelService.setAdapter(adapter);
+        ChatService.setStorageAdapter(adapter);
 
         // Load existing data (no mock data fallback)
         await loadExistingData();
@@ -260,6 +262,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
     async function loadExistingData() {
       try {
+        // Use adapter methods for all data loading
         const [
           storedConnections,
           storedTools,
@@ -267,7 +270,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           storedConversations,
           storedExecutions,
         ] = await Promise.all([
-          adapter.get("connections"),
+          adapter.getConnections(),
           adapter.get("tools"),
           adapter.get("resources"),
           adapter.get("conversations"),
@@ -275,10 +278,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         ]);
 
         // Load existing data into state (empty arrays/objects if nothing stored)
-        if (storedConnections?.value) {
-          const connectionsArray = storedConnections.value as Connection[];
-          setConnections(connectionsArray);
-        }
+        setConnections(storedConnections);
 
         if (storedTools?.value) {
           setTools(storedTools.value as Record<string, Tool[]>);

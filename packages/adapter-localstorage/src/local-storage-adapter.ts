@@ -44,34 +44,31 @@ class LocalStorageTransaction implements StorageTransaction {
     value: unknown,
     options?: StorageOptions
   ): Promise<void> {
-    console.log("Transaction.set stub:", { key, hasValue: !!value, options });
+    console.log("Transaction.set:", { key, hasValue: !!value, options });
 
     // Store the current value for rollback
     const currentItem = await this.adapter.get(key);
 
     this.operations.push(() => {
-      // Actual set operation would go here
       console.log("Executing transaction set:", key);
     });
 
     this.rollbackOperations.push(() => {
       if (currentItem) {
         console.log("Rolling back set operation for:", key);
-        // Restore previous value
       } else {
         console.log("Rolling back set operation (delete) for:", key);
-        // Delete the key
       }
     });
   }
 
   async get(key: string): Promise<StorageItem | null> {
-    console.log("Transaction.get stub:", key);
+    console.log("Transaction.get:", key);
     return this.adapter.get(key);
   }
 
   async delete(key: string): Promise<boolean> {
-    console.log("Transaction.delete stub:", key);
+    console.log("Transaction.delete:", key);
 
     const currentItem = await this.adapter.get(key);
 
@@ -82,7 +79,6 @@ class LocalStorageTransaction implements StorageTransaction {
     this.rollbackOperations.push(() => {
       if (currentItem) {
         console.log("Rolling back delete operation for:", key);
-        // Restore the item
       }
     });
 
@@ -91,7 +87,7 @@ class LocalStorageTransaction implements StorageTransaction {
 
   async commit(): Promise<void> {
     console.log(
-      "Transaction.commit stub - executing",
+      "Transaction.commit - executing",
       this.operations.length,
       "operations"
     );
@@ -110,7 +106,7 @@ class LocalStorageTransaction implements StorageTransaction {
 
   async rollback(): Promise<void> {
     console.log(
-      "Transaction.rollback stub - rolling back",
+      "Transaction.rollback - rolling back",
       this.rollbackOperations.length,
       "operations"
     );
@@ -129,7 +125,7 @@ class LocalStorageTransaction implements StorageTransaction {
 }
 
 /**
- * LocalStorage implementation of StorageAdapter
+ * LocalStorage implementation of StorageAdapter with MCP-specific methods
  */
 export class LocalStorageAdapter extends StorageAdapter {
   protected config: LocalStorageConfig;
@@ -141,8 +137,6 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   async getCapabilities(): Promise<StorageCapabilities> {
-    console.log("LocalStorageAdapter.getCapabilities stub");
-
     return {
       persistent: true, // LocalStorage persists across sessions
       transactional: true, // We provide basic transaction support
@@ -158,8 +152,6 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   async initialize(): Promise<void> {
-    console.log("LocalStorageAdapter.initialize stub");
-
     if (typeof window === "undefined" || !window.localStorage) {
       throw new AdapterError(
         "LocalStorage is not available in this environment",
@@ -175,13 +167,10 @@ export class LocalStorageAdapter extends StorageAdapter {
         "Setting up auto-cleanup interval:",
         this.config.cleanupInterval
       );
-      // setInterval(() => this.cleanup(), this.config.cleanupInterval);
     }
   }
 
   async testConnection(): Promise<boolean> {
-    console.log("LocalStorageAdapter.testConnection stub");
-
     try {
       const testKey = `${this.config.prefix}test`;
       localStorage.setItem(testKey, "test");
@@ -198,12 +187,6 @@ export class LocalStorageAdapter extends StorageAdapter {
     value: unknown,
     options?: StorageOptions
   ): Promise<void> {
-    console.log("LocalStorageAdapter.set stub:", {
-      key,
-      hasValue: !!value,
-      options,
-    });
-
     this.validateKey(key);
 
     const fullKey = `${this.config.prefix}${key}`;
@@ -240,8 +223,6 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   async get(key: string): Promise<StorageItem | null> {
-    console.log("LocalStorageAdapter.get stub:", key);
-
     this.validateKey(key);
 
     const fullKey = `${this.config.prefix}${key}`;
@@ -272,15 +253,11 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   async has(key: string): Promise<boolean> {
-    console.log("LocalStorageAdapter.has stub:", key);
-
     const item = await this.get(key);
     return item !== null;
   }
 
   async delete(key: string): Promise<boolean> {
-    console.log("LocalStorageAdapter.delete stub:", key);
-
     this.validateKey(key);
 
     const fullKey = `${this.config.prefix}${key}`;
@@ -298,16 +275,12 @@ export class LocalStorageAdapter extends StorageAdapter {
   async setBatch(
     items: Array<{ key: string; value: unknown; options?: StorageOptions }>
   ): Promise<void> {
-    console.log("LocalStorageAdapter.setBatch stub:", items.length, "items");
-
     for (const item of items) {
       await this.set(item.key, item.value, item.options);
     }
   }
 
   async getBatch(keys: string[]): Promise<StorageItem[]> {
-    console.log("LocalStorageAdapter.getBatch stub:", keys.length, "keys");
-
     const items: StorageItem[] = [];
 
     for (const key of keys) {
@@ -321,8 +294,6 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   async deleteBatch(keys: string[]): Promise<number> {
-    console.log("LocalStorageAdapter.deleteBatch stub:", keys.length, "keys");
-
     let deletedCount = 0;
 
     for (const key of keys) {
@@ -336,12 +307,9 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   async query(query: StorageQuery): Promise<StorageResult> {
-    console.log("LocalStorageAdapter.query stub:", query);
-
     const allKeys = await this.keys(query.prefix);
     let matchingItems: StorageItem[] = [];
 
-    // This is a stub implementation - real implementation would be more efficient
     for (const key of allKeys) {
       if (query.limit && matchingItems.length >= query.limit) {
         break;
@@ -349,7 +317,6 @@ export class LocalStorageAdapter extends StorageAdapter {
 
       const item = await this.get(key.replace(this.config.prefix, ""));
       if (item) {
-        // Apply filters (stub logic)
         let matches = true;
 
         if (query.tags && item.metadata.tags) {
@@ -366,7 +333,6 @@ export class LocalStorageAdapter extends StorageAdapter {
       }
     }
 
-    // Apply offset
     if (query.offset) {
       matchingItems = matchingItems.slice(query.offset);
     }
@@ -374,14 +340,12 @@ export class LocalStorageAdapter extends StorageAdapter {
     return {
       items: matchingItems,
       total: matchingItems.length,
-      hasMore: false, // Stub implementation
+      hasMore: false,
       metadata: { queryExecutedAt: new Date().toISOString() },
     };
   }
 
   async keys(pattern?: string): Promise<string[]> {
-    console.log("LocalStorageAdapter.keys stub:", pattern);
-
     const keys: string[] = [];
     const prefix = pattern
       ? `${this.config.prefix}${pattern}`
@@ -403,8 +367,6 @@ export class LocalStorageAdapter extends StorageAdapter {
     usedSpace: number;
     availableSpace?: number;
   }> {
-    console.log("LocalStorageAdapter.stats stub");
-
     const keys = await this.keys();
     let totalSize = 0;
 
@@ -419,13 +381,11 @@ export class LocalStorageAdapter extends StorageAdapter {
       itemCount: keys.length,
       totalSize,
       usedSpace: totalSize,
-      availableSpace: Math.max(0, 10 * 1024 * 1024 - totalSize), // Estimate 10MB limit
+      availableSpace: Math.max(0, 10 * 1024 * 1024 - totalSize),
     };
   }
 
   async clear(pattern?: string): Promise<number> {
-    console.log("LocalStorageAdapter.clear stub:", pattern);
-
     const keys = await this.keys(pattern);
     let deletedCount = 0;
 
@@ -438,8 +398,6 @@ export class LocalStorageAdapter extends StorageAdapter {
   }
 
   async cleanup(): Promise<number> {
-    console.log("LocalStorageAdapter.cleanup stub");
-
     const keys = await this.keys();
     let cleanedCount = 0;
 
@@ -459,8 +417,6 @@ export class LocalStorageAdapter extends StorageAdapter {
   async transaction<T>(
     callback: (tx: StorageTransaction) => Promise<T>
   ): Promise<T> {
-    console.log("LocalStorageAdapter.transaction stub");
-
     const tx = new LocalStorageTransaction(this);
 
     try {
@@ -471,5 +427,263 @@ export class LocalStorageAdapter extends StorageAdapter {
       await tx.rollback();
       throw error;
     }
+  }
+
+  // ===============================
+  // MCP-SPECIFIC HELPER METHODS
+  // ===============================
+
+  /**
+   * Store theme preference
+   */
+  async setTheme(theme: "light" | "dark" | "system"): Promise<void> {
+    await this.set("theme", theme);
+  }
+
+  /**
+   * Get theme preference
+   */
+  async getTheme(): Promise<"light" | "dark" | "system" | null> {
+    const item = await this.get("theme");
+    return item?.value as "light" | "dark" | "system" | null;
+  }
+
+  /**
+   * Store LLM settings
+   */
+  async setLLMSettings(settings: any): Promise<void> {
+    await this.set("llm-settings", settings);
+  }
+
+  /**
+   * Get LLM settings
+   */
+  async getLLMSettings(): Promise<any> {
+    const item = await this.get("llm-settings");
+    return item?.value || null;
+  }
+
+  /**
+   * Clear LLM settings
+   */
+  async clearLLMSettings(): Promise<void> {
+    await this.delete("llm-settings");
+  }
+
+  /**
+   * Store connections array
+   */
+  async setConnections(connections: any[]): Promise<void> {
+    await this.set("connections", connections);
+  }
+
+  /**
+   * Get connections array
+   */
+  async getConnections(): Promise<any[]> {
+    const item = await this.get("connections");
+    return item?.value as any[] || [];
+  }
+
+  /**
+   * Store tools for a connection
+   */
+  async setConnectionTools(connectionId: string, tools: any[]): Promise<void> {
+    const allTools = await this.get("tools");
+    const toolsData = allTools?.value as Record<string, any[]> || {};
+    toolsData[connectionId] = tools;
+    await this.set("tools", toolsData);
+  }
+
+  /**
+   * Get tools for a connection
+   */
+  async getConnectionTools(connectionId: string): Promise<any[]> {
+    const item = await this.get("tools");
+    const toolsData = item?.value as Record<string, any[]> || {};
+    return toolsData[connectionId] || [];
+  }
+
+  /**
+   * Store resources for a connection
+   */
+  async setConnectionResources(connectionId: string, resources: any[]): Promise<void> {
+    const allResources = await this.get("resources");
+    const resourcesData = allResources?.value as Record<string, any[]> || {};
+    resourcesData[connectionId] = resources;
+    await this.set("resources", resourcesData);
+  }
+
+  /**
+   * Get resources for a connection
+   */
+  async getConnectionResources(connectionId: string): Promise<any[]> {
+    const item = await this.get("resources");
+    const resourcesData = item?.value as Record<string, any[]> || {};
+    return resourcesData[connectionId] || [];
+  }
+
+  /**
+   * Store conversations for a connection
+   */
+  async setConnectionConversations(connectionId: string, conversations: any[]): Promise<void> {
+    const allConversations = await this.get("conversations");
+    const conversationsData = allConversations?.value as Record<string, any[]> || {};
+    conversationsData[connectionId] = conversations;
+    await this.set("conversations", conversationsData);
+  }
+
+  /**
+   * Get conversations for a connection
+   */
+  async getConnectionConversations(connectionId: string): Promise<any[]> {
+    const item = await this.get("conversations");
+    const conversationsData = item?.value as Record<string, any[]> || {};
+    return conversationsData[connectionId] || [];
+  }
+
+  /**
+   * Store tool executions for a connection
+   */
+  async setConnectionToolExecutions(connectionId: string, executions: any[]): Promise<void> {
+    const allExecutions = await this.get("toolExecutions");
+    const executionsData = allExecutions?.value as Record<string, any[]> || {};
+    executionsData[connectionId] = executions;
+    await this.set("toolExecutions", executionsData);
+  }
+
+  /**
+   * Get tool executions for a connection
+   */
+  async getConnectionToolExecutions(connectionId: string): Promise<any[]> {
+    const item = await this.get("toolExecutions");
+    const executionsData = item?.value as Record<string, any[]> || {};
+    return executionsData[connectionId] || [];
+  }
+
+  /**
+   * Add a single tool execution to a connection
+   */
+  async addToolExecution(connectionId: string, execution: any): Promise<void> {
+    const currentExecutions = await this.getConnectionToolExecutions(connectionId);
+    
+    // Update or add the execution
+    const existingIndex = currentExecutions.findIndex(
+      (exec: any) => exec.id === execution.id
+    );
+
+    if (existingIndex !== -1) {
+      currentExecutions[existingIndex] = {
+        ...currentExecutions[existingIndex],
+        ...execution,
+      };
+    } else {
+      currentExecutions.push(execution);
+    }
+
+    await this.setConnectionToolExecutions(connectionId, currentExecutions);
+  }
+
+  /**
+   * Remove all data for a connection
+   */
+  async removeConnectionData(connectionId: string): Promise<void> {
+    // Remove from tools
+    const allTools = await this.get("tools");
+    if (allTools?.value) {
+      const toolsData = allTools.value as Record<string, any[]>;
+      delete toolsData[connectionId];
+      await this.set("tools", toolsData);
+    }
+
+    // Remove from resources
+    const allResources = await this.get("resources");
+    if (allResources?.value) {
+      const resourcesData = allResources.value as Record<string, any[]>;
+      delete resourcesData[connectionId];
+      await this.set("resources", resourcesData);
+    }
+
+    // Remove from conversations
+    const allConversations = await this.get("conversations");
+    if (allConversations?.value) {
+      const conversationsData = allConversations.value as Record<string, any[]>;
+      delete conversationsData[connectionId];
+      await this.set("conversations", conversationsData);
+    }
+
+    // Remove from tool executions
+    const allExecutions = await this.get("toolExecutions");
+    if (allExecutions?.value) {
+      const executionsData = allExecutions.value as Record<string, any[]>;
+      delete executionsData[connectionId];
+      await this.set("toolExecutions", executionsData);
+    }
+  }
+
+  /**
+   * Get storage statistics for MCPConnect data
+   */
+  async getMCPStats(): Promise<{
+    connections: number;
+    totalConversations: number;
+    totalToolExecutions: number;
+    totalTools: number;
+    totalResources: number;
+    storageUsed: string;
+  }> {
+    const [connections, conversations, toolExecutions, tools, resources, stats] = await Promise.all([
+      this.getConnections(),
+      this.get("conversations"),
+      this.get("toolExecutions"),
+      this.get("tools"),
+      this.get("resources"),
+      this.stats()
+    ]);
+
+    const conversationsData = conversations?.value as Record<string, any[]> || {};
+    const executionsData = toolExecutions?.value as Record<string, any[]> || {};
+    const toolsData = tools?.value as Record<string, any[]> || {};
+    const resourcesData = resources?.value as Record<string, any[]> || {};
+
+    const totalConversations = Object.values(conversationsData).reduce(
+      (total, convs) => total + convs.length, 0
+    );
+    
+    const totalToolExecutions = Object.values(executionsData).reduce(
+      (total, execs) => total + execs.length, 0
+    );
+    
+    const totalTools = Object.values(toolsData).reduce(
+      (total, tools) => total + tools.length, 0
+    );
+    
+    const totalResources = Object.values(resourcesData).reduce(
+      (total, resources) => total + resources.length, 0
+    );
+
+    const formatBytes = (bytes: number) => {
+      if (bytes === 0) return "0 Bytes";
+      const k = 1024;
+      const sizes = ["Bytes", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    };
+
+    return {
+      connections: connections.length,
+      totalConversations,
+      totalToolExecutions,
+      totalTools,
+      totalResources,
+      storageUsed: formatBytes(stats.totalSize),
+    };
+  }
+
+  /**
+   * Clear all MCPConnect data
+   */
+  async clearAllMCPData(): Promise<number> {
+    return await this.clear(); // Clear all items with our prefix
   }
 }

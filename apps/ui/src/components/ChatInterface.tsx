@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-// apps/ui/src/components/ChatInterface.tsx - Refactored to use AISDKAdapter
+// apps/ui/src/components/ChatInterface.tsx - Fixed async LLM settings
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
@@ -30,12 +30,38 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load LLM settings on mount
+  // Load LLM settings on mount (async)
   useEffect(() => {
-    const settings = ModelService.loadSettings();
-    setLlmSettings(settings);
+    const loadSettings = async () => {
+      setIsLoadingSettings(true);
+      try {
+        const settings = await ModelService.loadSettings();
+        setLlmSettings(settings);
+      } catch (error) {
+        console.error("Failed to load LLM settings:", error);
+        setLlmSettings(null);
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+
+    loadSettings();
+  }, []);
+
+  // Reload settings when settings modal closes
+  const handleSettingsClose = useCallback(async () => {
+    setIsSettingsOpen(false);
+    
+    // Reload LLM settings after modal closes
+    try {
+      const settings = await ModelService.loadSettings();
+      setLlmSettings(settings);
+    } catch (error) {
+      console.error("Failed to reload LLM settings:", error);
+    }
   }, []);
 
   // Auto-scroll to bottom when messages change
@@ -144,7 +170,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     chatId,
     connectionConversations.length,
     isCreatingChat,
-    // Remove handleNewChat from here
   ]);
 
   // Delete a chat conversation
@@ -554,14 +579,14 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     );
   }
 
-  // Show loading if creating chat
-  if (isCreatingChat) {
+  // Show loading if creating chat or loading settings
+  if (isCreatingChat || isLoadingSettings) {
     return (
       <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-950 transition-colors">
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">
-            Setting up your chat...
+            {isCreatingChat ? "Setting up your chat..." : "Loading settings..."}
           </p>
         </div>
       </div>
@@ -807,12 +832,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => {
-          setIsSettingsOpen(false);
-          // Reload LLM settings after modal closes
-          const settings = ModelService.loadSettings();
-          setLlmSettings(settings);
-        }}
+        onClose={handleSettingsClose}
       />
     </>
   );

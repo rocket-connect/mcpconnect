@@ -14,7 +14,7 @@ interface ConnectionViewProps {
 
 export const ConnectionView = ({ connections }: ConnectionViewProps) => {
   const navigate = useNavigate();
-  const { updateConversations, conversations } = useStorage();
+  const { adapter, updateConversations, conversations } = useStorage();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingConnection, setEditingConnection] = useState<Connection | null>(
@@ -50,52 +50,20 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
 
     if (confirmed) {
       try {
-        // Remove connection from localStorage by updating the connections array
+        // Remove connection from adapter
         const updatedConnections = connections.filter(
           c => c.id !== connectionId
         );
 
-        // Update localStorage with new connections array
-        localStorage.setItem(
-          "mcpconnect:connections",
-          JSON.stringify({
-            key: "connections",
-            value: updatedConnections,
-            metadata: {
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              size: JSON.stringify(updatedConnections).length,
-              type: "array",
-            },
-          })
-        );
+        await adapter.setConnections(updatedConnections);
 
-        // Remove associated conversations
+        // Remove associated conversations using adapter
         const updatedConversations = { ...conversations };
         delete updatedConversations[connectionId];
         await updateConversations(updatedConversations);
 
-        // Remove tools and resources from localStorage
-        const toolsItem = localStorage.getItem("mcpconnect:tools");
-        if (toolsItem) {
-          const toolsData = JSON.parse(toolsItem);
-          if (toolsData.value && typeof toolsData.value === "object") {
-            delete toolsData.value[connectionId];
-            localStorage.setItem("mcpconnect:tools", JSON.stringify(toolsData));
-          }
-        }
-
-        const resourcesItem = localStorage.getItem("mcpconnect:resources");
-        if (resourcesItem) {
-          const resourcesData = JSON.parse(resourcesItem);
-          if (resourcesData.value && typeof resourcesData.value === "object") {
-            delete resourcesData.value[connectionId];
-            localStorage.setItem(
-              "mcpconnect:resources",
-              JSON.stringify(resourcesData)
-            );
-          }
-        }
+        // Remove all associated data using the adapter's helper method
+        await adapter.removeConnectionData(connectionId);
 
         // Refresh the page to reload data
         window.location.reload();
@@ -143,38 +111,17 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
 
           finalConnection.isConnected = true;
 
-          // Store tools in localStorage
+          // Store tools using adapter
           if (introspectionResult.tools.length > 0) {
-            const toolsItem = localStorage.getItem("mcpconnect:tools");
-            let toolsData = toolsItem ? JSON.parse(toolsItem) : { value: {} };
-            toolsData.value[connection.id] = introspectionResult.tools;
-            toolsData.metadata = {
-              ...toolsData.metadata,
-              updatedAt: new Date(),
-              size: JSON.stringify(toolsData.value).length,
-            };
-            localStorage.setItem("mcpconnect:tools", JSON.stringify(toolsData));
+            await adapter.setConnectionTools(connection.id, introspectionResult.tools);
             console.log(
               `[ConnectionView] Stored ${introspectionResult.tools.length} tools for ${connection.name}`
             );
           }
 
-          // Store resources in localStorage
+          // Store resources using adapter
           if (introspectionResult.resources.length > 0) {
-            const resourcesItem = localStorage.getItem("mcpconnect:resources");
-            let resourcesData = resourcesItem
-              ? JSON.parse(resourcesItem)
-              : { value: {} };
-            resourcesData.value[connection.id] = introspectionResult.resources;
-            resourcesData.metadata = {
-              ...resourcesData.metadata,
-              updatedAt: new Date(),
-              size: JSON.stringify(resourcesData.value).length,
-            };
-            localStorage.setItem(
-              "mcpconnect:resources",
-              JSON.stringify(resourcesData)
-            );
+            await adapter.setConnectionResources(connection.id, introspectionResult.resources);
             console.log(
               `[ConnectionView] Stored ${introspectionResult.resources.length} resources for ${connection.name}`
             );
@@ -215,20 +162,8 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         c.id === finalConnection.id ? finalConnection : c
       );
 
-      // Save to localStorage
-      localStorage.setItem(
-        "mcpconnect:connections",
-        JSON.stringify({
-          key: "connections",
-          value: finalUpdatedConnections,
-          metadata: {
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            size: JSON.stringify(finalUpdatedConnections).length,
-            type: "array",
-          },
-        })
-      );
+      // Save to adapter
+      await adapter.setConnections(finalUpdatedConnections);
 
       console.log(
         `[ConnectionView] Saved connection: ${finalConnection.name} (connected: ${finalConnection.isConnected})`

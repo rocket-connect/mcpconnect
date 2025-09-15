@@ -1,4 +1,4 @@
-// apps/ui/src/services/chatService.ts - Refactored to use AISDKAdapter
+// apps/ui/src/services/chatService.ts - Refactored to use LocalStorage Adapter
 import { Connection, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import {
   AISDKAdapter,
@@ -6,6 +6,7 @@ import {
   ChatResponse,
 } from "@mcpconnect/adapter-ai-sdk";
 import { MCPService } from "./mcpService";
+import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
 import { nanoid } from "nanoid";
 
 // Local interface that matches what the UI needs
@@ -23,7 +24,15 @@ interface LLMSettings {
  */
 export class ChatService {
   private static adapter: AISDKAdapter | null = null;
+  private static storageAdapter: LocalStorageAdapter | null = null;
   private static currentSettings: LLMSettings | null = null;
+
+  /**
+   * Set the storage adapter to use
+   */
+  static setStorageAdapter(adapter: LocalStorageAdapter) {
+    this.storageAdapter = adapter;
+  }
 
   /**
    * Initialize or update the adapter with new settings
@@ -188,58 +197,19 @@ export class ChatService {
   }
 
   /**
-   * Store tool execution in localStorage for tracking
+   * Store tool execution using the storage adapter
    */
   static async storeToolExecution(
     connectionId: string,
     execution: ToolExecution
   ): Promise<void> {
+    if (!this.storageAdapter) {
+      console.warn("No storage adapter configured for ChatService");
+      return;
+    }
+
     try {
-      // Get current executions
-      const toolExecutionsItem = localStorage.getItem(
-        "mcpconnect:toolExecutions"
-      );
-      const toolExecutionsData = toolExecutionsItem
-        ? JSON.parse(toolExecutionsItem)
-        : { value: {} };
-
-      // Initialize connection executions if needed
-      if (!toolExecutionsData.value[connectionId]) {
-        toolExecutionsData.value[connectionId] = [];
-      }
-
-      const currentExecutions = toolExecutionsData.value[connectionId];
-
-      // Update or add the execution
-      const existingIndex = currentExecutions.findIndex(
-        (exec: ToolExecution) => exec.id === execution.id
-      );
-
-      if (existingIndex !== -1) {
-        // Update existing execution
-        currentExecutions[existingIndex] = {
-          ...currentExecutions[existingIndex],
-          ...execution,
-        };
-      } else {
-        // Add new execution
-        currentExecutions.push(execution);
-      }
-
-      // Update metadata
-      toolExecutionsData.metadata = {
-        ...toolExecutionsData.metadata,
-        updatedAt: new Date(),
-        size: JSON.stringify(toolExecutionsData.value).length,
-        type: "object",
-      };
-
-      // Store back to localStorage
-      localStorage.setItem(
-        "mcpconnect:toolExecutions",
-        JSON.stringify(toolExecutionsData)
-      );
-
+      await this.storageAdapter.addToolExecution(connectionId, execution);
       console.log(
         `[ChatService] Stored tool execution for ${connectionId}:`,
         execution.id
