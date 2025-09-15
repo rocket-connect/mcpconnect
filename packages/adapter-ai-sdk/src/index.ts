@@ -3,6 +3,7 @@ export type {
   AISDKConfig,
   ChatContext,
   ChatResponse,
+  StreamingChatResponse,
   ToolExecutionResult,
   LLMSettings,
   ModelOption,

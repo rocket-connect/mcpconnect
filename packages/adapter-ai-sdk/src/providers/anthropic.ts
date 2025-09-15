@@ -1,5 +1,7 @@
+// packages/adapter-ai-sdk/src/providers/anthropic.ts
 import { z } from "zod";
 import { AISDKConfig } from "../ai-sdk-adapter";
+import { createAnthropic } from "@ai-sdk/anthropic";
 
 /**
  * Anthropic-specific configuration schema
@@ -15,6 +17,9 @@ export const AnthropicConfigSchema = z.object({
       "claude-3-opus-20240229",
       "claude-3-sonnet-20240229",
       "claude-3-haiku-20240307",
+      "claude-3-5-sonnet-latest",
+      "claude-3-5-haiku-latest",
+      "claude-3-opus-latest",
     ])
     .default("claude-3-5-sonnet-20241022"),
 });
@@ -93,38 +98,124 @@ export class AnthropicProvider {
         label: "Claude 3 Haiku",
         description: "Quick responses for simple tasks",
       },
+      {
+        value: "claude-3-5-sonnet-latest",
+        label: "Claude 3.5 Sonnet (Latest)",
+        description: "Latest version of Claude 3.5 Sonnet",
+      },
+      {
+        value: "claude-3-5-haiku-latest",
+        label: "Claude 3.5 Haiku (Latest)",
+        description: "Latest version of Claude 3.5 Haiku",
+      },
+      {
+        value: "claude-3-opus-latest",
+        label: "Claude 3 Opus (Latest)",
+        description: "Latest version of Claude 3 Opus",
+      },
     ];
   }
 
   /**
-   * Test API key validity
+   * Test API key validity with CORS headers
    */
   static async testApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
     try {
-      const url = baseUrl || "https://api.anthropic.com/v1/messages";
-
-      // Make a minimal test request
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-          "x-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          model: "claude-3-haiku-20240307",
-          max_tokens: 1,
-          messages: [{ role: "user", content: "Hi" }],
-        }),
+      console.log("Testing Anthropic API key with CORS headers...", {
+        hasApiKey: !!apiKey,
+        hasBaseUrl: !!baseUrl,
+        baseUrl: baseUrl || "default",
       });
 
-      // Even if the request fails for other reasons, a 401 means invalid auth
-      return response.status !== 401;
+      // Create the provider with CORS-friendly configuration
+      const anthropicProvider = createAnthropic({
+        apiKey,
+        // Use the provided baseUrl or fall back to Anthropic's default
+        ...(baseUrl && { baseURL: baseUrl }),
+        // Add headers for direct browser access
+        headers: {
+          "anthropic-dangerous-direct-browser-access": "true",
+          "Content-Type": "application/json",
+        },
+        // Additional fetch options for CORS
+        fetch: (url, options) => {
+          return fetch(url, {
+            ...options,
+            mode: "cors",
+            credentials: "omit",
+            headers: {
+              ...options?.headers,
+              "anthropic-dangerous-direct-browser-access": "true",
+              "Content-Type": "application/json",
+            },
+          });
+        },
+      });
+
+      // Get a model instance - use the smallest/fastest model for testing
+      const model = anthropicProvider("claude-3-haiku-20240307");
+
+      // Make a minimal test request using the AI SDK v5 generateText function
+      const { generateText } = await import("ai");
+
+      console.log("Making test API call to Anthropic with CORS headers...");
+
+      const result = await generateText({
+        model,
+        messages: [{ role: "user", content: "Hi" }],
+        maxOutputTokens: 1,
+      });
+
+      console.log("Anthropic API test successful:", {
+        hasText: !!result.text,
+        usage: result.usage,
+      });
+
+      return true;
     } catch (error) {
       console.error("Anthropic API key test failed:", error);
+
+      // Log more details about the error for debugging
+      if (error instanceof Error) {
+        console.error("Error details:", {
+          name: error.name,
+          message: error.message,
+          // Check if it's a CORS error
+          isCorsError:
+            error.message.includes("CORS") || error.message.includes("Origin"),
+        });
+      }
+
       return false;
     }
+  }
+
+  /**
+   * Create Anthropic provider with CORS configuration
+   */
+  static createProviderWithCors(apiKey: string, baseUrl?: string) {
+    return createAnthropic({
+      apiKey,
+      ...(baseUrl && { baseURL: baseUrl }),
+      // Essential header for direct browser access
+      headers: {
+        "anthropic-dangerous-direct-browser-access": "true",
+        "Content-Type": "application/json",
+      },
+      // Custom fetch with CORS configuration
+      fetch: (url, options) => {
+        return fetch(url, {
+          ...options,
+          mode: "cors",
+          credentials: "omit",
+          headers: {
+            ...options?.headers,
+            "anthropic-dangerous-direct-browser-access": "true",
+            "Content-Type": "application/json",
+          },
+        });
+      },
+    });
   }
 
   /**
@@ -147,6 +238,10 @@ export class AnthropicProvider {
       "claude-3-opus-20240229": { input: 15, output: 75 },
       "claude-3-sonnet-20240229": { input: 3, output: 15 },
       "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
+      // Latest versions use same pricing as their dated counterparts
+      "claude-3-5-sonnet-latest": { input: 3, output: 15 },
+      "claude-3-5-haiku-latest": { input: 0.25, output: 1.25 },
+      "claude-3-opus-latest": { input: 15, output: 75 },
     };
 
     return pricing[model] || null;
@@ -163,6 +258,9 @@ export class AnthropicProvider {
       "claude-3-opus-20240229": 200000,
       "claude-3-sonnet-20240229": 200000,
       "claude-3-haiku-20240307": 200000,
+      "claude-3-5-sonnet-latest": 200000,
+      "claude-3-5-haiku-latest": 200000,
+      "claude-3-opus-latest": 200000,
     };
 
     return limits[model] || 200000;

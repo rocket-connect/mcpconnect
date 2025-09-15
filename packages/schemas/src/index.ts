@@ -2,8 +2,10 @@
 export {
   ConnectionSchema,
   ConnectionStatusSchema,
+  ConnectionTypeSchema,
   type Connection,
   type ConnectionStatus,
+  type ConnectionType,
 } from "./connection";
 
 // Tool schemas

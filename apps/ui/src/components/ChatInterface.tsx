@@ -1,14 +1,23 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-// apps/ui/src/components/ChatInterface.tsx - Fixed async LLM settings
+// apps/ui/src/components/ChatInterface.tsx - Complete implementation with SSE streaming support
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
-import { Send, ExternalLink, Plus, Loader, X, Settings } from "lucide-react";
+import {
+  Send,
+  ExternalLink,
+  Plus,
+  Loader,
+  X,
+  Settings,
+  Zap,
+  ZapOff,
+} from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
-import { ChatService } from "../services/chatService";
+import { ChatService, SSEEvent } from "../services/chatService";
 import { SettingsModal } from "./SettingsModal";
 import { nanoid } from "nanoid";
 
@@ -27,11 +36,17 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   // Local state for UI interactions
   const [messageInput, setMessageInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingEnabled, setStreamingEnabled] = useState(true);
+  const [currentStreamingContent, setCurrentStreamingContent] = useState("");
+  const [streamingStatus, setStreamingStatus] = useState<string>("");
   const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamingMessageRef = useRef<string>("");
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load LLM settings on mount (async)
   useEffect(() => {
@@ -55,7 +70,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const handleSettingsClose = useCallback(async () => {
     setIsSettingsOpen(false);
 
-    // Reload LLM settings after modal closes
     try {
       const settings = await ModelService.loadSettings();
       setLlmSettings(settings);
@@ -67,7 +81,16 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversations]);
+  }, [conversations, currentStreamingContent]);
+
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Get the current connection and conversation using chat ID
   const currentConnection = connections.find(conn => conn.id === connectionId);
@@ -125,7 +148,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
         await updateConversations(updatedConversations);
 
-        // Navigate to the new chat
         navigate(`/connections/${connectionId}/chat/${newChatId}`, {
           replace: isAutoCreated,
         });
@@ -151,11 +173,10 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     const createInitialChatIfNeeded = async () => {
       if (!connectionId || isCreatingChat) return;
 
-      // If chatId is "new" or no conversations exist for this connection
       if (chatId === "new" || connectionConversations.length === 0) {
         setIsCreatingChat(true);
         try {
-          await handleNewChat(true); // true = isAutoCreated
+          await handleNewChat(true);
         } catch (error) {
           console.error("Failed to auto-create chat:", error);
         } finally {
@@ -205,7 +226,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             `/connections/${connectionId}/chat/${updatedConnectionConversations[0].id}`
           );
         } else {
-          // Create a new chat if we just deleted the last one
           await handleNewChat();
         }
       }
@@ -214,14 +234,129 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     }
   };
 
-  // Send message using ChatService (which now uses AISDKAdapter)
+  // Handle streaming toggle
+  const handleStreamingToggle = () => {
+    if (isStreaming) {
+      // Cancel current streaming
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setIsStreaming(false);
+      setCurrentStreamingContent("");
+      setStreamingStatus("");
+      streamingMessageRef.current = "";
+    }
+    setStreamingEnabled(!streamingEnabled);
+  };
+
+  // Handle SSE streaming events
+  const handleStreamingEvent = useCallback(
+    async (event: SSEEvent) => {
+      console.log("[ChatInterface] SSE Event:", event.type, event.data);
+
+      switch (event.type) {
+        case "thinking":
+          setStreamingStatus("Claude is thinking...");
+          setCurrentStreamingContent("");
+          break;
+
+        case "token":
+          if (event.data?.delta) {
+            streamingMessageRef.current += event.data.delta;
+            setCurrentStreamingContent(streamingMessageRef.current);
+            setStreamingStatus("Streaming response...");
+          }
+          break;
+
+        case "tool_start":
+          setStreamingStatus(`Executing ${event.data?.toolName || "tool"}...`);
+          break;
+
+        case "tool_end":
+          setStreamingStatus(`Completed ${event.data?.toolName || "tool"}`);
+          await refreshAll();
+          break;
+
+        case "message_complete":
+          console.log("[ChatInterface] Message streaming complete");
+          setCurrentStreamingContent("");
+          setStreamingStatus("");
+          streamingMessageRef.current = "";
+
+          if (
+            event.data?.assistantMessage &&
+            event.data?.toolExecutionMessages
+          ) {
+            const userMessage: ChatMessageType = {
+              id: nanoid(),
+              message: messageInput.trim(),
+              isUser: true,
+              timestamp: new Date(),
+              isExecuting: false,
+            };
+
+            const finalMessages = [
+              ...currentMessages,
+              userMessage,
+              ...event.data.toolExecutionMessages,
+              event.data.assistantMessage,
+            ];
+
+            await updateConversationMessages(finalMessages);
+            await refreshAll();
+          }
+          break;
+
+        case "error":
+          {
+            console.error(
+              "[ChatInterface] Streaming error:",
+              event.data?.error
+            );
+            setCurrentStreamingContent("");
+            setStreamingStatus("");
+            streamingMessageRef.current = "";
+
+            const errorMessage: ChatMessageType = {
+              id: nanoid(),
+              message:
+                event.data?.error || "An error occurred during streaming",
+              isUser: false,
+              timestamp: new Date(),
+              isExecuting: false,
+            };
+
+            const userMessage: ChatMessageType = {
+              id: nanoid(),
+              message: messageInput.trim(),
+              isUser: true,
+              timestamp: new Date(),
+              isExecuting: false,
+            };
+
+            const errorMessages = [
+              ...currentMessages,
+              userMessage,
+              errorMessage,
+            ];
+            await updateConversationMessages(errorMessages);
+          }
+          break;
+      }
+    },
+    [currentMessages, messageInput, refreshAll]
+  );
+
+  // Send message using ChatService with SSE streaming
   const handleSendMessage = async () => {
     if (
       !messageInput.trim() ||
       !llmSettings?.apiKey ||
       !connectionId ||
       !currentConversation ||
-      !currentConnection
+      !currentConnection ||
+      isLoading ||
+      isStreaming
     ) {
       if (!llmSettings?.apiKey) {
         console.warn(
@@ -231,102 +366,112 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       return;
     }
 
-    const userMessage: ChatMessageType = {
-      id: nanoid(),
-      message: messageInput.trim(),
-      isUser: true,
-      timestamp: new Date(),
-      isExecuting: false,
-    };
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController();
 
     try {
       setIsLoading(true);
+      setIsStreaming(streamingEnabled);
+      setCurrentStreamingContent("");
+      setStreamingStatus("");
+      streamingMessageRef.current = "";
+      const originalMessage = messageInput.trim();
       setMessageInput("");
 
-      // Add user message immediately
-      const updatedMessages = [...currentMessages, userMessage];
-      await updateConversationMessages(updatedMessages);
-
-      // Create thinking message
-      const thinkingMessage = ChatService.createThinkingMessage();
-      const messagesWithThinking = [...updatedMessages, thinkingMessage];
-      await updateConversationMessages(messagesWithThinking);
-
-      // Create chat context for AISDKAdapter
       const chatContext = {
         connection: currentConnection,
         tools: connectionTools,
         llmSettings,
       };
 
-      // Validate context
       if (!ChatService.validateChatContext(chatContext)) {
         throw new Error("Invalid chat context");
       }
 
-      // Send message via ChatService (which uses AISDKAdapter internally)
-      const conversationMessages = updatedMessages.filter(
+      const conversationMessages = currentMessages.filter(
         m => m.message && !m.isExecuting
       );
 
-      const response = await ChatService.sendMessage(
-        userMessage.message!,
-        chatContext,
-        conversationMessages
-      );
+      if (streamingEnabled) {
+        // Use streaming approach
+        await ChatService.sendMessageWithStreaming(
+          originalMessage,
+          chatContext,
+          conversationMessages,
+          handleStreamingEvent
+        );
+      } else {
+        // Fallback to non-streaming approach
+        const userMessage: ChatMessageType = {
+          id: nanoid(),
+          message: originalMessage,
+          isUser: true,
+          timestamp: new Date(),
+          isExecuting: false,
+        };
 
-      // Build final message array
-      let finalMessages = [...updatedMessages]; // Start with user message
+        const updatedMessages = [...currentMessages, userMessage];
+        await updateConversationMessages(updatedMessages);
 
-      // Add all tool execution messages
-      if (response.toolExecutionMessages.length > 0) {
-        finalMessages = [...finalMessages, ...response.toolExecutionMessages];
+        const thinkingMessage = ChatService.createThinkingMessage();
+        const messagesWithThinking = [...updatedMessages, thinkingMessage];
+        await updateConversationMessages(messagesWithThinking);
 
-        // Store tool executions for each tool execution message
-        for (const toolMsg of response.toolExecutionMessages) {
-          if (toolMsg.toolExecution) {
-            const execution = {
-              id: toolMsg.id || nanoid(),
-              tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
-              status: toolMsg.toolExecution.status,
-              duration: 0,
-              timestamp: new Date().toLocaleTimeString(),
-              request: {
+        const response = await ChatService.sendMessage(
+          originalMessage,
+          chatContext,
+          conversationMessages
+        );
+
+        let finalMessages = [...updatedMessages];
+
+        if (response.toolExecutionMessages.length > 0) {
+          finalMessages = [...finalMessages, ...response.toolExecutionMessages];
+
+          for (const toolMsg of response.toolExecutionMessages) {
+            if (toolMsg.toolExecution) {
+              const execution = {
+                id: toolMsg.id || nanoid(),
                 tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
-                arguments: {},
-                timestamp: new Date().toISOString(),
-              },
-              ...(toolMsg.toolExecution.result
-                ? {
-                    response: {
-                      success: true,
-                      result: toolMsg.toolExecution.result,
-                      timestamp: new Date().toISOString(),
-                    },
-                  }
-                : {}),
-              ...(toolMsg.toolExecution.error && {
-                error: toolMsg.toolExecution.error,
-              }),
-            };
+                status: toolMsg.toolExecution.status,
+                duration: 0,
+                timestamp: new Date().toLocaleTimeString(),
+                request: {
+                  tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
+                  arguments: {},
+                  timestamp: new Date().toISOString(),
+                },
+                ...(toolMsg.toolExecution.result
+                  ? {
+                      response: {
+                        success: true,
+                        result: toolMsg.toolExecution.result,
+                        timestamp: new Date().toISOString(),
+                      },
+                    }
+                  : {}),
+                ...(toolMsg.toolExecution.error && {
+                  error: toolMsg.toolExecution.error,
+                }),
+              };
 
-            await ChatService.storeToolExecution(connectionId, execution);
+              await ChatService.storeToolExecution(connectionId, execution);
+            }
           }
         }
+
+        finalMessages.push(response.assistantMessage);
+        await updateConversationMessages(finalMessages);
+        await refreshAll();
       }
-
-      // Add final assistant response
-      finalMessages.push(response.assistantMessage);
-
-      // Save all messages at once (removes thinking message)
-      await updateConversationMessages(finalMessages);
-
-      // Refresh data to sync with inspector
-      await refreshAll();
     } catch (error) {
       console.error("Failed to send message:", error);
 
-      // Create error message
+      if ((error as Error).name === "AbortError") {
+        console.log("Message sending was cancelled");
+        return;
+      }
+
       const errorMessage: ChatMessageType = {
         id: nanoid(),
         message: ChatService.getErrorMessage(error),
@@ -335,12 +480,23 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         isExecuting: false,
       };
 
-      // Remove thinking message and add error
-      const cleanMessages = [...currentMessages, userMessage];
-      const errorMessages = [...cleanMessages, errorMessage];
+      const userMessage: ChatMessageType = {
+        id: nanoid(),
+        message: messageInput.trim(),
+        isUser: true,
+        timestamp: new Date(),
+        isExecuting: false,
+      };
+
+      setCurrentStreamingContent("");
+      setStreamingStatus("");
+      streamingMessageRef.current = "";
+      const errorMessages = [...currentMessages, userMessage, errorMessage];
       await updateConversationMessages(errorMessages);
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -384,7 +540,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       message.toolExecution || message.isExecuting || message.executingTool;
     const toolName = message.executingTool || message.toolExecution?.toolName;
 
-    // Don't render empty thinking messages
     if (message.isExecuting && !message.message && !hasToolExecution) {
       return null;
     }
@@ -394,7 +549,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         <div
           className={`flex gap-4 mb-6 ${message.isUser ? "flex-row-reverse" : ""}`}
         >
-          {/* Avatar */}
           <div
             className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium ${
               message.isUser
@@ -411,7 +565,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             )}
           </div>
 
-          {/* Message Content */}
           <div className="flex-1 min-w-0">
             <div
               className={`text-sm text-gray-900 dark:text-gray-100 ${message.isUser ? "text-right" : ""}`}
@@ -456,7 +609,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               )}
             </div>
 
-            {/* Tool Actions */}
             {hasToolExecution && (
               <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
@@ -472,7 +624,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               </div>
             )}
 
-            {/* Expanded Details */}
             {isExpanded && hasToolExecution && (
               <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
                 <div className="text-xs space-y-3">
@@ -555,6 +706,37 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     );
   };
 
+  // Streaming message component
+  const StreamingMessage = () => {
+    if (!currentStreamingContent && !streamingStatus) return null;
+
+    return (
+      <div className="group relative">
+        <div className="flex gap-4 mb-6">
+          <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+            <Loader className="w-4 h-4 animate-spin" />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="text-sm text-gray-900 dark:text-gray-100">
+              {currentStreamingContent ? (
+                <div className="leading-relaxed whitespace-pre-wrap">
+                  {currentStreamingContent}
+                  <span className="inline-block w-2 h-4 ml-1 bg-blue-500 animate-pulse" />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  <span>{streamingStatus}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Show connection selector if no connection selected
   if (!connectionId) {
     return (
@@ -588,7 +770,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     );
   }
 
-  // Show API key warning if not configured
   const showApiWarning = !llmSettings?.apiKey;
 
   return (
@@ -629,10 +810,37 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                     </span>
                   </>
                 )}
+                {llmSettings?.apiKey && (
+                  <>
+                    <span>•</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleStreamingToggle}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                          streamingEnabled
+                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                        }`}
+                        title={
+                          streamingEnabled
+                            ? "Streaming enabled - click to disable"
+                            : "Streaming disabled - click to enable"
+                        }
+                        disabled={isLoading || isStreaming}
+                      >
+                        {streamingEnabled ? (
+                          <Zap className="w-3 h-3" />
+                        ) : (
+                          <ZapOff className="w-3 h-3" />
+                        )}
+                        {streamingEnabled ? "Streaming" : "Standard"}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Settings button for quick LLM config */}
             {showApiWarning && (
               <button
                 onClick={() => setIsSettingsOpen(true)}
@@ -690,6 +898,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 onClick={() => handleNewChat()}
                 className="flex-shrink-0 ml-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                 title="Create new chat"
+                disabled={isLoading || isStreaming}
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -723,7 +932,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="h-full">
             <div className="max-w-4xl mx-auto px-6 py-8 min-h-full">
-              {currentMessages.length === 0 ? (
+              {currentMessages.length === 0 && !currentStreamingContent ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                     <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg mx-auto mb-4 flex items-center justify-center">
@@ -747,6 +956,20 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                         Configure Claude
                       </button>
                     )}
+                    {!showApiWarning && (
+                      <div className="mt-4 flex items-center justify-center gap-2">
+                        {streamingEnabled ? (
+                          <Zap className="w-4 h-4 text-blue-500" />
+                        ) : (
+                          <ZapOff className="w-4 h-4 text-gray-400" />
+                        )}
+                        <span className="text-sm">
+                          {streamingEnabled
+                            ? "Streaming enabled"
+                            : "Standard mode"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -769,6 +992,12 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                           index={index}
                         />
                       ))}
+
+                  {/* Show streaming message if active */}
+                  {(isStreaming ||
+                    currentStreamingContent ||
+                    streamingStatus) && <StreamingMessage />}
+
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -786,7 +1015,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                   showApiWarning
                     ? "Configure API key to start chatting..."
                     : currentConnection
-                      ? `Message Claude about ${currentConnection.name}... (${connectionTools.length} tools available)`
+                      ? `Message Claude about ${currentConnection.name}... (${connectionTools.length} tools available, ${streamingEnabled ? "streaming" : "standard"} mode)`
                       : "Type a message..."
                 }
                 value={messageInput}
@@ -794,7 +1023,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 onKeyPress={e =>
                   e.key === "Enter" && !e.shiftKey && handleSendMessage()
                 }
-                disabled={showApiWarning || isLoading}
+                disabled={showApiWarning || isLoading || isStreaming}
                 className="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-lg 
                          bg-white dark:bg-gray-900
                          text-gray-900 dark:text-gray-100
@@ -805,10 +1034,15 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!messageInput.trim() || showApiWarning || isLoading}
+                disabled={
+                  !messageInput.trim() ||
+                  showApiWarning ||
+                  isLoading ||
+                  isStreaming
+                }
                 className="px-4 py-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isLoading ? (
+                {isLoading || isStreaming ? (
                   <Loader className="w-4 h-4 animate-spin" />
                 ) : (
                   <Send className="w-4 h-4" />
@@ -818,6 +1052,12 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             {currentConnection && !currentConnection.isConnected && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                 Connection offline - messages will be queued
+              </p>
+            )}
+            {isStreaming && (
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 flex items-center gap-1">
+                <Zap className="w-3 h-3" />
+                {streamingStatus || "Streaming response..."}
               </p>
             )}
           </div>

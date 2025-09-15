@@ -1,12 +1,12 @@
-// apps/ui/src/components/ConnectionView.tsx - Using enhanced adapter methods
+// apps/ui/src/components/ConnectionView.tsx - Updated to use adapters only
 import { ConnectionItem } from "@mcpconnect/components";
-import { Connection } from "@mcpconnect/schemas";
+import { Connection, Resource, Tool } from "@mcpconnect/schemas";
 import { useNavigate } from "react-router-dom";
 import { Plus, Server, Settings, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { ConnectionModal } from "./ConnectionModal";
 import { useStorage } from "../contexts/StorageContext";
-import { MCPService } from "../services/mcpService";
+import { MCPAdapter } from "@mcpconnect/base-adapters";
 
 interface ConnectionViewProps {
   connections: Connection[];
@@ -87,76 +87,99 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         // Add new connection - ensure it has a unique ID
         const connectionWithId = {
           ...connection,
-          id: connection.id || MCPService.createConnection(connection).id,
+          id: connection.id || MCPAdapter.createConnection(connection).id,
         };
         updatedConnections = [...connections, connectionWithId];
       }
 
-      // Test connection and perform introspection using MCPService
+      // Test connection and discover tools/resources using adapter
       let finalConnection = { ...connection };
 
       try {
-        console.log(
-          `[ConnectionView] Testing and introspecting connection: ${connection.name}`
-        );
+        console.log(`[ConnectionView] Testing connection: ${connection.name}`);
 
+        // Create a temporary MCP adapter for testing
+        const tempAdapter = new (class extends MCPAdapter {
+          async initialize(): Promise<void> {
+            // No-op for testing
+          }
+          async cleanup(): Promise<void> {
+            // No-op for testing
+          }
+        })({
+          name: "temp-introspection-adapter",
+          provider: "mcp",
+          protocolVersion: "2024-11-05",
+          debug: false,
+          timeout: 30000,
+          retries: 3,
+          clientInfo: {
+            name: "MCPConnect",
+            version: "0.0.11",
+            description: "MCPConnect browser-based MCP client",
+          },
+        });
+
+        // Use full introspection instead of just testing
         const introspectionResult =
-          await MCPService.connectAndIntrospect(connection);
+          await tempAdapter.connectAndIntrospect(connection);
 
         if (introspectionResult.isConnected) {
-          console.log(
-            `[ConnectionView] Connection successful:`,
-            introspectionResult.serverInfo
-          );
-
+          console.log(`[ConnectionView] Connection test successful`);
           finalConnection.isConnected = true;
 
-          // Store tools using enhanced adapter method
+          // Store discovered tools and resources using adapter
           if (introspectionResult.tools.length > 0) {
-            await adapter.setConnectionTools(
-              connection.id,
-              introspectionResult.tools
-            );
             console.log(
-              `[ConnectionView] Stored ${introspectionResult.tools.length} tools for ${connection.name}`
+              `[ConnectionView] Storing ${introspectionResult.tools.length} tools for connection ${connection.id}`
             );
+
+            // Ensure tools have proper default values for required fields
+            const normalizedTools: Tool[] = (
+              introspectionResult.tools as Tool[]
+            ).map(tool => ({
+              ...tool,
+              deprecated: tool.deprecated ?? false, // Ensure deprecated is never undefined
+              parameters:
+                tool.parameters?.map(param => ({
+                  ...param,
+                  required: param.required ?? false, // Ensure required is never undefined
+                  default: param.default ?? undefined, // Ensure type consistency
+                })) ?? undefined, // Handle case where parameters is undefined
+            }));
+
+            await adapter.setConnectionTools(connection.id, normalizedTools);
           }
 
-          // Store resources using enhanced adapter method
           if (introspectionResult.resources.length > 0) {
+            console.log(
+              `[ConnectionView] Storing ${introspectionResult.resources.length} resources for connection ${connection.id}`
+            );
             await adapter.setConnectionResources(
               connection.id,
-              introspectionResult.resources
-            );
-            console.log(
-              `[ConnectionView] Stored ${introspectionResult.resources.length} resources for ${connection.name}`
+              introspectionResult.resources as Resource[]
             );
           }
         } else {
-          console.warn(
-            `[ConnectionView] Connection failed:`,
-            introspectionResult.error
-          );
+          console.warn(`[ConnectionView] Connection test failed`);
           finalConnection.isConnected = false;
 
           // Show user-friendly error message
-          if (introspectionResult.error) {
-            alert(
-              `Connection failed: ${introspectionResult.error}\n\nThe connection will be saved but marked as disconnected.`
-            );
-          }
+          alert(
+            `Connection test failed: ${introspectionResult.error || "Unknown error"}\n\nThe connection will be saved but marked as disconnected.`
+          );
         }
-      } catch (introspectionError) {
+      } catch (connectionError) {
         console.error(
-          "[ConnectionView] Introspection failed:",
-          introspectionError
+          "[ConnectionView] Connection introspection failed:",
+          connectionError
         );
         finalConnection.isConnected = false;
 
-        // Show user-friendly error for introspection failures
+        // Show user-friendly error for connection failures
         const errorMessage =
-          introspectionError instanceof Error
-            ? introspectionError.message
+          connectionError instanceof Error
+            ? connectionError.message
             : "Unknown error occurred";
         alert(
           `Failed to connect to MCP server: ${errorMessage}\n\nThe connection will be saved but marked as disconnected.`
@@ -175,7 +198,7 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         `[ConnectionView] Saved connection: ${finalConnection.name} (connected: ${finalConnection.isConnected})`
       );
 
-      // Refresh the page to reload all data
+      // Refresh the page to reload all data and show tools in sidebar
       window.location.reload();
     } catch (error) {
       console.error("Failed to save connection:", error);
@@ -305,8 +328,8 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
                 servers
               </p>
               <p>
-                • MCPConnect will automatically discover available tools and
-                resources during connection
+                • MCPConnect will automatically discover and store available
+                tools during connection setup
               </p>
             </div>
           </div>

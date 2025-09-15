@@ -1,26 +1,39 @@
-// apps/ui/src/services/chatService.ts - Refactored to use abstract StorageAdapter
-import { Connection, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
+// apps/ui/src/services/chatService.ts - Pure delegation to AISDKAdapter
+import { ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import {
   AISDKAdapter,
   ChatContext,
   ChatResponse,
+  LLMSettings,
+  StreamingChatResponse,
 } from "@mcpconnect/adapter-ai-sdk";
-import { MCPService } from "./mcpService";
 import { StorageAdapter } from "@mcpconnect/base-adapters";
-import { nanoid } from "nanoid";
 
-// Local interface that matches what the UI needs
-interface LLMSettings {
-  provider: "anthropic";
-  apiKey: string;
-  model: string;
-  baseUrl?: string;
-  temperature: number;
-  maxTokens: number;
+// Re-export types for compatibility
+export type { ChatContext, ChatResponse, LLMSettings };
+
+// SSE Event interface for streaming (simplified)
+export interface SSEEvent {
+  type:
+    | "thinking"
+    | "token"
+    | "tool_start"
+    | "tool_end"
+    | "message_complete"
+    | "error";
+  data?: {
+    delta?: string;
+    toolName?: string;
+    toolResult?: any;
+    toolExecution?: ToolExecution;
+    assistantMessage?: ChatMessage;
+    toolExecutionMessages?: ChatMessage[];
+    error?: string;
+  };
 }
 
 /**
- * Centralized service for chat functionality using AISDKAdapter
+ * Simplified chat service that delegates all operations to AISDKAdapter
  */
 export class ChatService {
   private static adapter: AISDKAdapter | null = null;
@@ -32,8 +45,6 @@ export class ChatService {
    */
   static setStorageAdapter(adapter: StorageAdapter) {
     this.storageAdapter = adapter;
-
-    // Also set it for the AISDKAdapter to use
     AISDKAdapter.setStorageAdapter(adapter);
   }
 
@@ -52,20 +63,14 @@ export class ChatService {
         hasApiKey: !!settings.apiKey,
       });
 
-      // Clean up settings to ensure proper validation
-      const cleanSettings = {
-        ...settings,
-        baseUrl: settings.baseUrl?.trim() || undefined, // Convert empty strings to undefined
-      };
-
       this.adapter = new AISDKAdapter({
         name: "mcpconnect-chat-adapter",
-        provider: cleanSettings.provider,
-        model: cleanSettings.model,
-        apiKey: cleanSettings.apiKey,
-        baseUrl: cleanSettings.baseUrl,
-        temperature: cleanSettings.temperature,
-        maxTokens: cleanSettings.maxTokens,
+        provider: settings.provider,
+        model: settings.model,
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl?.trim() || undefined,
+        temperature: settings.temperature,
+        maxTokens: settings.maxTokens,
         stream: false,
         timeout: 30000,
         retries: 3,
@@ -77,20 +82,19 @@ export class ChatService {
   }
 
   /**
-   * Send a message to Claude with tool support using AISDKAdapter
+   * Send a message to Claude using AISDKAdapter
    */
   static async sendMessage(
     userMessage: string,
     context: ChatContext,
     conversationHistory: ChatMessage[] = []
   ): Promise<ChatResponse> {
-    const { tools, llmSettings } = context;
+    const { llmSettings } = context;
 
     if (!llmSettings.apiKey) {
       throw new Error("No Claude API key configured");
     }
 
-    // Initialize adapter with current settings
     this.initializeAdapter(llmSettings);
 
     if (!this.adapter) {
@@ -98,11 +102,10 @@ export class ChatService {
     }
 
     console.log(
-      `[ChatService] Sending message with ${tools.length} available tools`
+      `[ChatService] Sending message with ${context.tools.length} available tools`
     );
 
     try {
-      // Use the adapter's sendMessage method
       const response = await this.adapter.sendMessage(
         userMessage,
         context,
@@ -117,85 +120,112 @@ export class ChatService {
   }
 
   /**
-   * Execute a tool via MCPService and track the execution
+   * Send a message with streaming support
    */
-  static async executeToolWithTracking(
-    connection: Connection,
-    toolName: string,
-    toolArgs: Record<string, any>
-  ) {
-    const executionId = nanoid();
+  static async sendMessageWithStreaming(
+    userMessage: string,
+    context: ChatContext,
+    conversationHistory: ChatMessage[] = [],
+    onEvent: (event: SSEEvent) => Promise<void>
+  ): Promise<void> {
+    const { llmSettings } = context;
+
+    if (!llmSettings.apiKey) {
+      throw new Error("No Claude API key configured");
+    }
+
+    this.initializeAdapter(llmSettings);
+
+    if (!this.adapter) {
+      throw new Error("Failed to initialize adapter");
+    }
+
+    console.log(
+      `[ChatService] Starting streaming message with ${context.tools.length} available tools`
+    );
 
     try {
-      console.log(`[ChatService] Executing tool: ${toolName}`, toolArgs);
+      // Emit thinking event
+      await onEvent({
+        type: "thinking",
+        data: {},
+      });
 
-      // Execute via MCPService
-      const mcpResult = await MCPService.executeTool(
-        connection,
-        toolName,
-        toolArgs
-      );
-
-      // Create success chat message
-      const chatMessage: ChatMessage = {
-        id: executionId,
-        isUser: false,
-        executingTool: toolName,
-        timestamp: new Date(),
-        toolExecution: {
-          toolName,
-          status: "success",
-          result: mcpResult.result,
-        },
-        isExecuting: false,
-      };
-
-      return {
-        success: true,
-        result: mcpResult.result,
-        toolExecution: mcpResult.execution,
-        chatMessage,
-      };
+      // Use the adapter's streaming method and convert events
+      for await (const streamEvent of this.adapter.sendMessageStream(
+        userMessage,
+        context,
+        conversationHistory
+      )) {
+        // Convert AISDKAdapter streaming events to our SSE format
+        await this.convertAndEmitStreamEvent(streamEvent, onEvent);
+      }
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      console.error(`[ChatService] Tool execution failed:`, error);
-
-      // Create error chat message
-      const chatMessage: ChatMessage = {
-        id: executionId,
-        isUser: false,
-        executingTool: toolName,
-        timestamp: new Date(),
-        toolExecution: {
-          toolName,
-          status: "error",
-          error: errorMessage,
+      console.error("[ChatService] Streaming message failed:", error);
+      await onEvent({
+        type: "error",
+        data: {
+          error: error instanceof Error ? error.message : String(error),
         },
-        isExecuting: false,
-      };
+      });
+    }
+  }
 
-      // Create error execution object
-      const errorExecution: ToolExecution = {
-        id: executionId,
-        tool: toolName,
-        status: "error",
-        duration: 0,
-        timestamp: new Date().toLocaleTimeString(),
-        request: {
-          tool: toolName,
-          arguments: toolArgs,
-          timestamp: new Date().toISOString(),
-        },
-        error: errorMessage,
-      };
+  /**
+   * Convert AISDKAdapter streaming events to our SSE format
+   */
+  private static async convertAndEmitStreamEvent(
+    streamEvent: StreamingChatResponse,
+    onEvent: (event: SSEEvent) => Promise<void>
+  ): Promise<void> {
+    switch (streamEvent.type) {
+      case "token":
+        await onEvent({
+          type: "token",
+          data: {
+            delta: streamEvent.delta,
+          },
+        });
+        break;
 
-      return {
-        success: false,
-        error: errorMessage,
-        toolExecution: errorExecution,
-        chatMessage,
-      };
+      case "tool_start":
+        await onEvent({
+          type: "tool_start",
+          data: {
+            toolName: streamEvent.toolName,
+          },
+        });
+        break;
+
+      case "tool_end":
+        await onEvent({
+          type: "tool_end",
+          data: {
+            toolName: streamEvent.toolName,
+            toolResult: streamEvent.toolResult,
+            toolExecution: streamEvent.toolExecution,
+          },
+        });
+        break;
+
+      case "message_complete":
+        await onEvent({
+          type: "message_complete",
+          data: {
+            assistantMessage: streamEvent.assistantMessage,
+            toolExecutionMessages: streamEvent.toolExecutionMessages,
+          },
+        });
+        break;
+
+      case "error":
+        await onEvent({
+          type: "error",
+          data: {
+            error: streamEvent.error,
+          },
+        });
+        break;
     }
   }
 
@@ -222,90 +252,35 @@ export class ChatService {
     }
   }
 
-  /**
-   * Create a pending tool message
-   */
+  // Delegate all static helper methods to AISDKAdapter
   static createPendingToolMessage(toolName: string): ChatMessage {
-    return {
-      id: nanoid(),
-      isUser: false,
-      executingTool: toolName,
-      timestamp: new Date(),
-      toolExecution: {
-        toolName,
-        status: "pending",
-      },
-      isExecuting: true,
-    };
+    return AISDKAdapter.createPendingToolMessage(toolName);
   }
 
-  /**
-   * Create a thinking message for Claude
-   */
   static createThinkingMessage(): ChatMessage {
-    return {
-      id: nanoid(),
-      message: "",
-      isUser: false,
-      timestamp: new Date(),
-      isExecuting: true,
-    };
+    return AISDKAdapter.createThinkingMessage();
   }
 
-  /**
-   * Validate chat context
-   */
   static validateChatContext(context: ChatContext): boolean {
-    return Boolean(
-      context.connection &&
-        context.llmSettings?.apiKey &&
-        Array.isArray(context.tools)
-    );
+    return AISDKAdapter.validateChatContext(context);
   }
 
-  /**
-   * Get error message for chat failures
-   */
   static getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      if (error.message.includes("401")) {
-        return "Invalid API key. Please check your Claude API settings.";
-      }
-      if (error.message.includes("429")) {
-        return "Rate limit exceeded. Please wait a moment and try again.";
-      }
-      if (error.message.includes("500")) {
-        return "Claude API is experiencing issues. Please try again later.";
-      }
-      return error.message;
-    }
-    return "An unexpected error occurred. Please try again.";
+    return AISDKAdapter.getErrorMessage(error);
   }
 
-  /**
-   * Test API key validity
-   */
   static async testApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
     return AISDKAdapter.testApiKey(apiKey, baseUrl);
   }
 
-  /**
-   * Validate API key format
-   */
   static validateApiKey(apiKey: string): boolean {
     return AISDKAdapter.validateApiKey(apiKey);
   }
 
-  /**
-   * Get model pricing information
-   */
   static getModelPricing(model: string) {
     return AISDKAdapter.getModelPricing(model);
   }
 
-  /**
-   * Get context limit for model
-   */
   static getContextLimit(model: string): number {
     return AISDKAdapter.getContextLimit(model);
   }

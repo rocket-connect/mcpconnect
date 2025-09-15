@@ -1,4 +1,4 @@
-// apps/ui/src/components/ConnectionModal.tsx - Refactored to use MCPService
+// apps/ui/src/components/ConnectionModal.tsx - Updated to use adapters only
 import React, { useState, useEffect } from "react";
 import {
   X,
@@ -12,9 +12,12 @@ import {
   TestTube,
   Trash2,
   Plus,
+  Zap,
+  Globe2,
+  Radio,
 } from "lucide-react";
-import { Connection } from "@mcpconnect/schemas";
-import { MCPService } from "../services/mcpService";
+import { Connection, ConnectionType } from "@mcpconnect/schemas";
+import { MCPAdapter } from "@mcpconnect/base-adapters";
 
 interface ConnectionModalProps {
   isOpen: boolean;
@@ -29,6 +32,7 @@ interface ConnectionModalProps {
 type FormData = {
   name: string;
   url: string;
+  connectionType: ConnectionType;
   authType: "none" | "bearer" | "apiKey" | "basic";
   credentials: {
     token?: string;
@@ -44,6 +48,7 @@ type FormData = {
 const initialConnectionState: FormData = {
   name: "",
   url: "",
+  connectionType: "sse", // Default to SSE
   authType: "none",
   credentials: {},
   headers: {},
@@ -70,6 +75,11 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const [customHeaders, setCustomHeaders] = useState<
     Array<{ key: string; value: string }>
   >([]);
+  const [discoveredInfo, setDiscoveredInfo] = useState<{
+    tools: number;
+    resources: number;
+    serverInfo?: any;
+  } | null>(null);
 
   const isEditing = Boolean(connection);
 
@@ -77,10 +87,11 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (connection) {
-        // Editing existing connection
+        // Editing existing connection - ensure connectionType has a default
         setFormData({
           name: connection.name,
           url: connection.url,
+          connectionType: connection.connectionType || "sse", // Default to SSE if undefined
           authType: connection.authType || "none",
           credentials: connection.credentials || {},
           headers: connection.headers || {},
@@ -108,6 +119,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       setTestError(null);
       setShowPassword(false);
       setShowToken(false);
+      setDiscoveredInfo(null);
     }
   }, [isOpen, connection]);
 
@@ -177,7 +189,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       return;
     }
 
-    if (!MCPService.validateConnectionUrl(formData.url)) {
+    if (!MCPAdapter.validateConnectionUrl(formData.url)) {
       setTestError(
         "Please enter a valid URL (http://, https://, ws://, or wss://)"
       );
@@ -186,12 +198,14 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
 
     setTestStatus("testing");
     setTestError(null);
+    setDiscoveredInfo(null);
 
     try {
       const testConnection: Connection = {
         id: connection?.id || "test",
         name: formData.name,
         url: formData.url,
+        connectionType: formData.connectionType,
         isActive: true,
         isConnected: false,
         authType: formData.authType,
@@ -201,14 +215,49 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         retryAttempts: formData.retryAttempts,
       };
 
-      const isConnected = await MCPService.testConnection(testConnection);
+      // Create a temporary MCP adapter for testing
+      const tempAdapter = new (class extends MCPAdapter {
+        async initialize(): Promise<void> {
+          // No-op for testing
+        }
+        async cleanup(): Promise<void> {
+          // No-op for testing
+        }
+      })({
+        name: "temp-test-adapter",
+        provider: "mcp",
+        protocolVersion: "2024-11-05",
+        debug: false,
+        timeout: 30000,
+        retries: 3,
+        clientInfo: {
+          name: "MCPConnect",
+          version: "0.0.11",
+          description: "MCPConnect browser-based MCP client",
+        },
+      });
 
-      if (isConnected) {
+      console.log("[ConnectionModal] Starting full introspection...");
+      const introspectionResult =
+        await tempAdapter.connectAndIntrospect(testConnection);
+
+      if (introspectionResult.isConnected) {
         setTestStatus("success");
+        setDiscoveredInfo({
+          tools: introspectionResult.tools.length,
+          resources: introspectionResult.resources.length,
+          serverInfo: introspectionResult.serverInfo,
+        });
+        console.log("[ConnectionModal] Introspection successful:", {
+          tools: introspectionResult.tools.length,
+          resources: introspectionResult.resources.length,
+          serverInfo: introspectionResult.serverInfo,
+        });
       } else {
         setTestStatus("error");
         setTestError(
-          "Connection test failed. Please check your URL and credentials."
+          introspectionResult.error ||
+            "Connection test failed. Please check your URL and credentials."
         );
       }
     } catch (error) {
@@ -216,6 +265,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       setTestError(
         error instanceof Error ? error.message : "Connection test failed"
       );
+      console.error("[ConnectionModal] Test connection failed:", error);
     }
   };
 
@@ -225,7 +275,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       return;
     }
 
-    if (!MCPService.validateConnectionUrl(formData.url)) {
+    if (!MCPAdapter.validateConnectionUrl(formData.url)) {
       setTestError("Please enter a valid URL");
       return;
     }
@@ -245,10 +295,12 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     setIsLoading(true);
 
     try {
+      // Create the connection data with proper typing - ensure all required fields are defined
       const connectionData: Connection = {
         id: connection?.id || "", // Will be generated in service if empty
         name: formData.name.trim(),
         url: formData.url.trim(),
+        connectionType: formData.connectionType, // FormData guarantees this is defined
         isActive: false,
         isConnected: false,
         authType: formData.authType,
@@ -258,10 +310,10 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         retryAttempts: formData.retryAttempts,
       };
 
-      // If creating new, generate ID using MCPService
+      // If creating new, generate ID using MCPAdapter
       const finalConnection = connection?.id
         ? connectionData
-        : MCPService.createConnection(connectionData);
+        : MCPAdapter.createConnection(connectionData);
 
       onSave(finalConnection);
       onClose();
@@ -297,6 +349,32 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         return <AlertCircle className="w-4 h-4 text-red-500" />;
       default:
         return <TestTube className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  const getConnectionTypeIcon = (type: ConnectionType) => {
+    switch (type) {
+      case "sse":
+        return <Zap className="w-4 h-4" />;
+      case "http":
+        return <Globe className="w-4 h-4" />;
+      case "websocket":
+        return <Radio className="w-4 h-4" />;
+      default:
+        return <Globe2 className="w-4 h-4" />;
+    }
+  };
+
+  const getConnectionTypeDescription = (type: ConnectionType) => {
+    switch (type) {
+      case "sse":
+        return "Server-Sent Events - Real-time streaming (Recommended)";
+      case "http":
+        return "HTTP - Traditional request/response";
+      case "websocket":
+        return "WebSocket - Bidirectional real-time communication";
+      default:
+        return "Auto-detect based on URL protocol";
     }
   };
 
@@ -356,6 +434,77 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 Supports HTTP (http://, https://) and WebSocket (ws://, wss://)
                 MCP protocol endpoints
               </p>
+            </div>
+
+            {/* Connection Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Connection Type
+              </label>
+              <div className="space-y-3">
+                {(["sse", "http", "websocket"] as ConnectionType[]).map(
+                  type => (
+                    <label
+                      key={type}
+                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                        formData.connectionType === type
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                          : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="connectionType"
+                        value={type}
+                        checked={formData.connectionType === type}
+                        onChange={e =>
+                          handleInputChange(
+                            "connectionType",
+                            e.target.value as ConnectionType
+                          )
+                        }
+                        className="sr-only"
+                      />
+                      <div className="flex items-center gap-3 flex-1">
+                        <div
+                          className={`p-2 rounded-lg ${
+                            formData.connectionType === type
+                              ? "bg-blue-500 text-white"
+                              : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                          }`}
+                        >
+                          {getConnectionTypeIcon(type)}
+                        </div>
+                        <div className="flex-1">
+                          <div
+                            className={`font-medium text-sm ${
+                              formData.connectionType === type
+                                ? "text-blue-700 dark:text-blue-300"
+                                : "text-gray-900 dark:text-white"
+                            }`}
+                          >
+                            {type.toUpperCase()}
+                            {type === "sse" && (
+                              <span className="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">
+                                Recommended
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className={`text-xs ${
+                              formData.connectionType === type
+                                ? "text-blue-600 dark:text-blue-400"
+                                : "text-gray-500 dark:text-gray-400"
+                            }`}
+                          >
+                            {getConnectionTypeDescription(type)}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  )
+                )}
+              </div>
             </div>
           </div>
 
@@ -615,9 +764,24 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
 
             {testStatus === "success" && (
               <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  Connection test successful! The MCP server is reachable.
+                <p className="text-sm text-green-800 dark:text-green-200 mb-2">
+                  Connection test successful! The MCP server is reachable via{" "}
+                  {formData.connectionType.toUpperCase()}.
                 </p>
+                {discoveredInfo && (
+                  <div className="text-xs text-green-700 dark:text-green-300 space-y-1">
+                    <div>• Tools discovered: {discoveredInfo.tools}</div>
+                    <div>
+                      • Resources discovered: {discoveredInfo.resources}
+                    </div>
+                    {discoveredInfo.serverInfo && (
+                      <div>
+                        • Server: {discoveredInfo.serverInfo.name} v
+                        {discoveredInfo.serverInfo.version}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

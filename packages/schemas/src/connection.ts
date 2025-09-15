@@ -1,12 +1,20 @@
 import { z } from "zod";
 
 /**
+ * Schema for MCP connection types
+ */
+export const ConnectionTypeSchema = z.enum(["sse", "http", "websocket"]);
+
+export type ConnectionType = z.infer<typeof ConnectionTypeSchema>;
+
+/**
  * Schema for MCP server connection configuration
  */
 export const ConnectionSchema = z.object({
-  id: z.string().min(1, "Connection ID is required"), // NEW: ID field for proper identification
+  id: z.string().min(1, "Connection ID is required"),
   name: z.string().min(1, "Connection name is required"),
   url: z.string().url("Must be a valid URL"),
+  connectionType: ConnectionTypeSchema.default("sse"), // Default to SSE
   isActive: z.boolean().optional().default(false),
   isConnected: z.boolean().optional().default(false),
   headers: z.record(z.string(), z.string()).optional().default({}),

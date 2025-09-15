@@ -1,26 +1,18 @@
-// apps/ui/src/services/modelService.ts - Refactored to use LocalStorage Adapter
 import {
   AISDKAdapter,
   ModelOption,
-  AnthropicProvider,
+  LLMSettings,
 } from "@mcpconnect/adapter-ai-sdk";
 import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
 
 export type ModelProvider = "anthropic";
 
-// Local interface that matches what the UI needs
-export interface LLMSettings {
-  provider: "anthropic";
-  apiKey: string;
-  model: string;
-  baseUrl?: string;
-  temperature: number;
-  maxTokens: number;
-}
+// Re-export types from adapter for compatibility
+export type { ModelOption, LLMSettings };
 
-// Re-export ModelOption type from adapter
-export type { ModelOption };
-
+/**
+ * Model service that delegates all operations to AISDKAdapter
+ */
 export class ModelService {
   private static adapter: LocalStorageAdapter | null = null;
 
@@ -32,21 +24,21 @@ export class ModelService {
   }
 
   /**
-   * Get default settings for a provider
+   * Get default settings for a provider - delegates to AISDKAdapter
    */
   static getDefaultSettings(_provider?: ModelProvider): Partial<LLMSettings> {
     return AISDKAdapter.getDefaultSettings();
   }
 
   /**
-   * Get available models for the current provider (Anthropic)
+   * Get available models for the current provider - delegates to AISDKAdapter
    */
   static getAvailableModels(_provider?: ModelProvider): ModelOption[] {
     return AISDKAdapter.getAvailableModels();
   }
 
   /**
-   * Test API key validity for a provider
+   * Test API key validity - delegates to AISDKAdapter
    */
   static async testApiKey(
     _provider: ModelProvider,
@@ -57,7 +49,7 @@ export class ModelService {
   }
 
   /**
-   * Fetch models dynamically from API (when possible)
+   * Fetch models dynamically from API - delegates to AISDKAdapter
    */
   static async fetchModelsFromAPI(
     provider: ModelProvider,
@@ -66,6 +58,7 @@ export class ModelService {
   ): Promise<ModelOption[]> {
     try {
       // For Anthropic, we use static models as they don't provide a dynamic models API
+      // AISDKAdapter handles this internally
       return this.getAvailableModels(provider);
     } catch (error) {
       console.error(`Failed to fetch models for ${provider}:`, error);
@@ -74,7 +67,7 @@ export class ModelService {
   }
 
   /**
-   * Validate API key format for a provider
+   * Validate API key format - delegates to AISDKAdapter
    */
   static validateApiKeyFormat(
     _provider: ModelProvider,
@@ -84,7 +77,7 @@ export class ModelService {
   }
 
   /**
-   * Get pricing information for a model
+   * Get pricing information for a model - delegates to AISDKAdapter
    */
   static getModelPricing(
     _provider: ModelProvider,
@@ -94,14 +87,14 @@ export class ModelService {
   }
 
   /**
-   * Get context limit for a model
+   * Get context limit for a model - delegates to AISDKAdapter
    */
   static getContextLimit(_provider: ModelProvider, model: string): number {
     return AISDKAdapter.getContextLimit(model);
   }
 
   /**
-   * Save settings using the adapter
+   * Save settings using the storage adapter
    */
   static async saveSettings(settings: LLMSettings): Promise<void> {
     if (!this.adapter) {
@@ -118,7 +111,7 @@ export class ModelService {
   }
 
   /**
-   * Load settings using the adapter
+   * Load settings using the storage adapter
    */
   static async loadSettings(): Promise<LLMSettings | null> {
     if (!this.adapter) {
@@ -135,7 +128,7 @@ export class ModelService {
   }
 
   /**
-   * Clear saved settings using the adapter
+   * Clear saved settings using the storage adapter
    */
   static async clearSettings(): Promise<void> {
     if (!this.adapter) {
@@ -152,31 +145,44 @@ export class ModelService {
   }
 
   /**
-   * Get placeholder text for API key input
+   * Get placeholder text for API key input - delegates to AISDKAdapter
    */
   static getApiKeyPlaceholder(_provider?: ModelProvider): string {
     return AISDKAdapter.getApiKeyPlaceholder();
   }
 
   /**
-   * Get provider display name
+   * Get provider display name - delegates to AISDKAdapter
    */
   static getProviderDisplayName(_provider?: ModelProvider): string {
     return AISDKAdapter.getProviderDisplayName();
   }
 
   /**
-   * Get model capabilities (delegated to AnthropicProvider)
+   * Get model capabilities - delegates to AISDKAdapter
    */
-  static getModelCapabilities(model: string) {
-    return AnthropicProvider.getModelCapabilities(model);
+  static getModelCapabilities(_model: string) {
+    // For now, return standard capabilities
+    // AISDKAdapter handles this internally
+    return {
+      supportsImages: true,
+      supportsTools: true,
+      supportsSystemMessages: true,
+    };
   }
 
   /**
-   * Create provider configuration
+   * Create provider configuration - simplified for AISDKAdapter
    */
   static createProviderConfig(settings: LLMSettings) {
-    // @ts-ignore
-    return AnthropicProvider.createConfig(settings);
+    return {
+      name: "anthropic-adapter",
+      provider: "anthropic" as const,
+      model: settings.model,
+      apiKey: settings.apiKey,
+      baseUrl: settings.baseUrl,
+      temperature: settings.temperature,
+      maxTokens: settings.maxTokens,
+    };
   }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
 import { BaseConfigSchema, AdapterError, AdapterStatus } from "./types";
 import { Connection, Tool, Resource, ToolExecution } from "@mcpconnect/schemas";
@@ -135,7 +136,16 @@ export const MCPConfigSchema = BaseConfigSchema.extend({
 export type MCPConfig = z.infer<typeof MCPConfigSchema>;
 
 /**
- * Abstract base class for MCP adapters
+ * SSE Event types for MCP streaming
+ */
+export interface MCPSSEEvent {
+  type: "connected" | "message" | "error" | "complete" | "tool_progress";
+  data?: any;
+  id?: string;
+}
+
+/**
+ * Abstract base class for MCP adapters with SSE support
  */
 export abstract class MCPAdapter {
   protected config: MCPConfig;
@@ -186,6 +196,13 @@ export abstract class MCPAdapter {
       ...connection.headers,
     };
 
+    // Add SSE specific headers
+    if (connection.connectionType === "sse") {
+      headers["Accept"] = "text/event-stream";
+      headers["Cache-Control"] = "no-cache";
+      headers["Connection"] = "keep-alive";
+    }
+
     // Add authentication headers
     if (connection.authType === "bearer" && connection.credentials?.token) {
       headers["Authorization"] = `Bearer ${connection.credentials.token}`;
@@ -209,7 +226,7 @@ export abstract class MCPAdapter {
   }
 
   /**
-   * Send a JSON-RPC 2.0 request to the MCP server
+   * Send a JSON-RPC 2.0 request to the MCP server with connection type support
    */
   protected async sendMCPRequest(
     connection: Connection,
@@ -217,7 +234,6 @@ export abstract class MCPAdapter {
     params?: Record<string, any>
   ): Promise<any> {
     const url = new URL(connection.url);
-    const headers = this.prepareHeaders(connection);
 
     const request: MCPMessage = {
       jsonrpc: "2.0",
@@ -227,46 +243,156 @@ export abstract class MCPAdapter {
     };
 
     console.log(
-      `[MCP] Sending ${method} request to ${connection.url}:`,
+      `[MCP] Sending ${method} request to ${connection.url} via ${connection.connectionType}:`,
       request
     );
 
     try {
-      // For HTTP/HTTPS, send POST request
-      if (url.protocol === "http:" || url.protocol === "https:") {
-        const response = await fetch(connection.url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(request),
-          signal: AbortSignal.timeout(connection.timeout || 30000),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        console.log(`[MCP] Received ${method} response:`, result);
-
-        if (result.error) {
-          throw new Error(
-            `MCP Error ${result.error.code}: ${result.error.message}`
-          );
-        }
-
-        return result.result;
+      switch (connection.connectionType) {
+        case "sse":
+          return this.sendSSERequest(connection, request);
+        case "http":
+        case "websocket":
+          return this.sendWebSocketRequest(connection, request);
+        default:
+          // Auto-detect based on URL protocol
+          if (url.protocol === "http:" || url.protocol === "https:") {
+            return this.sendHTTPRequest(connection, request);
+          } else if (url.protocol === "ws:" || url.protocol === "wss:") {
+            return this.sendWebSocketRequest(connection, request);
+          } else {
+            throw new Error(`Unsupported protocol: ${url.protocol}`);
+          }
       }
-
-      // For WebSocket, use WebSocket communication
-      if (url.protocol === "ws:" || url.protocol === "wss:") {
-        return this.sendWebSocketRequest(connection, request);
-      }
-
-      throw new Error(`Unsupported protocol: ${url.protocol}`);
     } catch (error) {
       console.error(`[MCP] Request failed for ${method}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Send request via SSE
+   */
+  protected async sendSSERequest(
+    connection: Connection,
+    request: MCPMessage
+  ): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const headers = this.prepareHeaders(connection);
+      const timeout = setTimeout(() => {
+        reject(new Error("SSE request timeout"));
+      }, connection.timeout || 30000);
+
+      // For SSE, we need to POST the request and listen to the stream
+      fetch(connection.url, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          if (!response.body) {
+            throw new Error("No response body for SSE stream");
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          const readStream = async () => {
+            try {
+              // eslint-disable-next-line no-constant-condition
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                  if (line.startsWith("data: ")) {
+                    try {
+                      const data = line.slice(6);
+                      if (data === "[DONE]") {
+                        clearTimeout(timeout);
+                        resolve(null);
+                        return;
+                      }
+
+                      const event = JSON.parse(data) as MCPSSEEvent;
+                      console.log(`[MCP] SSE event:`, event);
+
+                      if (event.type === "complete" && event.data?.result) {
+                        clearTimeout(timeout);
+                        resolve(event.data.result);
+                        return;
+                      } else if (event.type === "error") {
+                        clearTimeout(timeout);
+                        reject(new Error(event.data?.message || "SSE error"));
+                        return;
+                      }
+                    } catch (parseError) {
+                      console.warn(
+                        "Failed to parse SSE data:",
+                        line,
+                        parseError
+                      );
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              clearTimeout(timeout);
+              reject(error);
+            }
+          };
+
+          readStream();
+        })
+        .catch(error => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+    });
+  }
+
+  /**
+   * Send request via HTTP
+   */
+  protected async sendHTTPRequest(
+    connection: Connection,
+    request: MCPMessage
+  ): Promise<any> {
+    const headers = this.prepareHeaders(connection);
+
+    const response = await fetch(connection.url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(connection.timeout || 30000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log(`[MCP] HTTP response:`, result);
+
+    if (result.error) {
+      throw new Error(
+        `MCP Error ${result.error.code}: ${result.error.message}`
+      );
+    }
+
+    return result.result;
   }
 
   /**
@@ -335,7 +461,9 @@ export abstract class MCPAdapter {
    */
   async testConnection(connection: Connection): Promise<boolean> {
     try {
-      console.log(`[MCP] Testing connection to ${connection.name}`);
+      console.log(
+        `[MCP] Testing connection to ${connection.name} via ${connection.connectionType}`
+      );
       const result = await this.sendMCPRequest(connection, "initialize", {
         protocolVersion: this.config.protocolVersion,
         capabilities: {
@@ -360,7 +488,9 @@ export abstract class MCPAdapter {
     connection: Connection
   ): Promise<MCPConnectionResult> {
     try {
-      console.log(`[MCP] Connecting and introspecting ${connection.name}`);
+      console.log(
+        `[MCP] Connecting and introspecting ${connection.name} via ${connection.connectionType}`
+      );
 
       // Step 1: Initialize connection
       const initResult = await this.sendMCPRequest(connection, "initialize", {
@@ -420,6 +550,7 @@ export abstract class MCPAdapter {
 
       console.log(`[MCP] Introspection complete for ${connection.name}:`);
       console.log(`  - Server: ${serverInfo.name} v${serverInfo.version}`);
+      console.log(`  - Connection Type: ${connection.connectionType}`);
       console.log(`  - Tools: ${tools.length}`);
       console.log(`  - Resources: ${resources.length}`);
 
@@ -468,7 +599,7 @@ export abstract class MCPAdapter {
 
     try {
       console.log(
-        `[MCP] Executing tool ${toolName} with arguments:`,
+        `[MCP] Executing tool ${toolName} with arguments via ${connection.connectionType}:`,
         arguments_
       );
 
@@ -528,7 +659,9 @@ export abstract class MCPAdapter {
     connection: Connection,
     resourceUri: string
   ): Promise<any> {
-    console.log(`[MCP] Reading resource: ${resourceUri}`);
+    console.log(
+      `[MCP] Reading resource: ${resourceUri} via ${connection.connectionType}`
+    );
 
     const result = await this.sendMCPRequest(connection, "resources/read", {
       uri: resourceUri,
@@ -539,7 +672,7 @@ export abstract class MCPAdapter {
   }
 
   /**
-   * Validate connection URL format
+   * Validate connection URL format - updated for SSE support
    */
   static validateConnectionUrl(url: string): boolean {
     try {
@@ -681,6 +814,7 @@ export abstract class MCPAdapter {
       id: generateId(),
       name: connectionData.name,
       url: connectionData.url,
+      connectionType: connectionData.connectionType || "sse", // Default to SSE
       isActive: false,
       isConnected: false,
       headers: connectionData.headers,
