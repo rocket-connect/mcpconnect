@@ -252,6 +252,7 @@ export abstract class MCPAdapter {
         case "sse":
           return this.sendSSERequest(connection, request);
         case "http":
+          return this.sendHTTPRequest(connection, request); // ✅ HTTP should go to HTTP
         case "websocket":
           return this.sendWebSocketRequest(connection, request);
         default:

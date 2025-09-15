@@ -1,3 +1,4 @@
+/* eslint-disable no-case-declarations */
 // packages/adapter-ai-sdk/src/ai-sdk-adapter.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
@@ -26,7 +27,7 @@ import {
 import { z } from "zod";
 import { MCPService } from "./mcp-service";
 import { AnthropicProvider } from "./providers/anthropic";
-import { generateText, streamText, LanguageModel } from "ai";
+import { generateText, streamText, LanguageModel, tool } from "ai";
 
 /**
  * AI SDK-specific configuration schema
@@ -260,24 +261,27 @@ export class AISDKAdapter extends LLMAdapter {
 
     try {
       const aiMessages = this.convertToAIMessages(messages);
-      const tools = this.convertToAITools(options?.tools || this.config.tools);
+      const aiTools = this.convertToAITools(
+        options?.tools || this.config.tools
+      );
 
       console.log("Complete request:", {
         messageCount: aiMessages.length,
-        toolCount: Object.keys(tools).length,
-        hasTools: Object.keys(tools).length > 0,
+        toolCount: Object.keys(aiTools).length,
+        hasTools: Object.keys(aiTools).length > 0,
       });
 
       const result = await generateText({
         model: this.aiModel,
         messages: aiMessages,
-        tools: Object.keys(tools).length > 0 ? tools : undefined,
+        ...(Object.keys(aiTools).length > 0 && { tools: aiTools }),
         maxOutputTokens: options?.maxTokens || this.config.maxTokens,
         temperature: options?.temperature || this.config.temperature,
       });
 
       this.status = AdapterStatus.CONNECTED;
 
+      // Convert AI SDK tool calls back to LLM format
       const toolCalls: LLMToolCall[] =
         result.toolCalls?.map(tc => ({
           id: tc.toolCallId,
@@ -297,11 +301,11 @@ export class AISDKAdapter extends LLMAdapter {
         model: this.config.model,
         timestamp: new Date(),
         usage: {
-          promptTokens: result.usage.inputTokens!,
-          completionTokens: result.usage.outputTokens!,
+          promptTokens: result.usage.inputTokens || 0,
+          completionTokens: result.usage.outputTokens || 0,
           totalTokens:
-            result.usage.totalTokens ??
-            result.usage.inputTokens! + result.usage.outputTokens!,
+            result.usage.totalTokens ||
+            (result.usage.inputTokens || 0) + (result.usage.outputTokens || 0),
         },
       };
     } catch (error) {
@@ -391,22 +395,25 @@ export class AISDKAdapter extends LLMAdapter {
 
     try {
       const aiMessages = this.convertToAIMessages(messages);
-      const tools = this.convertToAITools(options?.tools || this.config.tools);
+      const aiTools = this.convertToAITools(
+        options?.tools || this.config.tools
+      );
 
       console.log("Stream request:", {
         messageCount: aiMessages.length,
-        toolCount: Object.keys(tools).length,
-        hasTools: Object.keys(tools).length > 0,
+        toolCount: Object.keys(aiTools).length,
+        hasTools: Object.keys(aiTools).length > 0,
       });
 
-      const result = await streamText({
+      const result = streamText({
         model: this.aiModel,
         messages: aiMessages,
-        tools: Object.keys(tools).length > 0 ? tools : undefined,
+        ...(Object.keys(aiTools).length > 0 && { tools: aiTools }),
         maxOutputTokens: options?.maxTokens || this.config.maxTokens,
         temperature: options?.temperature || this.config.temperature,
       });
 
+      // Stream text tokens
       for await (const delta of result.textStream) {
         yield {
           id: `ai-sdk-stream-${Date.now()}`,
@@ -417,8 +424,9 @@ export class AISDKAdapter extends LLMAdapter {
         };
       }
 
-      // Handle tool calls if any
+      // Wait for final result to handle tool calls
       const finalResult = await result.finishReason;
+
       if (finalResult === "tool-calls") {
         const toolCalls = await result.toolCalls;
         for (const toolCall of toolCalls) {
@@ -442,6 +450,7 @@ export class AISDKAdapter extends LLMAdapter {
         }
       }
 
+      // Final usage information
       const usage = await result.usage;
       yield {
         id: `ai-sdk-stream-${Date.now()}`,
@@ -449,10 +458,11 @@ export class AISDKAdapter extends LLMAdapter {
         finishReason: finalResult === "tool-calls" ? "tool_calls" : "stop",
         model: this.config.model,
         usage: {
-          promptTokens: usage.inputTokens!,
-          completionTokens: usage.outputTokens!,
+          promptTokens: usage.inputTokens || 0,
+          completionTokens: usage.outputTokens || 0,
           totalTokens:
-            usage.totalTokens ?? usage?.inputTokens! + usage?.outputTokens!,
+            usage.totalTokens ||
+            (usage.inputTokens || 0) + (usage.outputTokens || 0),
         },
       };
 
@@ -482,7 +492,7 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   /**
-   * Convert LLM tools to AI SDK format - FIXED VERSION
+   * Convert LLM tools to AI SDK format using proper tool() instances
    */
   private convertToAITools(tools?: LLMTool[]) {
     if (!tools || tools.length === 0) {
@@ -493,16 +503,16 @@ export class AISDKAdapter extends LLMAdapter {
     console.log("Converting tools to AI SDK format:", tools.length);
 
     const convertedTools = tools.reduce(
-      (acc, tool) => {
-        if (tool.type === "function") {
-          console.log("Converting tool:", tool.function.name);
+      (acc, llmTool) => {
+        if (llmTool.type === "function") {
+          console.log("Converting tool:", llmTool.function.name);
 
-          // Ensure we have a valid schema structure
-          let parameters = tool.function.parameters;
+          // Get the parameters schema
+          let parametersSchema = llmTool.function.parameters;
 
           // If parameters is undefined or null, create a default empty object schema
-          if (!parameters) {
-            parameters = {
+          if (!parametersSchema) {
+            parametersSchema = {
               type: "object",
               properties: {},
               required: [],
@@ -510,43 +520,52 @@ export class AISDKAdapter extends LLMAdapter {
           }
 
           // Ensure the schema has the required "type" field
-          if (!parameters.type) {
-            parameters = {
-              ...parameters,
+          if (!parametersSchema.type) {
+            parametersSchema = {
+              ...parametersSchema,
               type: "object",
             };
           }
 
           // Ensure properties exists
-          if (!parameters.properties) {
-            parameters = {
-              ...parameters,
+          if (!parametersSchema.properties) {
+            parametersSchema = {
+              ...parametersSchema,
               properties: {},
             };
           }
 
           // Ensure required is an array
-          if (!Array.isArray(parameters.required)) {
-            parameters = {
-              ...parameters,
+          if (!Array.isArray(parametersSchema.required)) {
+            parametersSchema = {
+              ...parametersSchema,
               required: [],
             };
           }
 
-          console.log("Tool parameters after normalization:", parameters);
+          console.log("Tool parameters after normalization:", parametersSchema);
 
-          acc[tool.function.name] = {
+          // Convert JSON Schema to Zod schema
+          const zodSchema = this.jsonSchemaToZod(parametersSchema);
+
+          // Create proper AI SDK tool using tool() function
+          const aiTool = tool({
             description:
-              tool.function.description || `Execute ${tool.function.name}`,
-            parameters,
-            // eslint-disable-next-line no-unused-vars
-            execute: async (_args: any) => {
+              llmTool.function.description ||
+              `Execute ${llmTool.function.name}`,
+            inputSchema: zodSchema,
+            execute: async (args: any) => {
               // This is just a placeholder - actual execution happens via MCP
-              return `Tool ${tool.function.name} executed`;
+              console.log(
+                `Tool ${llmTool.function.name} called with args:`,
+                args
+              );
+              return `Tool ${llmTool.function.name} executed with arguments: ${JSON.stringify(args)}`;
             },
-          };
+          });
 
-          console.log("Added tool to AI SDK:", tool.function.name);
+          acc[llmTool.function.name] = aiTool;
+          console.log("Added AI SDK tool:", llmTool.function.name);
         }
         return acc;
       },
@@ -555,6 +574,114 @@ export class AISDKAdapter extends LLMAdapter {
 
     console.log("Final converted tools:", Object.keys(convertedTools));
     return convertedTools;
+  }
+
+  /**
+   * Convert JSON Schema to Zod schema for AI SDK tools
+   */
+  private jsonSchemaToZod(jsonSchema: any): z.ZodTypeAny {
+    if (!jsonSchema || typeof jsonSchema !== "object") {
+      return z.object({});
+    }
+
+    if (jsonSchema.type === "object") {
+      const shape: Record<string, z.ZodTypeAny> = {};
+      const properties = jsonSchema.properties || {};
+      const required = Array.isArray(jsonSchema.required)
+        ? jsonSchema.required
+        : [];
+
+      for (const [key, propSchema] of Object.entries(properties)) {
+        let zodType = this.jsonSchemaPropertyToZod(propSchema as any);
+
+        // Add description if available
+        if (
+          propSchema &&
+          typeof propSchema === "object" &&
+          (propSchema as any).description
+        ) {
+          zodType = zodType.describe((propSchema as any).description);
+        }
+
+        // Make optional if not in required array
+        if (!required.includes(key)) {
+          zodType = zodType.optional();
+        }
+
+        shape[key] = zodType;
+      }
+
+      return z.object(shape);
+    }
+
+    // Fallback for non-object schemas
+    return z.object({});
+  }
+
+  /**
+   * Convert individual JSON Schema property to Zod type
+   */
+  private jsonSchemaPropertyToZod(propSchema: any): z.ZodTypeAny {
+    if (!propSchema || typeof propSchema !== "object") {
+      return z.string();
+    }
+
+    const type = propSchema.type;
+
+    switch (type) {
+      case "string":
+        let stringSchema = z.string();
+        if (propSchema.enum) {
+          return z.enum(propSchema.enum);
+        }
+        if (propSchema.minLength !== undefined) {
+          stringSchema = stringSchema.min(propSchema.minLength);
+        }
+        if (propSchema.maxLength !== undefined) {
+          stringSchema = stringSchema.max(propSchema.maxLength);
+        }
+        return stringSchema;
+
+      case "number":
+      case "integer":
+        let numberSchema = type === "integer" ? z.number().int() : z.number();
+        if (propSchema.minimum !== undefined) {
+          numberSchema = numberSchema.min(propSchema.minimum);
+        }
+        if (propSchema.maximum !== undefined) {
+          numberSchema = numberSchema.max(propSchema.maximum);
+        }
+        return numberSchema;
+
+      case "boolean":
+        return z.boolean();
+
+      case "array":
+        const itemsSchema = propSchema.items
+          ? this.jsonSchemaPropertyToZod(propSchema.items)
+          : z.unknown();
+        return z.array(itemsSchema);
+
+      case "object":
+        if (propSchema.properties) {
+          return this.jsonSchemaToZod(propSchema);
+        }
+        return z.record(z.string(), z.unknown());
+
+      default:
+        // Handle union types
+        if (propSchema.anyOf || propSchema.oneOf) {
+          const unionSchemas = (propSchema.anyOf || propSchema.oneOf).map(
+            (schema: any) => this.jsonSchemaPropertyToZod(schema)
+          );
+          return z.union(
+            unionSchemas as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]
+          );
+        }
+
+        // Default fallback
+        return z.string();
+    }
   }
 
   async executeToolCalls(toolCalls: LLMToolCall[]): Promise<LLMToolResult[]> {
@@ -670,25 +797,30 @@ export class AISDKAdapter extends LLMAdapter {
         };
       }
 
-      // Ensure required fields are present
-      if (!inputSchema.type) {
-        inputSchema = { ...inputSchema, type: "object" };
-      }
-
-      if (!inputSchema.properties) {
-        inputSchema = { ...inputSchema, properties: {} };
-      }
-
-      if (!Array.isArray(inputSchema.required)) {
-        inputSchema = { ...inputSchema, required: [] };
-      }
+      // Create a new normalized schema object to avoid mutation
+      const normalizedSchema = {
+        type: "object" as const, // Ensure type is always "object"
+        properties: inputSchema.properties || {},
+        required: Array.isArray(inputSchema.required)
+          ? inputSchema.required
+          : [],
+        // Preserve other properties that might be present
+        ...(inputSchema.additionalProperties !== undefined && {
+          additionalProperties: inputSchema.additionalProperties,
+        }),
+        ...(inputSchema.description
+          ? {
+              description: inputSchema.description,
+            }
+          : {}),
+      };
 
       const llmTool: LLMTool = {
         type: "function",
         function: {
           name: tool.name,
           description: tool.description,
-          parameters: inputSchema,
+          parameters: normalizedSchema,
         },
       };
 
