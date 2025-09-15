@@ -1,3 +1,4 @@
+// apps/ui/src/components/ConnectionView.tsx - Refactored to use MCPService
 import { ConnectionItem } from "@mcpconnect/components";
 import { Connection } from "@mcpconnect/schemas";
 import { useNavigate } from "react-router-dom";
@@ -5,7 +6,7 @@ import { Plus, Server, Settings, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { ConnectionModal } from "./ConnectionModal";
 import { useStorage } from "../contexts/StorageContext";
-import { ConnectionService } from "../services/connectionService";
+import { MCPService } from "../services/mcpService";
 
 interface ConnectionViewProps {
   connections: Connection[];
@@ -118,71 +119,53 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         // Add new connection - ensure it has a unique ID
         const connectionWithId = {
           ...connection,
-          id:
-            connection.id || ConnectionService.createConnection(connection).id,
+          id: connection.id || MCPService.createConnection(connection).id,
         };
         updatedConnections = [...connections, connectionWithId];
       }
 
-      // Test connection and perform introspection if successful
+      // Test connection and perform introspection using MCPService
       let finalConnection = { ...connection };
 
       try {
-        const isConnected = await ConnectionService.testConnection(connection);
+        console.log(
+          `[ConnectionView] Testing and introspecting connection: ${connection.name}`
+        );
 
-        if (isConnected) {
+        const introspectionResult =
+          await MCPService.connectAndIntrospect(connection);
+
+        if (introspectionResult.isConnected) {
+          console.log(
+            `[ConnectionView] Connection successful:`,
+            introspectionResult.serverInfo
+          );
+
           finalConnection.isConnected = true;
 
-          try {
-            const introspectionResult =
-              await ConnectionService.introspectConnection(connection);
-
-            // Convert MCP tools to our tool format
-            const convertedTools = introspectionResult.tools.map(tool => ({
-              id: `${connection.id}_${tool.name}`, // Create unique tool ID
-              name: tool.name,
-              description: tool.description,
-              inputSchema: tool.inputSchema,
-              parameters: [], // We'll populate this from inputSchema if needed
-              category: "mcp",
-              tags: ["mcp", "introspected"],
-              deprecated: false,
-            }));
-
-            // Convert MCP resources to our resource format
-            const convertedResources = introspectionResult.resources.map(
-              resource => ({
-                name: resource.name,
-                description: resource.description,
-                uri: resource.uri,
-                mimeType: resource.mimeType,
-                type: "data",
-                permissions: {
-                  read: true,
-                  write: false,
-                  delete: false,
-                },
-                tags: ["mcp", "introspected"],
-              })
-            );
-
-            // Update tools in localStorage
+          // Store tools in localStorage
+          if (introspectionResult.tools.length > 0) {
             const toolsItem = localStorage.getItem("mcpconnect:tools");
             let toolsData = toolsItem ? JSON.parse(toolsItem) : { value: {} };
-            toolsData.value[connection.id] = convertedTools;
+            toolsData.value[connection.id] = introspectionResult.tools;
             toolsData.metadata = {
               ...toolsData.metadata,
               updatedAt: new Date(),
               size: JSON.stringify(toolsData.value).length,
             };
             localStorage.setItem("mcpconnect:tools", JSON.stringify(toolsData));
+            console.log(
+              `[ConnectionView] Stored ${introspectionResult.tools.length} tools for ${connection.name}`
+            );
+          }
 
-            // Update resources in localStorage
+          // Store resources in localStorage
+          if (introspectionResult.resources.length > 0) {
             const resourcesItem = localStorage.getItem("mcpconnect:resources");
             let resourcesData = resourcesItem
               ? JSON.parse(resourcesItem)
               : { value: {} };
-            resourcesData.value[connection.id] = convertedResources;
+            resourcesData.value[connection.id] = introspectionResult.resources;
             resourcesData.metadata = {
               ...resourcesData.metadata,
               updatedAt: new Date(),
@@ -192,19 +175,39 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
               "mcpconnect:resources",
               JSON.stringify(resourcesData)
             );
-          } catch (introspectionError) {
-            console.warn(
-              "Introspection failed, but connection is valid:",
-              introspectionError
+            console.log(
+              `[ConnectionView] Stored ${introspectionResult.resources.length} resources for ${connection.name}`
             );
-            // Connection is valid but introspection failed - that's OK
           }
         } else {
+          console.warn(
+            `[ConnectionView] Connection failed:`,
+            introspectionResult.error
+          );
           finalConnection.isConnected = false;
+
+          // Show user-friendly error message
+          if (introspectionResult.error) {
+            alert(
+              `Connection failed: ${introspectionResult.error}\n\nThe connection will be saved but marked as disconnected.`
+            );
+          }
         }
-      } catch (testError) {
-        console.error("Connection test failed:", testError);
+      } catch (introspectionError) {
+        console.error(
+          "[ConnectionView] Introspection failed:",
+          introspectionError
+        );
         finalConnection.isConnected = false;
+
+        // Show user-friendly error for introspection failures
+        const errorMessage =
+          introspectionError instanceof Error
+            ? introspectionError.message
+            : "Unknown error occurred";
+        alert(
+          `Failed to connect to MCP server: ${errorMessage}\n\nThe connection will be saved but marked as disconnected.`
+        );
       }
 
       // Update the connections array with the final connection
@@ -227,12 +230,18 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         })
       );
 
+      console.log(
+        `[ConnectionView] Saved connection: ${finalConnection.name} (connected: ${finalConnection.isConnected})`
+      );
+
       // Refresh the page to reload all data
       window.location.reload();
     } catch (error) {
       console.error("Failed to save connection:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
       alert(
-        "Failed to save connection. Please check the details and try again."
+        `Failed to save connection: ${errorMessage}\n\nPlease check the connection details and try again.`
       );
     }
   };
@@ -347,12 +356,16 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
                 https://api.example.com/mcp
               </p>
               <p>
+                • <strong>WebSocket MCP:</strong> ws://localhost:8080 or
+                wss://api.example.com/mcp
+              </p>
+              <p>
                 • Authentication is optional but recommended for production
                 servers
               </p>
               <p>
                 • MCPConnect will automatically discover available tools and
-                resources
+                resources during connection
               </p>
             </div>
           </div>

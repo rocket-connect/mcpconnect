@@ -1,4 +1,4 @@
-// apps/ui/src/components/ConnectionModal.tsx - Fixed TypeScript errors
+// apps/ui/src/components/ConnectionModal.tsx - Refactored to use MCPService
 import React, { useState, useEffect } from "react";
 import {
   X,
@@ -14,14 +14,14 @@ import {
   Plus,
 } from "lucide-react";
 import { Connection } from "@mcpconnect/schemas";
-import { ConnectionService } from "../services/connectionService";
+import { MCPService } from "../services/mcpService";
 
 interface ConnectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (connection: Connection) => void;
   onDelete?: (connectionId: string) => void;
-  connection?: Connection | null; // If provided, we're editing
+  connection?: Connection | null;
   existingConnections: Connection[];
 }
 
@@ -77,7 +77,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (connection) {
-        // Editing existing connection - ensure proper typing
+        // Editing existing connection
         setFormData({
           name: connection.name,
           url: connection.url,
@@ -177,7 +177,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       return;
     }
 
-    if (!ConnectionService.validateConnectionUrl(formData.url)) {
+    if (!MCPService.validateConnectionUrl(formData.url)) {
       setTestError(
         "Please enter a valid URL (http://, https://, ws://, or wss://)"
       );
@@ -201,8 +201,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         retryAttempts: formData.retryAttempts,
       };
 
-      const isConnected =
-        await ConnectionService.testConnection(testConnection);
+      const isConnected = await MCPService.testConnection(testConnection);
 
       if (isConnected) {
         setTestStatus("success");
@@ -226,7 +225,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       return;
     }
 
-    if (!ConnectionService.validateConnectionUrl(formData.url)) {
+    if (!MCPService.validateConnectionUrl(formData.url)) {
       setTestError("Please enter a valid URL");
       return;
     }
@@ -259,10 +258,10 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         retryAttempts: formData.retryAttempts,
       };
 
-      // If creating new, generate ID
+      // If creating new, generate ID using MCPService
       const finalConnection = connection?.id
         ? connectionData
-        : ConnectionService.createConnection(connectionData);
+        : MCPService.createConnection(connectionData);
 
       onSave(finalConnection);
       onClose();
@@ -350,11 +349,12 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 type="url"
                 value={formData.url}
                 onChange={e => handleInputChange("url", e.target.value)}
-                placeholder="https://api.example.com/mcp or http://localhost:3000/mcp"
+                placeholder="https://api.example.com/mcp or ws://localhost:3000/mcp"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Supports HTTP (http://, https://) MCP protocol endpoints
+                Supports HTTP (http://, https://) and WebSocket (ws://, wss://)
+                MCP protocol endpoints
               </p>
             </div>
           </div>
@@ -616,7 +616,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
             {testStatus === "success" && (
               <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
                 <p className="text-sm text-green-800 dark:text-green-200">
-                  Connection test successful! The server is reachable.
+                  Connection test successful! The MCP server is reachable.
                 </p>
               </div>
             )}

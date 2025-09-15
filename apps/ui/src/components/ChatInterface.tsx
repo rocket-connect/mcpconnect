@@ -1,4 +1,3 @@
-// apps/ui/src/components/ChatInterface.tsx - Fixed auto-chat creation and LLM prompting
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
@@ -7,7 +6,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
-import { MCPIntrospectionService } from "../services/mcpIntrospectionService";
+import { ChatService } from "../services/chatService";
 import { SettingsModal } from "./SettingsModal";
 import { nanoid } from "nanoid";
 
@@ -18,14 +17,8 @@ interface ChatInterfaceProps {
 export const ChatInterface = (_args: ChatInterfaceProps) => {
   const { connectionId, chatId } = useParams();
   const navigate = useNavigate();
-  const {
-    connections,
-    tools,
-    conversations,
-    updateConversations,
-    toolExecutions,
-    refreshAll,
-  } = useStorage();
+  const { connections, tools, conversations, updateConversations, refreshAll } =
+    useStorage();
   const { expandedToolCall: inspectorExpandedTool, syncToolCallState } =
     useInspector();
 
@@ -50,6 +43,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
   // Get the current connection and conversation using chat ID
   const currentConnection = connections.find(conn => conn.id === connectionId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectionConversations = connectionId
     ? conversations[connectionId] || []
     : [];
@@ -62,27 +56,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
   const currentMessages = currentConversation?.messages || [];
   const connectionTools = connectionId ? tools[connectionId] || [] : [];
-
-  // Auto-create chat for new connections or when chatId is "new"
-  useEffect(() => {
-    const createInitialChatIfNeeded = async () => {
-      if (!connectionId || isCreatingChat) return;
-
-      // If chatId is "new" or no conversations exist for this connection
-      if (chatId === "new" || connectionConversations.length === 0) {
-        setIsCreatingChat(true);
-        try {
-          await handleNewChat(true); // true = isAutoCreated
-        } catch (error) {
-          console.error("Failed to auto-create chat:", error);
-        } finally {
-          setIsCreatingChat(false);
-        }
-      }
-    };
-
-    createInitialChatIfNeeded();
-  }, [connectionId, chatId, connectionConversations.length, isCreatingChat]);
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -146,6 +119,33 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     ]
   );
 
+  // Auto-create chat for new connections or when chatId is "new"
+  useEffect(() => {
+    const createInitialChatIfNeeded = async () => {
+      if (!connectionId || isCreatingChat) return;
+
+      // If chatId is "new" or no conversations exist for this connection
+      if (chatId === "new" || connectionConversations.length === 0) {
+        setIsCreatingChat(true);
+        try {
+          await handleNewChat(true); // true = isAutoCreated
+        } catch (error) {
+          console.error("Failed to auto-create chat:", error);
+        } finally {
+          setIsCreatingChat(false);
+        }
+      }
+    };
+
+    createInitialChatIfNeeded();
+  }, [
+    connectionId,
+    chatId,
+    connectionConversations.length,
+    isCreatingChat,
+    handleNewChat,
+  ]);
+
   // Delete a chat conversation
   const handleDeleteChat = async (
     chatToDeleteId: string,
@@ -193,382 +193,14 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     }
   };
 
-  // Execute MCP tool
-  const executeTool = async (
-    toolName: string,
-    toolArgs: Record<string, any>
-  ): Promise<any> => {
-    if (!currentConnection) {
-      throw new Error("No connection available");
-    }
-
-    try {
-      console.log(`Executing tool ${toolName} with args:`, toolArgs);
-
-      const result = await MCPIntrospectionService.executeTool(
-        currentConnection,
-        toolName,
-        toolArgs
-      );
-
-      return result;
-    } catch (error) {
-      console.error(`Tool execution failed for ${toolName}:`, error);
-      throw error;
-    }
-  };
-
-  // FIXED: Proper tool execution storage update
-  const updateToolExecutionInStorage = async (execution: any) => {
-    if (!connectionId) return;
-
-    try {
-      // Get current executions
-      const currentExecutions = toolExecutions[connectionId] || [];
-
-      // Update or add the execution
-      const existingIndex = currentExecutions.findIndex(
-        exec => exec.id === execution.id
-      );
-      let updatedExecutions;
-
-      if (existingIndex !== -1) {
-        // Update existing execution
-        updatedExecutions = [...currentExecutions];
-        updatedExecutions[existingIndex] = {
-          ...updatedExecutions[existingIndex],
-          ...execution,
-        };
-      } else {
-        // Add new execution
-        updatedExecutions = [...currentExecutions, execution];
-      }
-
-      // Update in localStorage with proper structure
-      const toolExecutionsData = {
-        ...toolExecutions,
-        [connectionId]: updatedExecutions,
-      };
-
-      localStorage.setItem(
-        "mcpconnect:toolExecutions",
-        JSON.stringify({
-          key: "toolExecutions",
-          value: toolExecutionsData,
-          metadata: {
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            size: JSON.stringify(toolExecutionsData).length,
-            type: "object",
-          },
-        })
-      );
-
-      // FIXED: Force refresh of all data to sync state
-      await refreshAll();
-    } catch (error) {
-      console.error("Failed to update tool execution:", error);
-    }
-  };
-
-  // FIXED: Enhanced Claude API call with proper tool execution tracking
-  const callClaudeWithTools = async (
-    messages: ChatMessageType[]
-  ): Promise<{ response: string; toolExecutions: ChatMessageType[] }> => {
-    if (!llmSettings) throw new Error("No LLM settings configured");
-
-    // Convert messages to Claude format - filter out tool execution messages for API
-    const claudeMessages = messages
-      .filter(
-        msg =>
-          msg.message &&
-          msg.message.trim() &&
-          !msg.executingTool &&
-          !msg.toolExecution
-      )
-      .map(msg => ({
-        role: msg.isUser ? "user" : ("assistant" as const),
-        content: msg.message || "",
-      }));
-
-    // Convert available tools to Claude format
-    const claudeTools = connectionTools.map(tool => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: tool.inputSchema || {
-        type: "object",
-        properties: {},
-        required: [],
-      },
-    }));
-
-    const requestBody = {
-      model: llmSettings.model,
-      max_tokens: llmSettings.maxTokens,
-      temperature: llmSettings.temperature,
-      messages: claudeMessages,
-      ...(claudeTools.length > 0 && { tools: claudeTools }),
-    };
-
-    console.log("Sending request to Claude with tools:", {
-      messageCount: claudeMessages.length,
-      toolCount: claudeTools.length,
-    });
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-        "x-api-key": llmSettings.apiKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `API request failed: ${response.status} ${response.statusText}: ${errorText}`
-      );
-    }
-
-    const data = await response.json();
-    console.log("Claude response:", data);
-
-    const toolExecutionMessages: ChatMessageType[] = [];
-
-    // Handle tool use
-    if (data.content) {
-      let responseText = "";
-      const toolResults: any[] = [];
-
-      for (const content of data.content) {
-        if (content.type === "text") {
-          responseText += content.text;
-        } else if (content.type === "tool_use") {
-          // Execute the tool
-          const toolName = content.name;
-          const toolArgs = content.input;
-          const toolCallId = content.id;
-          const executionId = nanoid();
-
-          console.log(`Claude wants to use tool: ${toolName}`, toolArgs);
-
-          // FIXED: Create complete tool execution entry for storage
-          const baseExecution = {
-            id: executionId,
-            tool: toolName,
-            status: "pending" as const,
-            duration: 0,
-            timestamp: new Date().toLocaleTimeString(),
-            request: {
-              tool: toolName,
-              arguments: toolArgs,
-              timestamp: new Date().toISOString(),
-            },
-          };
-
-          try {
-            // Create tool execution message
-            const toolMessage: ChatMessageType = {
-              id: executionId,
-              isUser: false,
-              executingTool: toolName,
-              timestamp: new Date(),
-              toolExecution: {
-                toolName,
-                status: "pending",
-              },
-              isExecuting: true,
-            };
-
-            toolExecutionMessages.push(toolMessage);
-
-            // FIXED: Store the execution immediately with pending status
-            await updateToolExecutionInStorage(baseExecution);
-
-            const startTime = Date.now();
-
-            // Execute the tool
-            const toolResult = await executeTool(toolName, toolArgs);
-            const endTime = Date.now();
-            const duration = endTime - startTime;
-
-            // Extract the actual result text from MCP response
-            let resultText = "";
-            if (toolResult?.content?.[0]?.text) {
-              try {
-                const parsedResult = JSON.parse(toolResult.content[0].text);
-                resultText = JSON.stringify(parsedResult, null, 2);
-              } catch {
-                resultText = toolResult.content[0].text;
-              }
-            } else {
-              resultText = JSON.stringify(toolResult, null, 2);
-            }
-
-            // FIXED: Update with complete success execution data
-            const successExecution = {
-              ...baseExecution,
-              status: "success" as const,
-              duration,
-              response: {
-                success: true,
-                result: toolResult,
-                timestamp: new Date().toISOString(),
-              },
-            };
-
-            await updateToolExecutionInStorage(successExecution);
-
-            // Update the tool execution message with results
-            const completedToolMessage: ChatMessageType = {
-              ...toolMessage,
-              toolExecution: {
-                toolName,
-                status: "success",
-                result: toolResult,
-              },
-              isExecuting: false,
-            };
-
-            // Replace in the executions array
-            const execIndex = toolExecutionMessages.findIndex(
-              msg => msg.id === executionId
-            );
-            if (execIndex !== -1) {
-              toolExecutionMessages[execIndex] = completedToolMessage;
-            }
-
-            // Add tool result in the correct format for Anthropic
-            toolResults.push({
-              tool_use_id: toolCallId,
-              type: "tool_result",
-              content: resultText,
-            });
-          } catch (error) {
-            console.error(`Tool execution failed:`, error);
-            const endTime = Date.now();
-
-            // FIXED: Store error execution
-            const errorExecution = {
-              ...baseExecution,
-              status: "error" as const,
-              duration: endTime - Date.now(),
-              error: error instanceof Error ? error.message : String(error),
-            };
-
-            await updateToolExecutionInStorage(errorExecution);
-
-            // Create error message
-            const errorMessage: ChatMessageType = {
-              id: executionId,
-              isUser: false,
-              executingTool: toolName,
-              timestamp: new Date(),
-              toolExecution: {
-                toolName,
-                status: "error",
-                error: error instanceof Error ? error.message : String(error),
-              },
-              isExecuting: false,
-            };
-
-            // Replace in executions array
-            const execIndex = toolExecutionMessages.findIndex(
-              msg => msg.id === executionId
-            );
-            if (execIndex !== -1) {
-              toolExecutionMessages[execIndex] = errorMessage;
-            } else {
-              toolExecutionMessages.push(errorMessage);
-            }
-
-            toolResults.push({
-              tool_use_id: toolCallId,
-              type: "tool_result",
-              content: `Error: ${error instanceof Error ? error.message : String(error)}`,
-            });
-          }
-        }
-      }
-
-      // If tools were used, send results back to Claude
-      if (toolResults.length > 0) {
-        console.log("Sending tool results back to Claude:", toolResults);
-
-        const followUpMessages = [
-          ...claudeMessages,
-          {
-            role: "assistant" as const,
-            content: data.content,
-          },
-          {
-            role: "user" as const,
-            content: toolResults,
-          },
-        ];
-
-        try {
-          const followUpResponse = await fetch(
-            "https://api.anthropic.com/v1/messages",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01",
-                "anthropic-dangerous-direct-browser-access": "true",
-                "x-api-key": llmSettings.apiKey,
-              },
-              body: JSON.stringify({
-                model: llmSettings.model,
-                max_tokens: llmSettings.maxTokens,
-                temperature: llmSettings.temperature,
-                messages: followUpMessages,
-                tools: claudeTools,
-              }),
-            }
-          );
-
-          if (followUpResponse.ok) {
-            const followUpData = await followUpResponse.json();
-            responseText =
-              followUpData.content?.[0]?.text ||
-              responseText ||
-              "Tool executed successfully.";
-          } else {
-            const errorText = await followUpResponse.text();
-            console.error("Follow-up request failed:", errorText);
-            responseText =
-              responseText ||
-              "Tool executed, but failed to get follow-up response.";
-          }
-        } catch (followUpError) {
-          console.error("Follow-up request error:", followUpError);
-          responseText = responseText || "Tool executed successfully.";
-        }
-      }
-
-      return {
-        response: responseText || "Tool executed successfully.",
-        toolExecutions: toolExecutionMessages,
-      };
-    }
-
-    return {
-      response: "No response received",
-      toolExecutions: [],
-    };
-  };
-
-  // FIXED: Enhanced message sending with proper state management
+  // Send message using ChatService
   const handleSendMessage = async () => {
     if (
       !messageInput.trim() ||
       !llmSettings?.apiKey ||
       !connectionId ||
-      !currentConversation
+      !currentConversation ||
+      !currentConnection
     ) {
       if (!llmSettings?.apiKey) {
         console.warn(
@@ -594,65 +226,95 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const updatedMessages = [...currentMessages, userMessage];
       await updateConversationMessages(updatedMessages);
 
-      // Create assistant thinking message with unique ID
-      const thinkingMessageId = nanoid();
-      const thinkingMessage: ChatMessageType = {
-        id: thinkingMessageId,
-        message: "",
-        isUser: false,
-        timestamp: new Date(),
-        isExecuting: true,
-      };
-
+      // Create thinking message
+      const thinkingMessage = ChatService.createThinkingMessage();
       const messagesWithThinking = [...updatedMessages, thinkingMessage];
       await updateConversationMessages(messagesWithThinking);
 
-      // Call Claude with tool support - pass only the actual conversation messages
+      // Create chat context
+      const chatContext = {
+        connection: currentConnection,
+        tools: connectionTools,
+        llmSettings,
+      };
+
+      // Validate context
+      if (!ChatService.validateChatContext(chatContext)) {
+        throw new Error("Invalid chat context");
+      }
+
+      // Send message via ChatService
       const conversationMessages = updatedMessages.filter(
         m => m.message && !m.isExecuting
       );
-      const { response, toolExecutions } =
-        await callClaudeWithTools(conversationMessages);
 
-      // FIXED: Remove thinking message and build final message array
-      let finalMessages = [...updatedMessages]; // Start with user message only
+      const response = await ChatService.sendMessage(
+        userMessage.message!,
+        chatContext,
+        conversationMessages
+      );
 
-      // Add all tool execution messages (safely check if array exists)
-      if (
-        toolExecutions &&
-        Array.isArray(toolExecutions) &&
-        toolExecutions.length > 0
-      ) {
-        finalMessages = [...finalMessages, ...toolExecutions];
+      // Build final message array
+      let finalMessages = [...updatedMessages]; // Start with user message
+
+      // Add all tool execution messages
+      if (response.toolExecutionMessages.length > 0) {
+        finalMessages = [...finalMessages, ...response.toolExecutionMessages];
+
+        // Store tool executions for each tool execution message
+        for (const toolMsg of response.toolExecutionMessages) {
+          if (toolMsg.toolExecution) {
+            const execution = {
+              id: toolMsg.id || nanoid(),
+              tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
+              status: toolMsg.toolExecution.status,
+              duration: 0,
+              timestamp: new Date().toLocaleTimeString(),
+              request: {
+                tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
+                arguments: {},
+                timestamp: new Date().toISOString(),
+              },
+              ...(toolMsg.toolExecution.result
+                ? {
+                    response: {
+                      success: true,
+                      result: toolMsg.toolExecution.result,
+                      timestamp: new Date().toISOString(),
+                    },
+                  }
+                : {}),
+              ...(toolMsg.toolExecution.error && {
+                error: toolMsg.toolExecution.error,
+              }),
+            };
+
+            await ChatService.storeToolExecution(connectionId, execution);
+          }
+        }
       }
 
-      // Add final assistant response (not the thinking message)
-      const assistantMessage: ChatMessageType = {
-        id: nanoid(), // New ID for the actual response
-        message: response,
-        isUser: false,
-        timestamp: new Date(),
-        isExecuting: false,
-      };
+      // Add final assistant response
+      finalMessages.push(response.assistantMessage);
 
-      finalMessages.push(assistantMessage);
-
-      // Save all messages at once - this removes the thinking message
+      // Save all messages at once (removes thinking message)
       await updateConversationMessages(finalMessages);
+
+      // Refresh data to sync with inspector
+      await refreshAll();
     } catch (error) {
       console.error("Failed to send message:", error);
 
-      // FIXED: Replace thinking message with error, don't add to existing messages
+      // Create error message
       const errorMessage: ChatMessageType = {
         id: nanoid(),
-        message:
-          "Sorry, I encountered an error. Please check your API settings and try again.",
+        message: ChatService.getErrorMessage(error),
         isUser: false,
         timestamp: new Date(),
         isExecuting: false,
       };
 
-      // Remove any thinking messages and add error
+      // Remove thinking message and add error
       const cleanMessages = [...currentMessages, userMessage];
       const errorMessages = [...cleanMessages, errorMessage];
       await updateConversationMessages(errorMessages);
@@ -700,9 +362,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       message.toolExecution || message.isExecuting || message.executingTool;
     const toolName = message.executingTool || message.toolExecution?.toolName;
 
-    // FIXED: Don't render messages that are just thinking without content
+    // Don't render empty thinking messages
     if (message.isExecuting && !message.message && !hasToolExecution) {
-      return null; // Skip empty thinking messages
+      return null;
     }
 
     return (
@@ -1035,7 +697,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           </div>
         )}
 
-        {/* Scrollable Messages Container - This is the key fix */}
+        {/* Scrollable Messages Container */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="h-full">
             <div className="max-w-4xl mx-auto px-6 py-8 min-h-full">
@@ -1077,7 +739,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                             !msg.executingTool &&
                             !msg.toolExecution
                           )
-                      ) // Filter out empty thinking messages
+                      )
                       .map((msg, index) => (
                         <CleanChatMessage
                           key={msg.id || `msg-${index}`}
