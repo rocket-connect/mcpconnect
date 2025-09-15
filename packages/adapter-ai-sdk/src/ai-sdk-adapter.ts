@@ -474,21 +474,71 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   /**
-   * Convert LLM messages to AI SDK format
+   * Convert LLM messages to AI SDK format - Fixed for v5 compatibility
    */
   private convertToAIMessages(messages: LLMMessage[]) {
-    return messages.map(msg => ({
-      role: msg.role as any,
-      content: msg.content,
-      ...(msg.toolCallId && { toolInvocationId: msg.toolCallId }),
-      ...(msg.toolCalls && {
-        toolInvocations: msg.toolCalls.map(tc => ({
-          toolCallId: tc.id,
-          toolName: tc.function.name,
-          args: JSON.parse(tc.function.arguments),
-        })),
-      }),
-    }));
+    console.log("Converting messages to AI SDK format:", messages.length);
+
+    return messages.map((msg, index) => {
+      console.log(`Converting message ${index}:`, {
+        role: msg.role,
+        hasContent: !!msg.content,
+      });
+
+      // Ensure content is always a string, never undefined
+      const content = String(msg.content || "");
+
+      // Handle different message types
+      switch (msg.role) {
+        case "tool":
+          // AI SDK v5 expects ToolContent format with toolName and output
+          return {
+            role: "tool" as const,
+            content: [
+              {
+                type: "tool-result" as const,
+                toolCallId: msg.toolCallId || "",
+                toolName: msg.name || "unknown-tool", // Use the name field for tool name
+                output: {
+                  type: "text" as const,
+                  value: content,
+                },
+              },
+            ],
+          };
+
+        case "assistant":
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            return {
+              role: "assistant" as const,
+              content: content,
+              toolInvocations: msg.toolCalls.map(tc => ({
+                toolCallId: tc.id,
+                toolName: tc.function.name,
+                args: JSON.parse(tc.function.arguments),
+              })),
+            };
+          }
+          return {
+            role: "assistant" as const,
+            content: content,
+          };
+
+        case "user":
+        case "system":
+          return {
+            role: msg.role,
+            content: content,
+          };
+
+        default:
+          // Fallback for any unexpected roles
+          return {
+            role: "user" as const,
+            content: content,
+          };
+      }
+    });
   }
 
   /**
@@ -737,7 +787,7 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   /**
-   * Send a message with streaming support
+   * Send a message with streaming support - Fixed version
    */
   async *sendMessageStream(
     userMessage: string,
@@ -762,18 +812,22 @@ export class AISDKAdapter extends LLMAdapter {
       this.initializeAIModel();
     }
 
-    // Convert conversation history to LLM format
+    // Convert conversation history to LLM format - improved filtering
     const llmMessages: LLMMessage[] = conversationHistory
-      .filter(
-        msg =>
+      .filter(msg => {
+        // More strict filtering to avoid problematic messages
+        return (
           msg.message &&
           msg.message.trim() &&
+          typeof msg.message === "string" &&
+          !msg.isExecuting &&
           !msg.executingTool &&
           !msg.toolExecution
-      )
+        );
+      })
       .map(msg => ({
         role: msg.isUser ? "user" : "assistant",
-        content: msg.message || "",
+        content: String(msg.message || ""), // Ensure string type
       }));
 
     // Add the new user message
@@ -782,13 +836,14 @@ export class AISDKAdapter extends LLMAdapter {
       content: userMessage,
     });
 
+    console.log("Final LLM messages for streaming:", llmMessages);
+
     // Convert tools to LLM format with proper schema handling
     const llmTools: LLMTool[] = tools.map(tool => {
-      console.log("Converting tool for LLM:", tool.name, tool.inputSchema);
+      console.log("Converting tool for streaming:", tool.name);
 
       // Ensure the input schema is properly structured
       let inputSchema = tool.inputSchema;
-
       if (!inputSchema) {
         inputSchema = {
           type: "object",
@@ -797,35 +852,22 @@ export class AISDKAdapter extends LLMAdapter {
         };
       }
 
-      // Create a new normalized schema object to avoid mutation
       const normalizedSchema = {
-        type: "object" as const, // Ensure type is always "object"
+        type: "object" as const,
         properties: inputSchema.properties || {},
         required: Array.isArray(inputSchema.required)
           ? inputSchema.required
           : [],
-        // Preserve other properties that might be present
-        ...(inputSchema.additionalProperties !== undefined && {
-          additionalProperties: inputSchema.additionalProperties,
-        }),
-        ...(inputSchema.description
-          ? {
-              description: inputSchema.description,
-            }
-          : {}),
       };
 
-      const llmTool: LLMTool = {
-        type: "function",
+      return {
+        type: "function" as const,
         function: {
           name: tool.name,
           description: tool.description,
           parameters: normalizedSchema,
         },
       };
-
-      console.log("Created LLM tool:", llmTool);
-      return llmTool;
     });
 
     console.log("Setting tools for streaming:", llmTools.length);
@@ -865,7 +907,7 @@ export class AISDKAdapter extends LLMAdapter {
 
       // Handle tool execution if any
       if (toolCalls.length > 0) {
-        console.log(`[AISDKAdapter] Processing ${toolCalls.length} tool calls`);
+        console.log(`Processing ${toolCalls.length} tool calls`);
 
         for (const toolCall of toolCalls) {
           yield {
@@ -889,7 +931,7 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // Get final response with tool results
+        // Get final response with tool results - Fixed message construction
         const toolResultMessages: LLMMessage[] = [
           ...llmMessages,
           {
@@ -900,9 +942,15 @@ export class AISDKAdapter extends LLMAdapter {
           ...toolCalls.map(tc => ({
             role: "tool" as const,
             content: "Tool executed successfully",
+            name: tc.function.name, // Add tool name for AI SDK v5
             toolCallId: tc.id,
           })),
         ];
+
+        console.log(
+          "Prepared tool result messages:",
+          toolResultMessages.length
+        );
 
         let finalContent = "";
         for await (const chunk of this.stream(toolResultMessages)) {
@@ -965,18 +1013,22 @@ export class AISDKAdapter extends LLMAdapter {
       this.initializeAIModel();
     }
 
-    // Convert conversation history to LLM format
+    // Convert conversation history to LLM format - improved filtering
     const llmMessages: LLMMessage[] = conversationHistory
-      .filter(
-        msg =>
+      .filter(msg => {
+        // More strict filtering to avoid problematic messages
+        return (
           msg.message &&
           msg.message.trim() &&
+          typeof msg.message === "string" &&
+          !msg.isExecuting &&
           !msg.executingTool &&
           !msg.toolExecution
-      )
+        );
+      })
       .map(msg => ({
         role: msg.isUser ? "user" : "assistant",
-        content: msg.message || "",
+        content: String(msg.message || ""), // Ensure string type
       }));
 
     // Add the new user message
@@ -1058,7 +1110,7 @@ export class AISDKAdapter extends LLMAdapter {
         toolExecutionMessages.push(toolResult.chatMessage);
       }
 
-      // Get final response with tool results
+      // Get final response with tool results - Fixed message construction
       const toolResultMessages: LLMMessage[] = [
         ...llmMessages,
         {
@@ -1069,6 +1121,7 @@ export class AISDKAdapter extends LLMAdapter {
         ...response.toolCalls.map(tc => ({
           role: "tool" as const,
           content: "Tool executed successfully",
+          name: tc.function.name, // Add tool name for AI SDK v5
           toolCallId: tc.id,
         })),
       ];
