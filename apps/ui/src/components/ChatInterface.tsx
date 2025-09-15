@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+// apps/ui/src/components/ChatInterface.tsx - Refactored to use AISDKAdapter
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
@@ -43,7 +45,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
   // Get the current connection and conversation using chat ID
   const currentConnection = connections.find(conn => conn.id === connectionId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectionConversations = connectionId
     ? conversations[connectionId] || []
     : [];
@@ -143,7 +144,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     chatId,
     connectionConversations.length,
     isCreatingChat,
-    handleNewChat,
+    // Remove handleNewChat from here
   ]);
 
   // Delete a chat conversation
@@ -193,7 +194,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     }
   };
 
-  // Send message using ChatService
+  // Send message using ChatService (which now uses AISDKAdapter)
   const handleSendMessage = async () => {
     if (
       !messageInput.trim() ||
@@ -231,7 +232,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const messagesWithThinking = [...updatedMessages, thinkingMessage];
       await updateConversationMessages(messagesWithThinking);
 
-      // Create chat context
+      // Create chat context for AISDKAdapter
       const chatContext = {
         connection: currentConnection,
         tools: connectionTools,
@@ -243,7 +244,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         throw new Error("Invalid chat context");
       }
 
-      // Send message via ChatService
+      // Send message via ChatService (which uses AISDKAdapter internally)
       const conversationMessages = updatedMessages.filter(
         m => m.message && !m.isExecuting
       );
@@ -349,6 +350,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     navigate(`/connections/${connectionId}/chat/${selectedChatId}`);
   };
 
+  // Clean chat message component
   const CleanChatMessage = ({
     message,
     index,

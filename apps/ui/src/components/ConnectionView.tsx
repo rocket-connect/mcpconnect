@@ -1,4 +1,4 @@
-// apps/ui/src/components/ConnectionView.tsx - Refactored to use MCPService
+// apps/ui/src/components/ConnectionView.tsx - Refactored to use adapter pattern
 import { ConnectionItem } from "@mcpconnect/components";
 import { Connection } from "@mcpconnect/schemas";
 import { useNavigate } from "react-router-dom";

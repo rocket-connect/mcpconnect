@@ -14,15 +14,21 @@ import {
   AdapterError,
   AdapterStatus,
 } from "@mcpconnect/base-adapters";
+import {
+  Connection,
+  Tool,
+  ChatMessage,
+  ToolExecution,
+} from "@mcpconnect/schemas";
 import { z } from "zod";
-import { CoreMessage, CoreTool } from "ai";
+import { MCPService } from "./mcp-service";
 
 /**
  * AI SDK-specific configuration schema
  */
 export const AISDKConfigSchema = LLMConfigSchema.extend({
   provider: z.enum(["anthropic"]),
-  modelProvider: z.unknown().optional(), // The actual AI SDK provider instance
+  modelProvider: z.unknown().optional(),
   customProvider: z
     .object({
       generateText: z.function().optional(),
@@ -30,31 +36,76 @@ export const AISDKConfigSchema = LLMConfigSchema.extend({
       generateObject: z.function().optional(),
     })
     .optional(),
-});
+}).transform(data => ({
+  ...data,
+  baseUrl: data.baseUrl === "" ? undefined : data.baseUrl,
+}));
 
 export type AISDKConfig = z.infer<typeof AISDKConfigSchema>;
 
 /**
- * AI SDK implementation of LLMAdapter
+ * Chat context for tool-enabled conversations
+ */
+export interface ChatContext {
+  connection: Connection;
+  tools: Tool[];
+  llmSettings: LLMSettings;
+}
+
+/**
+ * Chat response with tool executions
+ */
+export interface ChatResponse {
+  assistantMessage: ChatMessage;
+  toolExecutionMessages: ChatMessage[];
+}
+
+/**
+ * Tool execution result
+ */
+export interface ToolExecutionResult {
+  success: boolean;
+  result?: any;
+  error?: string;
+  toolExecution: ToolExecution;
+  chatMessage: ChatMessage;
+}
+
+/**
+ * LLM Settings for model configuration
+ */
+export interface LLMSettings {
+  provider: "anthropic";
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+  temperature: number;
+  maxTokens: number;
+}
+
+/**
+ * Model options for UI
+ */
+export interface ModelOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+/**
+ * AI SDK implementation of LLMAdapter with integrated chat and model services
  */
 export class AISDKAdapter extends LLMAdapter {
   protected config: AISDKConfig;
-  private modelProvider: any; // AI SDK provider
+  private static readonly STORAGE_KEY = "mcpconnect-llm-settings";
 
   constructor(config: AISDKConfig) {
     const parsedConfig = AISDKConfigSchema.parse(config);
     super(parsedConfig);
     this.config = parsedConfig;
-    this.modelProvider = config.modelProvider;
   }
 
   async getCapabilities(): Promise<LLMCapabilities> {
-    console.log(
-      "AISDKAdapter.getCapabilities stub for provider:",
-      this.config.provider
-    );
-
-    // Default capabilities - would be provider-specific in real implementation
     const baseCapabilities: LLMCapabilities = {
       streaming: true,
       tools: true,
@@ -64,12 +115,11 @@ export class AISDKAdapter extends LLMAdapter {
       supportedModalities: ["text"],
     };
 
-    // Provider-specific capabilities
     switch (this.config.provider) {
       case "anthropic":
         return {
           ...baseCapabilities,
-          maxContextLength: 200000, // Claude context
+          maxContextLength: 200000,
           multiModal: true,
           supportedModalities: ["text", "image"],
           costPerToken: {
@@ -77,26 +127,12 @@ export class AISDKAdapter extends LLMAdapter {
             output: 0.000024,
           },
         };
-
       default:
         return baseCapabilities;
     }
   }
 
   async initialize(): Promise<void> {
-    console.log(
-      "AISDKAdapter.initialize stub for provider:",
-      this.config.provider
-    );
-
-    if (!this.modelProvider) {
-      throw new AdapterError(
-        "Model provider not configured. Please provide a valid AI SDK provider instance.",
-        "PROVIDER_NOT_CONFIGURED"
-      );
-    }
-
-    // Test connection
     const isConnected = await this.testConnection();
     if (!isConnected) {
       throw new AdapterError(
@@ -104,26 +140,13 @@ export class AISDKAdapter extends LLMAdapter {
         "CONNECTION_FAILED"
       );
     }
-
     this.status = AdapterStatus.CONNECTED;
   }
 
   async testConnection(): Promise<boolean> {
-    console.log(
-      "AISDKAdapter.testConnection stub for provider:",
-      this.config.provider
-    );
-
     try {
-      // Attempt a simple generation to test the connection
-      const testMessages: CoreMessage[] = [{ role: "user", content: "Hello" }];
-
-      // This would use the actual AI SDK in real implementation
-      console.log("Testing connection with messages:", testMessages);
-
-      // Simulate successful connection test
-      await new Promise(resolve => setTimeout(resolve, 100));
-
+      const testMessages: LLMMessage[] = [{ role: "user", content: "Hello" }];
+      await this.complete(testMessages);
       return true;
     } catch (error) {
       console.error("Connection test failed:", error);
@@ -135,49 +158,12 @@ export class AISDKAdapter extends LLMAdapter {
     messages: LLMMessage[],
     options?: Partial<LLMConfig>
   ): Promise<LLMResponse> {
-    console.log("AISDKAdapter.complete stub:", {
-      messageCount: messages.length,
-      provider: this.config.provider,
-      options,
-    });
-
     this.status = AdapterStatus.PROCESSING;
 
     try {
-      // Convert our LLMMessage format to AI SDK CoreMessage format
-      const coreMessages = this.convertToAISDKMessages(messages);
-
-      // Convert our tools to AI SDK format
-      const tools = this.config.tools
-        ? this.convertToAISDKTools(this.config.tools)
-        : undefined;
-
-      // This would use the actual AI SDK generateText function
-      console.log("Generating with AI SDK:", {
-        model: this.modelProvider,
-        messages: coreMessages,
-        temperature: options?.temperature || this.config.temperature,
-        maxTokens: options?.maxTokens || this.config.maxTokens,
-        tools,
-      });
-
-      // Simulate AI SDK response
-      const mockResponse: LLMResponse = {
-        id: `ai-sdk-${Date.now()}`,
-        content:
-          "This is a mock response from the AI SDK adapter. In a real implementation, this would come from the actual AI provider.",
-        finishReason: "stop",
-        model: this.config.model,
-        timestamp: new Date(),
-        usage: {
-          promptTokens: 50,
-          completionTokens: 25,
-          totalTokens: 75,
-        },
-      };
-
+      const response = await this.callAnthropicAPI(messages, options);
       this.status = AdapterStatus.CONNECTED;
-      return mockResponse;
+      return response;
     } catch (error) {
       this.status = AdapterStatus.ERROR;
       this.handleError(error, "complete");
@@ -188,57 +174,22 @@ export class AISDKAdapter extends LLMAdapter {
     messages: LLMMessage[],
     options?: Partial<LLMConfig>
   ): AsyncIterable<LLMStreamResponse> {
-    console.log("AISDKAdapter.stream stub:", {
-      messageCount: messages.length,
-      provider: this.config.provider,
-      options,
-    });
-
     this.status = AdapterStatus.PROCESSING;
 
     try {
-      const coreMessages = this.convertToAISDKMessages(messages);
-      const tools = this.config.tools
-        ? this.convertToAISDKTools(this.config.tools)
-        : undefined;
+      // This would implement streaming for Anthropic API
+      const response = await this.callAnthropicAPI(messages, options);
 
-      console.log("Streaming with AI SDK:", {
-        model: this.modelProvider,
-        messages: coreMessages,
-        tools,
-      });
-
-      // Simulate streaming response
-      const streamId = `ai-sdk-stream-${Date.now()}`;
-      const chunks = [
-        "This is a mock ",
-        "streaming response ",
-        "from the AI SDK adapter. ",
-        "In a real implementation, ",
-        "this would stream from ",
-        "the actual AI provider.",
-      ];
-
-      for (let i = 0; i < chunks.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        yield {
-          id: streamId,
-          delta: {
-            content: chunks[i],
-          },
-          finishReason: i === chunks.length - 1 ? "stop" : undefined,
-          model: this.config.model,
-          usage:
-            i === chunks.length - 1
-              ? {
-                  promptTokens: 50,
-                  completionTokens: 25,
-                  totalTokens: 75,
-                }
-              : undefined,
-        };
-      }
+      // Simulate streaming by yielding the complete response
+      yield {
+        id: response.id,
+        delta: {
+          content: response.content,
+        },
+        finishReason: response.finishReason,
+        model: response.model,
+        usage: response.usage,
+      };
 
       this.status = AdapterStatus.CONNECTED;
     } catch (error) {
@@ -248,26 +199,15 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   async executeToolCalls(toolCalls: LLMToolCall[]): Promise<LLMToolResult[]> {
-    console.log(
-      "AISDKAdapter.executeToolCalls stub:",
-      toolCalls.length,
-      "tool calls"
-    );
-
     const results: LLMToolResult[] = [];
 
     for (const toolCall of toolCalls) {
       try {
-        console.log("Executing tool call:", toolCall.function.name);
-
-        // Parse arguments
         const args = JSON.parse(toolCall.function.arguments);
-
-        // This would actually execute the tool in real implementation
         const mockResult = {
           toolName: toolCall.function.name,
           arguments: args,
-          result: `Mock result for ${toolCall.function.name} with args: ${JSON.stringify(args)}`,
+          result: `Mock result for ${toolCall.function.name}`,
           executedAt: new Date().toISOString(),
         };
 
@@ -288,90 +228,657 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   async estimateTokens(messages: LLMMessage[]): Promise<number> {
-    console.log(
-      "AISDKAdapter.estimateTokens stub:",
-      messages.length,
-      "messages"
-    );
-
-    // Simple character-based estimation (very rough)
     const totalChars = messages.reduce(
       (total, msg) => total + msg.content.length,
       0
     );
-
-    // Rough estimation: ~4 characters per token for English text
     return Math.ceil(totalChars / 4);
   }
 
   async calculateCost(usage: LLMUsage): Promise<number> {
-    console.log("AISDKAdapter.calculateCost stub:", usage);
-
     const capabilities = await this.getCapabilities();
-
-    if (!capabilities.costPerToken) {
-      return 0;
-    }
+    if (!capabilities.costPerToken) return 0;
 
     const inputCost = usage.promptTokens * capabilities.costPerToken.input;
     const outputCost =
       usage.completionTokens * capabilities.costPerToken.output;
-
     return inputCost + outputCost;
   }
 
   async cleanup(): Promise<void> {
-    console.log("AISDKAdapter.cleanup stub");
-
     this.status = AdapterStatus.DISCONNECTED;
-
-    // Clean up any resources, cancel ongoing requests, etc.
-    // In a real implementation, this might close connections or cancel streams
   }
 
   /**
-   * Convert LLMMessage to AI SDK CoreMessage format
+   * Call Anthropic API directly - FIXED to properly handle tool messages and generate IDs
    */
-  private convertToAISDKMessages(messages: LLMMessage[]): CoreMessage[] {
-    console.log("Converting", messages.length, "messages to AI SDK format");
-
-    return messages.map(msg => {
-      const coreMessage: CoreMessage = {
-        role: msg.role as any,
-        content: msg.content,
-      };
-
-      if (msg.name) {
-        (coreMessage as any).name = msg.name;
-      }
-
-      if (msg.toolCalls) {
-        (coreMessage as any).toolInvocations = msg.toolCalls.map(tc => ({
-          toolCallId: tc.id,
-          toolName: tc.function.name,
-          args: JSON.parse(tc.function.arguments),
-        }));
-      }
-
-      return coreMessage;
-    });
-  }
-
-  /**
-   * Convert LLMTool to AI SDK CoreTool format
-   */
-  private convertToAISDKTools(tools: LLMTool[]): Record<string, CoreTool> {
-    console.log("Converting", tools.length, "tools to AI SDK format");
-
-    const coreTools: Record<string, CoreTool> = {};
-
-    for (const tool of tools) {
-      coreTools[tool.function.name] = {
-        description: tool.function.description,
-        parameters: tool.function.parameters || {},
-      };
+  private async callAnthropicAPI(
+    messages: LLMMessage[],
+    options?: Partial<LLMConfig>
+  ): Promise<LLMResponse> {
+    if (!this.config.apiKey) {
+      throw new AdapterError("No API key configured", "MISSING_API_KEY");
     }
 
-    return coreTools;
+    // Convert messages to Claude format, handling tool messages properly
+    const claudeMessages: Array<{
+      role: "user" | "assistant";
+      content:
+        | string
+        | Array<{
+            type: string;
+            text?: string;
+            tool_call_id?: string;
+            tool_use_id?: string;
+            content?: string;
+            name?: string;
+            input?: any;
+            id?: string; // FIXED: Added id field for tool_use
+          }>;
+    }> = [];
+
+    let currentMessage: { role: "user" | "assistant"; content: any[] } | null =
+      null;
+
+    for (const msg of messages) {
+      if (msg.role === "tool") {
+        // FIXED: Tool result messages MUST always be in user messages
+        // Finish current message first if it exists
+        if (currentMessage) {
+          if (
+            currentMessage.content.length === 1 &&
+            currentMessage.content[0].type === "text"
+          ) {
+            claudeMessages.push({
+              role: currentMessage.role,
+              content: currentMessage.content[0].text || "",
+            });
+          } else {
+            claudeMessages.push({
+              role: currentMessage.role,
+              content: currentMessage.content,
+            });
+          }
+          currentMessage = null;
+        }
+
+        // Always create a new user message for tool results
+        claudeMessages.push({
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: msg.toolCallId,
+              content: msg.content,
+            },
+          ],
+        });
+      } else {
+        // Finish current message if exists
+        if (currentMessage) {
+          if (
+            currentMessage.content.length === 1 &&
+            currentMessage.content[0].type === "text"
+          ) {
+            claudeMessages.push({
+              role: currentMessage.role,
+              content: currentMessage.content[0].text || "",
+            });
+          } else {
+            claudeMessages.push({
+              role: currentMessage.role,
+              content: currentMessage.content,
+            });
+          }
+        }
+
+        // Start new message
+        const role = msg.role as "user" | "assistant";
+        currentMessage = {
+          role,
+          content: [{ type: "text", text: msg.content }],
+        };
+
+        // Add tool calls if this is an assistant message with tool calls
+        if (msg.role === "assistant" && msg.toolCalls) {
+          for (const toolCall of msg.toolCalls) {
+            currentMessage.content.push({
+              type: "tool_use",
+              id: toolCall.id, // FIXED: Use the existing tool call ID
+              name: toolCall.function.name,
+              input: JSON.parse(toolCall.function.arguments),
+            });
+          }
+        }
+      }
+    }
+
+    // Finish last message
+    if (currentMessage) {
+      if (
+        currentMessage.content.length === 1 &&
+        currentMessage.content[0].type === "text"
+      ) {
+        claudeMessages.push({
+          role: currentMessage.role,
+          content: currentMessage.content[0].text || "",
+        });
+      } else {
+        claudeMessages.push({
+          role: currentMessage.role,
+          content: currentMessage.content,
+        });
+      }
+    }
+
+    const claudeTools = this.config.tools?.map(tool => ({
+      name: tool.function.name,
+      description: tool.function.description,
+      input_schema: tool.function.parameters || {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    }));
+
+    const requestBody = {
+      model: options?.model || this.config.model,
+      max_tokens: options?.maxTokens || this.config.maxTokens,
+      temperature: options?.temperature || this.config.temperature,
+      messages: claudeMessages,
+      ...(claudeTools && claudeTools.length > 0 && { tools: claudeTools }),
+    };
+
+    console.log(
+      "[AISDKAdapter] Sending request to Anthropic:",
+      JSON.stringify(requestBody, null, 2)
+    );
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+        "x-api-key": this.config.apiKey,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new AdapterError(
+        `Anthropic API request failed: ${response.status} ${response.statusText}: ${errorText}`,
+        "API_REQUEST_FAILED"
+      );
+    }
+
+    const data = await response.json();
+    console.log("[AISDKAdapter] Received response from Anthropic:", data);
+
+    const responseText =
+      data.content?.find((c: any) => c.type === "text")?.text || "";
+    const toolCalls: LLMToolCall[] = [];
+
+    // Process tool calls if any - FIXED: Ensure proper ID handling
+    for (const content of data.content || []) {
+      if (content.type === "tool_use") {
+        toolCalls.push({
+          id: content.id || this.generateId(), // FIXED: Ensure ID is always present
+          type: "function",
+          function: {
+            name: content.name,
+            arguments: JSON.stringify(content.input),
+          },
+        });
+      }
+    }
+
+    return {
+      id: `anthropic-${Date.now()}`,
+      content: responseText,
+      finishReason:
+        data.stop_reason === "end_turn"
+          ? "stop"
+          : data.stop_reason === "tool_use"
+            ? "tool_calls"
+            : "stop",
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      model: this.config.model,
+      timestamp: new Date(),
+      usage: {
+        promptTokens: data.usage?.input_tokens || 0,
+        completionTokens: data.usage?.output_tokens || 0,
+        totalTokens:
+          (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+      },
+    };
+  }
+
+  /**
+   * Send a message with chat context and tool execution - FIXED VERSION
+   */
+  async sendMessage(
+    userMessage: string,
+    context: ChatContext,
+    conversationHistory: ChatMessage[] = []
+  ): Promise<ChatResponse> {
+    const { tools, llmSettings } = context;
+
+    // Convert conversation history to LLM format
+    const llmMessages: LLMMessage[] = conversationHistory
+      .filter(
+        msg =>
+          msg.message &&
+          msg.message.trim() &&
+          !msg.executingTool &&
+          !msg.toolExecution
+      )
+      .map(msg => ({
+        role: msg.isUser ? "user" : "assistant",
+        content: msg.message || "",
+      }));
+
+    // Add the new user message
+    llmMessages.push({
+      role: "user",
+      content: userMessage,
+    });
+
+    // Convert tools to LLM format
+    const llmTools: LLMTool[] = tools.map(tool => ({
+      type: "function",
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema || {
+          type: "object",
+          properties: {},
+          required: [],
+        },
+      },
+    }));
+
+    // Configure adapter for this request
+    this.config.apiKey = llmSettings.apiKey;
+    this.config.model = llmSettings.model;
+    this.config.temperature = llmSettings.temperature;
+    this.config.maxTokens = llmSettings.maxTokens;
+    this.config.tools = llmTools;
+
+    // Get initial response from Claude
+    const response = await this.complete(llmMessages);
+    const toolExecutionMessages: ChatMessage[] = [];
+
+    // Handle tool calls if any
+    if (response.toolCalls && response.toolCalls.length > 0) {
+      console.log(
+        `[AISDKAdapter] Processing ${response.toolCalls.length} tool calls`
+      );
+
+      // Execute each tool and collect results
+      const toolResults: Array<{
+        toolCallId: string;
+        result: any;
+        error?: string;
+      }> = [];
+
+      for (const toolCall of response.toolCalls) {
+        const toolResult = await this.executeToolWithTracking(
+          context.connection,
+          toolCall.function.name,
+          JSON.parse(toolCall.function.arguments)
+        );
+
+        toolExecutionMessages.push(toolResult.chatMessage);
+
+        // Collect result for feeding back to Claude
+        toolResults.push({
+          toolCallId: toolCall.id,
+          result: toolResult.success ? toolResult.result : null,
+          error: toolResult.error,
+        });
+      }
+
+      // Create tool result messages for Claude
+      const toolResultMessages: LLMMessage[] = [
+        ...llmMessages,
+        {
+          role: "assistant",
+          content: response.content || "",
+          toolCalls: response.toolCalls,
+        },
+        // Add tool results back to Claude
+        ...toolResults.map(result => ({
+          role: "tool" as const,
+          content: result.error
+            ? `Error: ${result.error}`
+            : typeof result.result === "string"
+              ? result.result
+              : JSON.stringify(result.result),
+          toolCallId: result.toolCallId,
+        })),
+      ];
+
+      // Get final response from Claude with tool results
+      console.log(
+        "[AISDKAdapter] Getting final response from Claude with tool results"
+      );
+      const finalResponse = await this.complete(toolResultMessages);
+      response.content = finalResponse.content;
+    }
+
+    const assistantMessage: ChatMessage = {
+      id: this.generateId(),
+      message: response.content || "I executed the requested tools.",
+      isUser: false,
+      timestamp: new Date(),
+      isExecuting: false,
+    };
+
+    return {
+      assistantMessage,
+      toolExecutionMessages,
+    };
+  }
+
+  /**
+   * Execute a tool with tracking - FIXED VERSION
+   */
+  private async executeToolWithTracking(
+    connection: Connection,
+    toolName: string,
+    toolArgs: Record<string, any>
+  ): Promise<ToolExecutionResult> {
+    const executionId = this.generateId();
+    const startTime = Date.now();
+
+    try {
+      // Execute the tool via MCP protocol
+      console.log(
+        `[AISDKAdapter] Executing tool ${toolName} via MCP:`,
+        toolArgs
+      );
+      const mcpResult = await MCPService.executeTool(
+        connection,
+        toolName,
+        toolArgs
+      );
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
+      // Use the actual MCP result instead of mock
+      const chatMessage: ChatMessage = {
+        id: executionId,
+        isUser: false,
+        executingTool: toolName,
+        timestamp: new Date(),
+        toolExecution: {
+          toolName,
+          status: mcpResult.success ? "success" : "error",
+          result: mcpResult.result,
+          error: mcpResult.error,
+        },
+        isExecuting: false,
+      };
+
+      const toolExecution: ToolExecution = {
+        id: executionId,
+        tool: toolName,
+        status: mcpResult.success ? "success" : "error",
+        duration,
+        timestamp: new Date().toLocaleTimeString(),
+        request: {
+          tool: toolName,
+          arguments: toolArgs,
+          timestamp: new Date().toISOString(),
+        },
+        response: mcpResult.success
+          ? {
+              success: true,
+              result: mcpResult.result,
+              timestamp: new Date().toISOString(),
+            }
+          : undefined,
+        error: mcpResult.error,
+      };
+
+      return {
+        success: mcpResult.success,
+        result: mcpResult.result,
+        error: mcpResult.error,
+        toolExecution,
+        chatMessage,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
+      console.error(`[AISDKAdapter] Tool execution failed:`, error);
+
+      const chatMessage: ChatMessage = {
+        id: executionId,
+        isUser: false,
+        executingTool: toolName,
+        timestamp: new Date(),
+        toolExecution: {
+          toolName,
+          status: "error",
+          error: errorMessage,
+        },
+        isExecuting: false,
+      };
+
+      const errorExecution: ToolExecution = {
+        id: executionId,
+        tool: toolName,
+        status: "error",
+        duration,
+        timestamp: new Date().toLocaleTimeString(),
+        request: {
+          tool: toolName,
+          arguments: toolArgs,
+          timestamp: new Date().toISOString(),
+        },
+        error: errorMessage,
+      };
+
+      return {
+        success: false,
+        error: errorMessage,
+        toolExecution: errorExecution,
+        chatMessage,
+      };
+    }
+  }
+
+  /**
+   * Generate unique ID - FIXED to be more robust
+   */
+  private generateId(): string {
+    return `tool_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  }
+
+  /**
+   * Static methods for model management
+   */
+  static getDefaultSettings(): Partial<LLMSettings> {
+    return {
+      provider: "anthropic",
+      model: "claude-3-5-sonnet-20241022",
+      temperature: 0.7,
+      maxTokens: 4096,
+    };
+  }
+
+  static getAvailableModels(): ModelOption[] {
+    return [
+      {
+        value: "claude-3-5-sonnet-20241022",
+        label: "Claude 3.5 Sonnet",
+        description: "Most capable model for complex tasks",
+      },
+      {
+        value: "claude-3-5-haiku-20241022",
+        label: "Claude 3.5 Haiku",
+        description: "Fast and efficient for simple tasks",
+      },
+      {
+        value: "claude-3-opus-20240229",
+        label: "Claude 3 Opus",
+        description: "Powerful model for demanding tasks",
+      },
+      {
+        value: "claude-3-sonnet-20240229",
+        label: "Claude 3 Sonnet",
+        description: "Balanced performance and speed",
+      },
+      {
+        value: "claude-3-haiku-20240307",
+        label: "Claude 3 Haiku",
+        description: "Quick responses for simple tasks",
+      },
+    ];
+  }
+
+  static async testApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
+    try {
+      const url = baseUrl || "https://api.anthropic.com/v1/messages";
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          model: "claude-3-haiku-20240307",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "Hi" }],
+        }),
+      });
+
+      return response.status !== 401;
+    } catch (error) {
+      console.error("API key test failed:", error);
+      return false;
+    }
+  }
+
+  static validateApiKey(apiKey: string): boolean {
+    return apiKey.startsWith("sk-ant-") && apiKey.length > 20;
+  }
+
+  static getModelPricing(
+    model: string
+  ): { input: number; output: number } | null {
+    const pricing: Record<string, { input: number; output: number }> = {
+      "claude-3-5-sonnet-20241022": { input: 3, output: 15 },
+      "claude-3-5-haiku-20241022": { input: 0.25, output: 1.25 },
+      "claude-3-opus-20240229": { input: 15, output: 75 },
+      "claude-3-sonnet-20240229": { input: 3, output: 15 },
+      "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
+    };
+    return pricing[model] || null;
+  }
+
+  static getContextLimit(model: string): number {
+    const limits: Record<string, number> = {
+      "claude-3-5-sonnet-20241022": 200000,
+      "claude-3-5-haiku-20241022": 200000,
+      "claude-3-opus-20240229": 200000,
+      "claude-3-sonnet-20240229": 200000,
+      "claude-3-haiku-20240307": 200000,
+    };
+    return limits[model] || 200000;
+  }
+
+  static saveSettings(settings: LLMSettings): void {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
+    } catch (error) {
+      console.error("Failed to save LLM settings:", error);
+    }
+  }
+
+  static loadSettings(): LLMSettings | null {
+    try {
+      const saved = localStorage.getItem(this.STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved) as LLMSettings;
+      }
+    } catch (error) {
+      console.error("Failed to load LLM settings:", error);
+    }
+    return null;
+  }
+
+  static clearSettings(): void {
+    try {
+      localStorage.removeItem(this.STORAGE_KEY);
+    } catch (error) {
+      console.error("Failed to clear LLM settings:", error);
+    }
+  }
+
+  static getApiKeyPlaceholder(): string {
+    return "sk-ant-api03-...";
+  }
+
+  static getProviderDisplayName(): string {
+    return "Anthropic";
+  }
+
+  static createPendingToolMessage(toolName: string): ChatMessage {
+    return {
+      id: Math.random().toString(36).substring(2, 15),
+      isUser: false,
+      executingTool: toolName,
+      timestamp: new Date(),
+      toolExecution: {
+        toolName,
+        status: "pending",
+      },
+      isExecuting: true,
+    };
+  }
+
+  static createThinkingMessage(): ChatMessage {
+    return {
+      id: Math.random().toString(36).substring(2, 15),
+      message: "",
+      isUser: false,
+      timestamp: new Date(),
+      isExecuting: true,
+    };
+  }
+
+  static validateChatContext(context: ChatContext): boolean {
+    return Boolean(
+      context.connection &&
+        context.llmSettings?.apiKey &&
+        Array.isArray(context.tools)
+    );
+  }
+
+  static getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      if (error.message.includes("401")) {
+        return "Invalid API key. Please check your Claude API settings.";
+      }
+      if (error.message.includes("429")) {
+        return "Rate limit exceeded. Please wait a moment and try again.";
+      }
+      if (error.message.includes("500")) {
+        return "Claude API is experiencing issues. Please try again later.";
+      }
+      return error.message;
+    }
+    return "An unexpected error occurred. Please try again.";
   }
 }

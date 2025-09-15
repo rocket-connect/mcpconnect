@@ -25,6 +25,29 @@ export {
   StorageConfigSchema,
 } from "./storage-adapter";
 
+// MCP Adapter exports
+export {
+  MCPAdapter,
+  type MCPConfig,
+  type MCPCapabilities,
+  type MCPServerInfo,
+  type MCPInitialization,
+  type MCPToolDefinition,
+  type MCPResourceDefinition,
+  type MCPMessage,
+  type MCPConnectionResult,
+  type MCPToolExecutionResult,
+  MCPCapabilitiesSchema,
+  MCPServerInfoSchema,
+  MCPInitializationSchema,
+  MCPToolDefinitionSchema,
+  MCPResourceDefinitionSchema,
+  MCPMessageSchema,
+  MCPConnectionResultSchema,
+  MCPToolExecutionResultSchema,
+  MCPConfigSchema,
+} from "./mcp-adapter";
+
 // Common types and utilities
 export {
   AdapterError,

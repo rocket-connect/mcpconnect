@@ -1,39 +1,71 @@
-// apps/ui/src/services/chatService.ts
+// apps/ui/src/services/chatService.ts - Refactored to use AISDKAdapter
+import { Connection, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import {
-  Connection,
-  Tool,
-  ChatMessage,
-  ToolExecution,
-} from "@mcpconnect/schemas";
+  AISDKAdapter,
+  ChatContext,
+  ChatResponse,
+} from "@mcpconnect/adapter-ai-sdk";
 import { MCPService } from "./mcpService";
-import { LLMSettings } from "./modelService";
 import { nanoid } from "nanoid";
 
-export interface ChatContext {
-  connection: Connection;
-  tools: Tool[];
-  llmSettings: LLMSettings;
-}
-
-export interface ChatResponse {
-  assistantMessage: ChatMessage;
-  toolExecutionMessages: ChatMessage[];
-}
-
-export interface ToolExecutionResult {
-  success: boolean;
-  result?: any;
-  error?: string;
-  toolExecution: ToolExecution;
-  chatMessage: ChatMessage;
+// Local interface that matches what the UI needs
+interface LLMSettings {
+  provider: "anthropic";
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+  temperature: number;
+  maxTokens: number;
 }
 
 /**
- * Centralized service for chat functionality and LLM communication
+ * Centralized service for chat functionality using AISDKAdapter
  */
 export class ChatService {
+  private static adapter: AISDKAdapter | null = null;
+  private static currentSettings: LLMSettings | null = null;
+
   /**
-   * Send a message to Claude with tool support
+   * Initialize or update the adapter with new settings
+   */
+  private static initializeAdapter(settings: LLMSettings): void {
+    if (
+      !this.adapter ||
+      !this.currentSettings ||
+      JSON.stringify(this.currentSettings) !== JSON.stringify(settings)
+    ) {
+      console.log("[ChatService] Initializing AISDKAdapter with settings:", {
+        provider: settings.provider,
+        model: settings.model,
+        hasApiKey: !!settings.apiKey,
+      });
+
+      // Clean up settings to ensure proper validation
+      const cleanSettings = {
+        ...settings,
+        baseUrl: settings.baseUrl?.trim() || undefined, // Convert empty strings to undefined
+      };
+
+      this.adapter = new AISDKAdapter({
+        name: "mcpconnect-chat-adapter",
+        provider: cleanSettings.provider,
+        model: cleanSettings.model,
+        apiKey: cleanSettings.apiKey,
+        baseUrl: cleanSettings.baseUrl,
+        temperature: cleanSettings.temperature,
+        maxTokens: cleanSettings.maxTokens,
+        stream: false,
+        timeout: 30000,
+        retries: 3,
+        debug: false,
+      });
+
+      this.currentSettings = { ...settings };
+    }
+  }
+
+  /**
+   * Send a message to Claude with tool support using AISDKAdapter
    */
   static async sendMessage(
     userMessage: string,
@@ -46,222 +78,40 @@ export class ChatService {
       throw new Error("No Claude API key configured");
     }
 
+    // Initialize adapter with current settings
+    this.initializeAdapter(llmSettings);
+
+    if (!this.adapter) {
+      throw new Error("Failed to initialize adapter");
+    }
+
     console.log(
       `[ChatService] Sending message with ${tools.length} available tools`
     );
 
-    // Convert conversation history to Claude format (filter out tool execution messages)
-    const claudeMessages = conversationHistory
-      .filter(
-        msg =>
-          msg.message &&
-          msg.message.trim() &&
-          !msg.executingTool &&
-          !msg.toolExecution
-      )
-      .map(msg => ({
-        role: msg.isUser ? ("user" as const) : ("assistant" as const),
-        content: msg.message || "",
-      }));
-
-    // Add the new user message
-    claudeMessages.push({
-      role: "user",
-      content: userMessage,
-    });
-
-    // Convert available tools to Claude format
-    const claudeTools = tools.map(tool => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: tool.inputSchema || {
-        type: "object",
-        properties: {},
-        required: [],
-      },
-    }));
-
-    const requestBody = {
-      model: llmSettings.model,
-      max_tokens: llmSettings.maxTokens,
-      temperature: llmSettings.temperature,
-      messages: claudeMessages,
-      ...(claudeTools.length > 0 && { tools: claudeTools }),
-    };
-
-    console.log(
-      `[ChatService] Calling Claude API with ${claudeMessages.length} messages and ${claudeTools.length} tools`
-    );
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-        "x-api-key": llmSettings.apiKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Claude API request failed: ${response.status} ${response.statusText}: ${errorText}`
-      );
-    }
-
-    const data = await response.json();
-    console.log(`[ChatService] Received Claude response:`, data);
-
-    // Process the response and handle tool calls
-    return await this.processClaudeResponse(data, context, claudeMessages);
-  }
-
-  /**
-   * Process Claude's response and handle any tool calls
-   */
-  private static async processClaudeResponse(
-    claudeResponse: any,
-    context: ChatContext,
-    conversationMessages: any[]
-  ): Promise<ChatResponse> {
-    const { connection, tools, llmSettings } = context;
-    const toolExecutionMessages: ChatMessage[] = [];
-
-    if (!claudeResponse.content) {
-      throw new Error("No content in Claude response");
-    }
-
-    let responseText = "";
-    const toolResults: any[] = [];
-
-    // Process each content block
-    for (const content of claudeResponse.content) {
-      if (content.type === "text") {
-        responseText += content.text;
-      } else if (content.type === "tool_use") {
-        // Execute the tool
-        const toolName = content.name;
-        const toolArgs = content.input;
-        const toolCallId = content.id;
-
-        console.log(
-          `[ChatService] Claude wants to use tool: ${toolName}`,
-          toolArgs
-        );
-
-        // Execute the tool and get the result
-        const toolResult = await this.executeToolWithTracking(
-          connection,
-          toolName,
-          toolArgs
-        );
-
-        // Add the tool execution message to our list
-        toolExecutionMessages.push(toolResult.chatMessage);
-
-        // Add tool result for Claude's follow-up
-        const resultText = this.formatToolResultForClaude(toolResult.result);
-        toolResults.push({
-          tool_use_id: toolCallId,
-          type: "tool_result",
-          content: resultText,
-        });
-      }
-    }
-
-    // If tools were used, send results back to Claude for final response
-    if (toolResults.length > 0) {
-      console.log(
-        `[ChatService] Sending ${toolResults.length} tool results back to Claude`
+    try {
+      // Use the adapter's sendMessage method
+      const response = await this.adapter.sendMessage(
+        userMessage,
+        context,
+        conversationHistory
       );
 
-      const followUpMessages = [
-        ...conversationMessages,
-        {
-          role: "assistant" as const,
-          content: claudeResponse.content,
-        },
-        {
-          role: "user" as const,
-          content: toolResults,
-        },
-      ];
-
-      try {
-        const followUpResponse = await fetch(
-          "https://api.anthropic.com/v1/messages",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "anthropic-version": "2023-06-01",
-              "anthropic-dangerous-direct-browser-access": "true",
-              "x-api-key": llmSettings.apiKey,
-            },
-            body: JSON.stringify({
-              model: llmSettings.model,
-              max_tokens: llmSettings.maxTokens,
-              temperature: llmSettings.temperature,
-              messages: followUpMessages,
-              tools: tools.map(tool => ({
-                name: tool.name,
-                description: tool.description,
-                input_schema: tool.inputSchema || {
-                  type: "object",
-                  properties: {},
-                  required: [],
-                },
-              })),
-            }),
-          }
-        );
-
-        if (followUpResponse.ok) {
-          const followUpData = await followUpResponse.json();
-          responseText =
-            followUpData.content?.[0]?.text ||
-            responseText ||
-            "Tool executed successfully.";
-        } else {
-          console.error(
-            "Follow-up request failed:",
-            await followUpResponse.text()
-          );
-          responseText =
-            responseText ||
-            "Tool executed, but failed to get follow-up response.";
-        }
-      } catch (followUpError) {
-        console.error("Follow-up request error:", followUpError);
-        responseText = responseText || "Tool executed successfully.";
-      }
+      return response;
+    } catch (error) {
+      console.error("[ChatService] Send message failed:", error);
+      throw error;
     }
-
-    // Create the final assistant message
-    const assistantMessage: ChatMessage = {
-      id: nanoid(),
-      message: responseText || "I executed the requested tools.",
-      isUser: false,
-      timestamp: new Date(),
-      isExecuting: false,
-    };
-
-    return {
-      assistantMessage,
-      toolExecutionMessages,
-    };
   }
 
   /**
    * Execute a tool via MCPService and track the execution
    */
-  private static async executeToolWithTracking(
+  static async executeToolWithTracking(
     connection: Connection,
     toolName: string,
     toolArgs: Record<string, any>
-  ): Promise<ToolExecutionResult> {
+  ) {
     const executionId = nanoid();
 
     try {
@@ -338,27 +188,6 @@ export class ChatService {
   }
 
   /**
-   * Format tool result for Claude API
-   */
-  private static formatToolResultForClaude(result: any): string {
-    if (typeof result === "string") {
-      return result;
-    }
-
-    // Handle MCP response format
-    if (result?.content?.[0]?.text) {
-      try {
-        const parsedResult = JSON.parse(result.content[0].text);
-        return JSON.stringify(parsedResult, null, 2);
-      } catch {
-        return result.content[0].text;
-      }
-    }
-
-    return JSON.stringify(result, null, 2);
-  }
-
-  /**
    * Store tool execution in localStorage for tracking
    */
   static async storeToolExecution(
@@ -370,7 +199,7 @@ export class ChatService {
       const toolExecutionsItem = localStorage.getItem(
         "mcpconnect:toolExecutions"
       );
-      let toolExecutionsData = toolExecutionsItem
+      const toolExecutionsData = toolExecutionsItem
         ? JSON.parse(toolExecutionsItem)
         : { value: {} };
 
@@ -421,7 +250,7 @@ export class ChatService {
   }
 
   /**
-   * Create a pending tool execution message
+   * Create a pending tool message
    */
   static createPendingToolMessage(toolName: string): ChatMessage {
     return {
@@ -478,5 +307,33 @@ export class ChatService {
       return error.message;
     }
     return "An unexpected error occurred. Please try again.";
+  }
+
+  /**
+   * Test API key validity
+   */
+  static async testApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
+    return AISDKAdapter.testApiKey(apiKey, baseUrl);
+  }
+
+  /**
+   * Validate API key format
+   */
+  static validateApiKey(apiKey: string): boolean {
+    return AISDKAdapter.validateApiKey(apiKey);
+  }
+
+  /**
+   * Get model pricing information
+   */
+  static getModelPricing(model: string) {
+    return AISDKAdapter.getModelPricing(model);
+  }
+
+  /**
+   * Get context limit for model
+   */
+  static getContextLimit(model: string): number {
+    return AISDKAdapter.getContextLimit(model);
   }
 }

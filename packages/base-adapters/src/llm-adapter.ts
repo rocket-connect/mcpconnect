@@ -133,7 +133,12 @@ export const LLMConfigSchema = BaseConfigSchema.extend({
   provider: z.string(),
   model: z.string(),
   apiKey: z.string().optional(),
-  baseUrl: z.string().url().optional(),
+  baseUrl: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal(""))
+    .transform(val => (val === "" ? undefined : val)),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().positive().optional(),
   topP: z.number().min(0).max(1).optional(),

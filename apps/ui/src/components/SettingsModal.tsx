@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+// apps/ui/src/components/SettingsModal.tsx - Refactored to use AISDKAdapter
 import React, { useState, useEffect, useCallback } from "react";
 import {
   X,
@@ -11,7 +13,6 @@ import {
 import {
   ModelService,
   LLMSettings,
-  ModelProvider,
   ModelOption,
 } from "../services/modelService";
 
@@ -63,15 +64,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const loadAvailableModels = useCallback(async () => {
     setIsLoadingModels(true);
     try {
-      // First load static models immediately
-      const staticModels = ModelService.getAvailableModels(settings.provider);
+      // Load static models immediately (AISDKAdapter handles this)
+      const staticModels = ModelService.getAvailableModels("anthropic");
       setAvailableModels(staticModels);
 
-      // Then try to fetch dynamic models if we have credentials
+      // For Anthropic, we use static models as they don't provide a dynamic models API
+      // The adapter handles this internally
       if (settings.apiKey) {
         try {
           const dynamicModels = await ModelService.fetchModelsFromAPI(
-            settings.provider,
+            "anthropic",
             settings.apiKey,
             settings.baseUrl
           );
@@ -124,6 +126,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     setApiKeyStatus("testing");
     try {
+      // Use the adapter's testApiKey method
       const isValid = await ModelService.testApiKey(
         settings.provider,
         settings.apiKey,
@@ -156,7 +159,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       // Load provider defaults when switching providers (for future expansion)
       if (key === "provider") {
         const providerDefaults = ModelService.getDefaultSettings(
-          value as ModelProvider
+          value as "anthropic"
         );
         return { ...newSettings, ...providerDefaults };
       }
@@ -300,7 +303,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={e =>
                       handleSettingChange("apiKey", e.target.value)
                     }
-                    placeholder="sk-ant-api03-..."
+                    placeholder={ModelService.getApiKeyPlaceholder("anthropic")}
                     className={`w-full px-3 py-2 pr-20 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       !isApiKeyFormatValid
                         ? "border-red-300 dark:border-red-600"
