@@ -1,4 +1,4 @@
-// apps/ui/src/App.tsx - Simplified version that always shows main UI
+// apps/ui/src/App.tsx - Fixed provider wrapping and connection flow
 import { useState, useEffect } from "react";
 import {
   BrowserRouter,
@@ -103,7 +103,8 @@ function AppContent() {
         />
       );
     } else {
-      return <Navigate to={`/connections/${connectionId}`} replace />;
+      // No chat exists - let ChatInterface handle creating one
+      return <Navigate to={`/connections/${connectionId}/chat/new`} replace />;
     }
   };
 
@@ -138,10 +139,6 @@ function AppContent() {
     return <ToolInterface selectedTool={null} />;
   };
 
-  const DebugRouteWrapper = ({ children }: { children: React.ReactNode }) => {
-    return <>{children}</>;
-  };
-
   return (
     <InspectorProvider>
       <MCPLayout
@@ -171,77 +168,45 @@ function AppContent() {
           {/* Connection detail redirect to first chat */}
           <Route
             path="/connections/:connectionId"
-            element={
-              <DebugRouteWrapper>
-                <ConnectionChatRedirect />
-              </DebugRouteWrapper>
-            }
+            element={<ConnectionChatRedirect />}
           />
 
           {/* Basic connection chat redirect */}
           <Route
             path="/connections/:connectionId/chat"
-            element={
-              <DebugRouteWrapper>
-                <ConnectionChatRedirect />
-              </DebugRouteWrapper>
-            }
+            element={<ConnectionChatRedirect />}
           />
 
           {/* Specific chat within a connection */}
           <Route
             path="/connections/:connectionId/chat/:chatId"
-            element={
-              <DebugRouteWrapper>
-                <ChatInterface />
-              </DebugRouteWrapper>
-            }
+            element={<ChatInterface />}
           />
 
           {/* Tool execution within a specific chat */}
           <Route
             path="/connections/:connectionId/chat/:chatId/tools/:toolId"
-            element={
-              <DebugRouteWrapper>
-                <ChatInterface expandedToolCall={true} />
-              </DebugRouteWrapper>
-            }
+            element={<ChatInterface expandedToolCall={true} />}
           />
 
           {/* Connection-specific tools routes */}
           <Route
             path="/connections/:connectionId/tools"
-            element={
-              <DebugRouteWrapper>
-                <ConnectionToolsOverview />
-              </DebugRouteWrapper>
-            }
+            element={<ConnectionToolsOverview />}
           />
           <Route
             path="/connections/:connectionId/tools/:toolId"
-            element={
-              <DebugRouteWrapper>
-                <ConnectionToolLoader />
-              </DebugRouteWrapper>
-            }
+            element={<ConnectionToolLoader />}
           />
 
           {/* Connection-specific resources routes */}
           <Route
             path="/connections/:connectionId/resources"
-            element={
-              <DebugRouteWrapper>
-                <ResourceView selectedResource={selectedResource} />
-              </DebugRouteWrapper>
-            }
+            element={<ResourceView selectedResource={selectedResource} />}
           />
           <Route
             path="/connections/:connectionId/resources/:resourceId"
-            element={
-              <DebugRouteWrapper>
-                <ResourceView selectedResource={selectedResource} />
-              </DebugRouteWrapper>
-            }
+            element={<ResourceView selectedResource={selectedResource} />}
           />
 
           {/* Fallback */}

@@ -1,13 +1,14 @@
-// apps/ui/src/components/ChatInterface.tsx - Fixed tool execution and state management
+// apps/ui/src/components/ChatInterface.tsx - Fixed auto-chat creation and LLM prompting
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
-import { Send, ExternalLink, Plus, Loader, X } from "lucide-react";
+import { Send, ExternalLink, Plus, Loader, X, Settings } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
 import { MCPIntrospectionService } from "../services/mcpIntrospectionService";
+import { SettingsModal } from "./SettingsModal";
 import { nanoid } from "nanoid";
 
 interface ChatInterfaceProps {
@@ -32,6 +33,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const [messageInput, setMessageInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load LLM settings on mount
@@ -52,12 +55,34 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     : [];
 
   // Find conversation by ID instead of index
-  const currentConversation = chatId
-    ? connectionConversations.find(conv => conv.id === chatId)
-    : connectionConversations[0];
+  const currentConversation =
+    chatId && chatId !== "new"
+      ? connectionConversations.find(conv => conv.id === chatId)
+      : connectionConversations[0];
 
   const currentMessages = currentConversation?.messages || [];
   const connectionTools = connectionId ? tools[connectionId] || [] : [];
+
+  // Auto-create chat for new connections or when chatId is "new"
+  useEffect(() => {
+    const createInitialChatIfNeeded = async () => {
+      if (!connectionId || isCreatingChat) return;
+
+      // If chatId is "new" or no conversations exist for this connection
+      if (chatId === "new" || connectionConversations.length === 0) {
+        setIsCreatingChat(true);
+        try {
+          await handleNewChat(true); // true = isAutoCreated
+        } catch (error) {
+          console.error("Failed to auto-create chat:", error);
+        } finally {
+          setIsCreatingChat(false);
+        }
+      }
+    };
+
+    createInitialChatIfNeeded();
+  }, [connectionId, chatId, connectionConversations.length, isCreatingChat]);
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -70,50 +95,56 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   };
 
   // Create a new chat conversation
-  const handleNewChat = useCallback(async () => {
-    if (!connectionId) return;
+  const handleNewChat = useCallback(
+    async (isAutoCreated = false) => {
+      if (!connectionId) return;
 
-    try {
-      const newChatId = nanoid();
-      const newChat = {
-        id: newChatId,
-        title: `Chat ${connectionConversations.length + 1}`,
-        messages: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      try {
+        const newChatId = nanoid();
+        const chatNumber = connectionConversations.length + 1;
+        const chatTitle = isAutoCreated
+          ? `${currentConnection?.name || "Chat"} - Session 1`
+          : `Chat ${chatNumber}`;
 
-      const updatedConnectionConversations = [
-        ...connectionConversations,
-        newChat,
-      ];
-      const updatedConversations = {
-        ...conversations,
-        [connectionId]: updatedConnectionConversations,
-      };
+        const newChat = {
+          id: newChatId,
+          title: chatTitle,
+          messages: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
 
-      await updateConversations(updatedConversations);
-      navigate(`/connections/${connectionId}/chat/${newChatId}`);
-    } catch (error) {
-      console.error("Failed to create new chat:", error);
-    }
-  }, [
-    connectionId,
-    connectionConversations,
-    conversations,
-    navigate,
-    updateConversations,
-  ]);
+        const updatedConnectionConversations = [
+          ...connectionConversations,
+          newChat,
+        ];
+        const updatedConversations = {
+          ...conversations,
+          [connectionId]: updatedConnectionConversations,
+        };
 
-  useEffect(() => {
-    const createInitialChatIfNeeded = async () => {
-      if (connectionId && connectionConversations.length === 0) {
-        await handleNewChat();
+        await updateConversations(updatedConversations);
+
+        // Navigate to the new chat
+        navigate(`/connections/${connectionId}/chat/${newChatId}`, {
+          replace: isAutoCreated,
+        });
+
+        return newChatId;
+      } catch (error) {
+        console.error("Failed to create new chat:", error);
+        throw error;
       }
-    };
-
-    createInitialChatIfNeeded();
-  }, [connectionId, connectionConversations.length, handleNewChat]);
+    },
+    [
+      connectionId,
+      connectionConversations,
+      conversations,
+      navigate,
+      updateConversations,
+      currentConnection?.name,
+    ]
+  );
 
   // Delete a chat conversation
   const handleDeleteChat = async (
@@ -153,7 +184,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             `/connections/${connectionId}/chat/${updatedConnectionConversations[0].id}`
           );
         } else {
-          navigate(`/connections/${connectionId}`);
+          // Create a new chat if we just deleted the last one
+          await handleNewChat();
         }
       }
     } catch (error) {
@@ -858,213 +890,266 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     );
   }
 
+  // Show loading if creating chat
+  if (isCreatingChat) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-950 transition-colors">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">
+            Setting up your chat...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Show API key warning if not configured
   const showApiWarning = !llmSettings?.apiKey;
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-950 transition-colors">
-      {/* Fixed Header with Connection Info */}
-      <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {currentConnection?.name}
-            </h2>
-            <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
-              <span>{currentMessages.length} messages</span>
-              <span>{connectionTools.length} tools available</span>
-              {currentConnection && (
-                <>
-                  <span>•</span>
-                  <div className="flex items-center gap-1">
-                    <div
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        currentConnection.isConnected
-                          ? "bg-green-500"
-                          : "bg-gray-400"
-                      }`}
-                    />
-                    {currentConnection.isConnected
-                      ? "Connected"
-                      : "Disconnected"}
-                  </div>
-                </>
-              )}
-              {showApiWarning && (
-                <>
-                  <span>•</span>
-                  <span className="text-amber-600 dark:text-amber-400">
-                    Claude API not configured
-                  </span>
-                </>
-              )}
+    <>
+      <div className="flex flex-col h-full bg-white dark:bg-gray-950 transition-colors">
+        {/* Fixed Header with Connection Info */}
+        <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {currentConnection?.name}
+              </h2>
+              <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                <span>{currentMessages.length} messages</span>
+                <span>{connectionTools.length} tools available</span>
+                {currentConnection && (
+                  <>
+                    <span>•</span>
+                    <div className="flex items-center gap-1">
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          currentConnection.isConnected
+                            ? "bg-green-500"
+                            : "bg-gray-400"
+                        }`}
+                      />
+                      {currentConnection.isConnected
+                        ? "Connected"
+                        : "Disconnected"}
+                    </div>
+                  </>
+                )}
+                {showApiWarning && (
+                  <>
+                    <span>•</span>
+                    <span className="text-amber-600 dark:text-amber-400">
+                      Claude API not configured
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
+
+            {/* Settings button for quick LLM config */}
+            {showApiWarning && (
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                Configure Claude
+              </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Fixed Chat Tabs with Delete Buttons */}
-      {connectionConversations.length > 0 && (
-        <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
-          <div className="flex items-center px-6">
-            <div className="flex overflow-x-auto scrollbar-hide">
-              {connectionConversations.map(conv => {
-                const isActive = chatId === conv.id;
-                return (
-                  <div key={conv.id} className="relative flex-shrink-0 group">
-                    <button
-                      onClick={() => handleTabClick(conv.id)}
-                      className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                        isActive
-                          ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-950"
-                          : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                      }`}
-                    >
-                      <span className="truncate max-w-32">{conv.title}</span>
-                      <span className="ml-2 text-xs opacity-60">
-                        ({conv.messages.length})
-                      </span>
-                    </button>
-
-                    {connectionConversations.length > 1 && (
+        {/* Fixed Chat Tabs with Delete Buttons */}
+        {connectionConversations.length > 0 && (
+          <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+            <div className="flex items-center px-6">
+              <div className="flex overflow-x-auto scrollbar-hide">
+                {connectionConversations.map(conv => {
+                  const isActive = chatId === conv.id;
+                  return (
+                    <div key={conv.id} className="relative flex-shrink-0 group">
                       <button
-                        onClick={e => handleDeleteChat(conv.id, e)}
-                        className={`absolute top-1 right-1 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                        onClick={() => handleTabClick(conv.id)}
+                        className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                           isActive
-                            ? "text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            : "text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-950"
+                            : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
                         }`}
-                        title={`Delete "${conv.title}"`}
                       >
-                        <X className="w-3 h-3" />
+                        <span className="truncate max-w-32">{conv.title}</span>
+                        <span className="ml-2 text-xs opacity-60">
+                          ({conv.messages.length})
+                        </span>
+                      </button>
+
+                      {connectionConversations.length > 1 && (
+                        <button
+                          onClick={e => handleDeleteChat(conv.id, e)}
+                          className={`absolute top-1 right-1 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                            isActive
+                              ? "text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              : "text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          }`}
+                          title={`Delete "${conv.title}"`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => handleNewChat()}
+                className="flex-shrink-0 ml-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                title="Create new chat"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Fixed API Key Warning */}
+        {showApiWarning && (
+          <div className="flex-shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+                <div className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center">
+                  <span className="text-xs text-amber-900">!</span>
+                </div>
+                <span>
+                  Configure your Anthropic API key to start chatting with Claude
+                </span>
+              </div>
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 text-sm font-medium"
+              >
+                Configure Now
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Scrollable Messages Container - This is the key fix */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="h-full">
+            <div className="max-w-4xl mx-auto px-6 py-8 min-h-full">
+              {currentMessages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                      <ExternalLink className="w-8 h-8" />
+                    </div>
+                    <p className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
+                      {showApiWarning
+                        ? "Configure Claude API"
+                        : "Start a conversation"}
+                    </p>
+                    <p className="text-sm">
+                      {showApiWarning
+                        ? "Add your Anthropic API key to begin chatting with Claude"
+                        : `Start chatting with Claude about ${currentConnection?.name}. ${connectionTools.length} tools are available.`}
+                    </p>
+                    {showApiWarning && (
+                      <button
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                      >
+                        Configure Claude
                       </button>
                     )}
                   </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={handleNewChat}
-              className="flex-shrink-0 ml-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-              title="Create new chat"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Fixed API Key Warning */}
-      {showApiWarning && (
-        <div className="flex-shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3">
-          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
-            <div className="w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center">
-              <span className="text-xs text-amber-900">!</span>
-            </div>
-            <span>
-              Configure your Anthropic API key in Settings to start chatting
-              with Claude
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Scrollable Messages Container - This is the key fix */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="h-full">
-          <div className="max-w-4xl mx-auto px-6 py-8 min-h-full">
-            {currentMessages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                    <ExternalLink className="w-8 h-8" />
-                  </div>
-                  <p className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
-                    {showApiWarning
-                      ? "Configure Claude API"
-                      : "Start a conversation"}
-                  </p>
-                  <p className="text-sm">
-                    {showApiWarning
-                      ? "Add your Anthropic API key in Settings to begin chatting"
-                      : `Start chatting with Claude about ${currentConnection?.name}. ${connectionTools.length} tools are available.`}
-                  </p>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {Array.isArray(currentMessages) &&
-                  currentMessages
-                    .filter(
-                      msg =>
-                        !(
-                          msg.isExecuting &&
-                          !msg.message &&
-                          !msg.executingTool &&
-                          !msg.toolExecution
-                        )
-                    ) // Filter out empty thinking messages
-                    .map((msg, index) => (
-                      <CleanChatMessage
-                        key={msg.id || `msg-${index}`}
-                        message={msg}
-                        index={index}
-                      />
-                    ))}
-                <div ref={messagesEndRef} />
-              </div>
+              ) : (
+                <div className="space-y-6">
+                  {Array.isArray(currentMessages) &&
+                    currentMessages
+                      .filter(
+                        msg =>
+                          !(
+                            msg.isExecuting &&
+                            !msg.message &&
+                            !msg.executingTool &&
+                            !msg.toolExecution
+                          )
+                      ) // Filter out empty thinking messages
+                      .map((msg, index) => (
+                        <CleanChatMessage
+                          key={msg.id || `msg-${index}`}
+                          message={msg}
+                          index={index}
+                        />
+                      ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Fixed Input */}
+        <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder={
+                  showApiWarning
+                    ? "Configure API key to start chatting..."
+                    : currentConnection
+                      ? `Message Claude about ${currentConnection.name}... (${connectionTools.length} tools available)`
+                      : "Type a message..."
+                }
+                value={messageInput}
+                onChange={e => setMessageInput(e.target.value)}
+                onKeyPress={e =>
+                  e.key === "Enter" && !e.shiftKey && handleSendMessage()
+                }
+                disabled={showApiWarning || isLoading}
+                className="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-lg 
+                         bg-white dark:bg-gray-900
+                         text-gray-900 dark:text-gray-100
+                         placeholder:text-gray-500 dark:placeholder:text-gray-400
+                         focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 focus:border-transparent
+                         disabled:opacity-50 disabled:cursor-not-allowed
+                         transition-colors"
+              />
+              <Button
+                onClick={handleSendMessage}
+                disabled={!messageInput.trim() || showApiWarning || isLoading}
+                className="px-4 py-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isLoading ? (
+                  <Loader className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+            {currentConnection && !currentConnection.isConnected && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Connection offline - messages will be queued
+              </p>
             )}
           </div>
         </div>
       </div>
 
-      {/* Fixed Input */}
-      <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder={
-                showApiWarning
-                  ? "Configure API key to start chatting..."
-                  : currentConnection
-                    ? `Message Claude about ${currentConnection.name}... (${connectionTools.length} tools available)`
-                    : "Type a message..."
-              }
-              value={messageInput}
-              onChange={e => setMessageInput(e.target.value)}
-              onKeyPress={e =>
-                e.key === "Enter" && !e.shiftKey && handleSendMessage()
-              }
-              disabled={showApiWarning || isLoading}
-              className="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-lg 
-                       bg-white dark:bg-gray-900
-                       text-gray-900 dark:text-gray-100
-                       placeholder:text-gray-500 dark:placeholder:text-gray-400
-                       focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 focus:border-transparent
-                       disabled:opacity-50 disabled:cursor-not-allowed
-                       transition-colors"
-            />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!messageInput.trim() || showApiWarning || isLoading}
-              className="px-4 py-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isLoading ? (
-                <Loader className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
-          {currentConnection && !currentConnection.isConnected && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Connection offline - messages will be queued
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => {
+          setIsSettingsOpen(false);
+          // Reload LLM settings after modal closes
+          const settings = ModelService.loadSettings();
+          setLlmSettings(settings);
+        }}
+      />
+    </>
   );
 };
