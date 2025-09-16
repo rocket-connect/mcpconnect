@@ -50,15 +50,12 @@ export const StorageResultSchema = z.object({
 
 export type StorageResult = z.infer<typeof StorageResultSchema>;
 
-/**
- * Storage options schema - FIXED: compress and encrypt are now optional
- */
 export const StorageOptionsSchema = z.object({
   ttl: z.number().positive().optional(), // Time to live in milliseconds
   tags: z.array(z.string()).optional(),
   type: z.string().optional(),
-  compress: z.boolean().optional().default(false), // FIXED: Made optional
-  encrypt: z.boolean().optional().default(false), // FIXED: Made optional
+  compress: z.boolean().optional().default(false),
+  encrypt: z.boolean().optional().default(false),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -210,27 +207,15 @@ export abstract class StorageAdapter {
    */
   abstract cleanup(): Promise<number>;
 
-  /**
-   * Start a transaction (if supported)
-   */
   abstract transaction<T>(
     callback: (tx: StorageTransaction) => Promise<T>
   ): Promise<T>;
 
-  // ===============================
-  // MCP-SPECIFIC HELPER METHODS
-  // ===============================
 
-  /**
-   * Store theme preference
-   */
   async setTheme(theme: "light" | "dark" | "system"): Promise<void> {
     await this.set("theme", theme);
   }
 
-  /**
-   * Get theme preference
-   */
   async getTheme(): Promise<"light" | "dark" | "system" | null> {
     const item = await this.get("theme");
     return item?.value as "light" | "dark" | "system" | null;

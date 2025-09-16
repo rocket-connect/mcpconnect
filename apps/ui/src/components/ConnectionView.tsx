@@ -1,4 +1,3 @@
-// apps/ui/src/components/ConnectionView.tsx - Updated to use MCPService
 import { ConnectionItem } from "@mcpconnect/components";
 import { Connection, Resource, Tool } from "@mcpconnect/schemas";
 import { useNavigate } from "react-router-dom";
@@ -96,22 +95,15 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
       let finalConnection = { ...connection };
 
       try {
-        console.log(`[ConnectionView] Testing connection: ${connection.name}`);
-
         // Use MCPService for full introspection
         const introspectionResult =
           await MCPService.connectAndIntrospect(connection);
 
         if (introspectionResult.isConnected) {
-          console.log(`[ConnectionView] Connection test successful`);
           finalConnection.isConnected = true;
 
           // Store discovered tools and resources using adapter
           if (introspectionResult.tools.length > 0) {
-            console.log(
-              `[ConnectionView] Storing ${introspectionResult.tools.length} tools for connection ${connection.id}`
-            );
-
             // Ensure tools have proper default values for required fields
             const normalizedTools: Tool[] = (
               introspectionResult.tools as Tool[]
@@ -130,9 +122,6 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
           }
 
           if (introspectionResult.resources.length > 0) {
-            console.log(
-              `[ConnectionView] Storing ${introspectionResult.resources.length} resources for connection ${connection.id}`
-            );
             await adapter.setConnectionResources(
               connection.id,
               introspectionResult.resources as Resource[]
@@ -169,14 +158,8 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         c.id === finalConnection.id ? finalConnection : c
       );
 
-      // Save to adapter using enhanced method
       await adapter.setConnections(finalUpdatedConnections);
 
-      console.log(
-        `[ConnectionView] Saved connection: ${finalConnection.name} (connected: ${finalConnection.isConnected})`
-      );
-
-      // Refresh the page to reload all data and show tools in sidebar
       window.location.reload();
     } catch (error) {
       console.error("Failed to save connection:", error);

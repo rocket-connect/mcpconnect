@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/mcp-service.ts - Fixed version with better SSE handling
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-constant-condition */
 /* eslint-disable no-async-promise-executor */
@@ -178,20 +177,11 @@ export class MCPService extends MCPAdapter {
     return createJsonResponseHandler(MCPSuccessResponseSchema);
   }
 
-  /**
-   * FIXED: Enhanced SSE request handling with better session management and timeout handling
-   */
   private async sendSSERequest(
     connection: Connection,
     request: MCPMessage,
     abortSignal?: AbortSignal
   ): Promise<any> {
-    console.log(`[MCP SSE] Sending request:`, {
-      method: request.method,
-      id: request.id,
-      url: connection.url,
-    });
-
     return new Promise(async (resolve, reject) => {
       // Increased timeout for large responses like tool lists
       const timeoutMs = connection.timeout || 60000;
@@ -221,7 +211,6 @@ export class MCPService extends MCPAdapter {
           /\/sse\/?$/,
           `/message?sessionId=${sessionId}`
         );
-        console.log(`[MCP SSE] POST to:`, messageUrl);
 
         const fetchFn = this.fetch || fetch;
         const response = await fetchFn(messageUrl, {
@@ -236,9 +225,6 @@ export class MCPService extends MCPAdapter {
 
           // Handle session expiry
           if (response.status === 400 || response.status === 404) {
-            console.log(
-              `[MCP SSE] Session may be invalid, clearing cache and retrying...`
-            );
             this.sessionCache.delete(connection.url);
             this.connectionCache.delete(connection.url);
 
@@ -281,13 +267,6 @@ export class MCPService extends MCPAdapter {
             );
           }
         }
-
-        console.log(
-          `[MCP SSE] Request sent successfully, waiting for response on SSE stream for ID: ${request.id}`
-        );
-
-        // The response will come through the SSE listener we set up in establishSSESession
-        // The promise will be resolved by the SSE message handler
       } catch (error) {
         this.cleanupPendingRequest(request.id as string);
         console.error("[MCP SSE] Request error:", error);
@@ -296,15 +275,10 @@ export class MCPService extends MCPAdapter {
     });
   }
 
-  /**
-   * FIXED: Enhanced SSE session establishment with persistent listener
-   */
   private async establishSSESession(
     connection: Connection,
     abortSignal?: AbortSignal
   ): Promise<string> {
-    console.log(`[MCP SSE] Establishing session at: ${connection.url}`);
-
     return new Promise(async (resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(
@@ -344,7 +318,6 @@ export class MCPService extends MCPAdapter {
             const { done, value } = await reader.read();
 
             if (done) {
-              console.log("[MCP SSE] Session stream ended");
               break;
             }
 
@@ -370,7 +343,6 @@ export class MCPService extends MCPAdapter {
                   const match = data.match(/sessionId=([^&\s]+)/);
                   if (match) {
                     sessionId = match[1];
-                    console.log(`[MCP SSE] Session established: ${sessionId}`);
                     clearTimeout(timeout);
                     sessionEstablished = true;
                     resolve(sessionId);
@@ -405,9 +377,6 @@ export class MCPService extends MCPAdapter {
     });
   }
 
-  /**
-   * FIXED: Enhanced SSE listener with better buffer management for large responses
-   */
   private async startSSEListener(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     decoder: TextDecoder,
@@ -418,14 +387,11 @@ export class MCPService extends MCPAdapter {
     let isInJsonMessage = false;
     let braceCount = 0;
 
-    console.log("[MCP SSE] Starting persistent SSE listener");
-
     try {
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
-          console.log("[MCP SSE] Persistent listener stream ended");
           break;
         }
 
@@ -437,11 +403,6 @@ export class MCPService extends MCPAdapter {
           const trimmed = line.trim();
           if (!trimmed) continue;
 
-          console.log(
-            `[MCP SSE] Processing line: "${trimmed.substring(0, 100)}${trimmed.length > 100 ? "..." : ""}"`
-          );
-
-          // Skip endpoint events
           if (trimmed.startsWith("event: endpoint")) {
             continue;
           }
@@ -471,9 +432,6 @@ export class MCPService extends MCPAdapter {
 
               // If braces are balanced, we have a complete message
               if (braceCount === 0 && currentMessage.includes('"jsonrpc"')) {
-                console.log(
-                  `[MCP SSE] Complete message received (${currentMessage.length} chars)`
-                );
                 this.handleCompleteSSEMessage(currentMessage);
                 currentMessage = "";
                 isInJsonMessage = false;
@@ -492,29 +450,15 @@ export class MCPService extends MCPAdapter {
     }
   }
 
-  /**
-   * FIXED: Better message handling with improved JSON parsing
-   */
   private handleCompleteSSEMessage(messageData: string): void {
     try {
       const parsedData = JSON.parse(messageData);
-      console.log(`[MCP SSE] Parsed complete message:`, {
-        id: parsedData.id,
-        hasResult: !!parsedData.result,
-        hasError: !!parsedData.error,
-        resultSize: parsedData.result
-          ? JSON.stringify(parsedData.result).length
-          : 0,
-      });
 
       if (parsedData.jsonrpc === "2.0" && parsedData.id) {
         const requestId = String(parsedData.id);
         const pendingRequest = this.pendingRequests.get(requestId);
 
         if (pendingRequest) {
-          console.log(
-            `[MCP SSE] Found matching pending request for ID: ${requestId}`
-          );
           this.cleanupPendingRequest(requestId);
 
           if (parsedData.error) {
@@ -584,15 +528,6 @@ export class MCPService extends MCPAdapter {
       params: params || {},
     };
 
-    console.log(
-      `[MCP] Sending ${method} request via ${connection.connectionType}:`,
-      {
-        id: request.id,
-        method: request.method,
-        hasParams: Object.keys(request.params || {}).length > 0,
-      }
-    );
-
     try {
       switch (connection.connectionType) {
         case "sse":
@@ -637,7 +572,6 @@ export class MCPService extends MCPAdapter {
         fetch: this.fetch,
       });
 
-      console.log(`[MCP HTTP] Response:`, value);
       return value.result;
     } catch (error) {
       if (
@@ -666,14 +600,12 @@ export class MCPService extends MCPAdapter {
       }, connection.timeout || 30000);
 
       ws.onopen = () => {
-        console.log(`[MCP WebSocket] Connected to ${connection.url}`);
         ws.send(JSON.stringify(request));
       };
 
       ws.onmessage = event => {
         try {
           const response = JSON.parse(event.data);
-          console.log(`[MCP WebSocket] Response:`, response);
 
           clearTimeout(timeout);
           ws.close();
@@ -718,16 +650,10 @@ export class MCPService extends MCPAdapter {
   }
 
   async initialize(): Promise<void> {
-    console.log(
-      "MCPService initialized with enhanced SSE handling for large responses"
-    );
     this.status = AdapterStatus.IDLE;
   }
 
   async cleanup(): Promise<void> {
-    console.log("MCPService cleaned up");
-
-    // Clean up all pending requests
     for (const [, pendingRequest] of this.pendingRequests) {
       clearTimeout(pendingRequest.timeout);
       pendingRequest.reject(new AdapterError("Service cleanup", "CLEANUP"));
@@ -739,13 +665,8 @@ export class MCPService extends MCPAdapter {
     this.status = AdapterStatus.DISCONNECTED;
   }
 
-  // Rest of the methods remain the same...
-  // [Previous implementation for testConnection, connectAndIntrospect, executeTool, etc.]
-
   async testConnection(connection: Connection): Promise<boolean> {
     try {
-      console.log(`[MCP] Testing connection: ${connection.name}`);
-
       this.sessionCache.delete(connection.url);
       this.connectionCache.delete(connection.url);
 
@@ -771,7 +692,6 @@ export class MCPService extends MCPAdapter {
         );
 
         clearTimeout(timeout);
-        console.log(`[MCP] Test successful:`, result.serverInfo?.name);
 
         this.connectionCache.set(connection.url, {
           isConnected: true,
@@ -802,10 +722,6 @@ export class MCPService extends MCPAdapter {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(
-          `[MCP] Connect attempt ${attempt + 1}/${maxRetries + 1}: ${connection.name}`
-        );
-
         const abortController = new AbortController();
         const timeout = setTimeout(() => {
           abortController.abort();
@@ -831,11 +747,6 @@ export class MCPService extends MCPAdapter {
           const serverInfo: MCPServerInfo = initResult.serverInfo;
           const capabilities: MCPCapabilities = initResult.capabilities;
 
-          console.log(
-            `[MCP] Initialized: ${serverInfo.name} v${serverInfo.version}`
-          );
-
-          // Step 2: Get tools with longer timeout for large tool lists
           let mcpTools: MCPToolDefinition[] = [];
           if (capabilities.tools) {
             try {
@@ -864,7 +775,6 @@ export class MCPService extends MCPAdapter {
                 abortController.signal
               );
               mcpResources = resourcesResult.resources || [];
-              console.log(`[MCP] Found ${mcpResources.length} resources`);
             } catch (error) {
               console.warn("[MCP] Resources listing failed:", error);
             }
@@ -885,10 +795,6 @@ export class MCPService extends MCPAdapter {
             lastUsed: Date.now(),
           });
 
-          console.log(
-            `[MCP] Connection successful: ${tools.length} tools, ${resources.length} resources`
-          );
-
           return {
             isConnected: true,
             serverInfo,
@@ -908,9 +814,6 @@ export class MCPService extends MCPAdapter {
 
         if (attempt < maxRetries) {
           const backoffMs = Math.min(1000 * Math.pow(2, attempt), 5000);
-          console.log(
-            `[MCP] Attempt ${attempt + 1} failed, retrying in ${backoffMs}ms...`
-          );
           await delay(backoffMs);
         }
       }
@@ -951,10 +854,6 @@ export class MCPService extends MCPAdapter {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(
-          `[MCP] Executing ${toolName} (attempt ${attempt + 1}/${maxRetries + 1})`
-        );
-
         const abortController = new AbortController();
         const timeout = setTimeout(() => {
           abortController.abort();
@@ -974,10 +873,6 @@ export class MCPService extends MCPAdapter {
           clearTimeout(timeout);
           const endTime = Date.now();
           const duration = endTime - startTime;
-
-          console.log(
-            `[MCP] Tool ${toolName} executed successfully in ${duration}ms`
-          );
 
           const successExecution: ToolExecution = {
             ...baseExecution,
@@ -1010,16 +905,12 @@ export class MCPService extends MCPAdapter {
           lastError.message.includes("session") ||
           lastError.message.includes("404")
         ) {
-          console.log(
-            `[MCP] Clearing session cache due to error: ${lastError.message}`
-          );
           this.sessionCache.delete(connection.url);
           this.connectionCache.delete(connection.url);
         }
 
         if (attempt < maxRetries) {
           const backoffMs = Math.min(500 * Math.pow(2, attempt), 2000);
-          console.log(`[MCP] Tool execution retry in ${backoffMs}ms...`);
           await delay(backoffMs);
         }
       }
@@ -1050,8 +941,6 @@ export class MCPService extends MCPAdapter {
     connection: Connection,
     resourceUri: string
   ): Promise<any> {
-    console.log(`[MCP] Reading resource: ${resourceUri}`);
-
     const abortController = new AbortController();
     const timeout = setTimeout(() => {
       abortController.abort();
@@ -1066,7 +955,6 @@ export class MCPService extends MCPAdapter {
       );
 
       clearTimeout(timeout);
-      console.log(`[MCP] Resource read successfully`);
       return result;
     } catch (error) {
       clearTimeout(timeout);

@@ -1,5 +1,4 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-// apps/ui/src/components/ChatInterface.tsx - Complete implementation with SSE streaming support
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
@@ -249,11 +248,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     setStreamingEnabled(!streamingEnabled);
   };
 
-  // Handle SSE streaming events
   const handleStreamingEvent = useCallback(
     async (event: SSEEvent) => {
-      console.log("[ChatInterface] SSE Event:", event.type, event.data);
-
       switch (event.type) {
         case "thinking":
           setStreamingStatus("Claude is thinking...");
@@ -278,7 +274,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           break;
 
         case "message_complete":
-          console.log("[ChatInterface] Message streaming complete");
           setCurrentStreamingContent("");
           setStreamingStatus("");
           streamingMessageRef.current = "";
@@ -468,7 +463,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       console.error("Failed to send message:", error);
 
       if ((error as Error).name === "AbortError") {
-        console.log("Message sending was cancelled");
         return;
       }
 

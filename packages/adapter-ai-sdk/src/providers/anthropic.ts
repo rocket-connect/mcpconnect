@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/providers/anthropic.ts
 import { z } from "zod";
 import { AISDKConfig } from "../ai-sdk-adapter";
 import { createAnthropic } from "@ai-sdk/anthropic";

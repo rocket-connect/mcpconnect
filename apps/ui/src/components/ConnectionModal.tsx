@@ -1,4 +1,3 @@
-// apps/ui/src/components/ConnectionModal.tsx - Updated to use MCPService
 import React, { useState, useEffect } from "react";
 import {
   X,
@@ -215,18 +214,12 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         retryAttempts: formData.retryAttempts,
       };
 
-      console.log("[ConnectionModal] Starting full introspection...");
       const introspectionResult =
         await MCPService.connectAndIntrospect(testConnection);
 
       if (introspectionResult.isConnected) {
         setTestStatus("success");
         setDiscoveredInfo({
-          tools: introspectionResult.tools.length,
-          resources: introspectionResult.resources.length,
-          serverInfo: introspectionResult.serverInfo,
-        });
-        console.log("[ConnectionModal] Introspection successful:", {
           tools: introspectionResult.tools.length,
           resources: introspectionResult.resources.length,
           serverInfo: introspectionResult.serverInfo,

@@ -70,35 +70,20 @@ class LocalStorageTransaction implements StorageTransaction {
   }
 
   async get(key: string): Promise<StorageItem | null> {
-    console.log("Transaction.get:", key);
     return this.adapter.get(key);
   }
 
   async delete(key: string): Promise<boolean> {
-    console.log("Transaction.delete:", key);
-
     const currentItem = await this.adapter.get(key);
 
-    this.operations.push(() => {
-      console.log("Executing transaction delete:", key);
-    });
+    this.operations.push(() => {});
 
-    this.rollbackOperations.push(() => {
-      if (currentItem) {
-        console.log("Rolling back delete operation for:", key);
-      }
-    });
+    this.rollbackOperations.push(() => {});
 
     return !!currentItem;
   }
 
   async commit(): Promise<void> {
-    console.log(
-      "Transaction.commit - executing",
-      this.operations.length,
-      "operations"
-    );
-
     try {
       for (const operation of this.operations) {
         operation();
@@ -112,12 +97,6 @@ class LocalStorageTransaction implements StorageTransaction {
   }
 
   async rollback(): Promise<void> {
-    console.log(
-      "Transaction.rollback - rolling back",
-      this.rollbackOperations.length,
-      "operations"
-    );
-
     for (const rollbackOperation of this.rollbackOperations.reverse()) {
       try {
         rollbackOperation();
@@ -167,14 +146,6 @@ export class LocalStorageAdapter extends StorageAdapter {
     }
 
     this.status = AdapterStatus.CONNECTED;
-
-    // Set up cleanup interval if auto-cleanup is enabled
-    if (this.config.autoCleanup) {
-      console.log(
-        "Setting up auto-cleanup interval:",
-        this.config.cleanupInterval
-      );
-    }
   }
 
   async testConnection(): Promise<boolean> {
@@ -436,13 +407,6 @@ export class LocalStorageAdapter extends StorageAdapter {
     }
   }
 
-  // ===============================
-  // ENHANCED MCP-SPECIFIC METHODS
-  // ===============================
-
-  /**
-   * Get connections array with proper typing
-   */
   async getConnections(): Promise<Connection[]> {
     const item = await this.get("connections");
     return (item?.value as Connection[]) || [];

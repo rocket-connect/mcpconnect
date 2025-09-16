@@ -1,4 +1,3 @@
-// packages/components/src/NetworkInspector.tsx - Fixed real-time sync and tool name display
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 /* eslint-disable jsx-a11y/no-static-element-interactions */
@@ -54,11 +53,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
 
       if (mostRecentExecution && externalSelectedExecution === undefined) {
         setInternalSelectedExecution(mostRecentExecution.id);
-        console.log(
-          "Auto-selected new execution:",
-          mostRecentExecution.id,
-          mostRecentExecution.tool
-        );
       }
     }
 

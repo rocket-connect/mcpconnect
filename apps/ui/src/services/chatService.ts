@@ -1,4 +1,3 @@
-// apps/ui/src/services/chatService.ts - Pure delegation to AISDKAdapter
 import { ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import {
   AISDKAdapter,
@@ -57,12 +56,6 @@ export class ChatService {
       !this.currentSettings ||
       JSON.stringify(this.currentSettings) !== JSON.stringify(settings)
     ) {
-      console.log("[ChatService] Initializing AISDKAdapter with settings:", {
-        provider: settings.provider,
-        model: settings.model,
-        hasApiKey: !!settings.apiKey,
-      });
-
       this.adapter = new AISDKAdapter({
         name: "mcpconnect-chat-adapter",
         provider: settings.provider,
@@ -101,10 +94,6 @@ export class ChatService {
       throw new Error("Failed to initialize adapter");
     }
 
-    console.log(
-      `[ChatService] Sending message with ${context.tools.length} available tools`
-    );
-
     try {
       const response = await this.adapter.sendMessage(
         userMessage,
@@ -139,10 +128,6 @@ export class ChatService {
     if (!this.adapter) {
       throw new Error("Failed to initialize adapter");
     }
-
-    console.log(
-      `[ChatService] Starting streaming message with ${context.tools.length} available tools`
-    );
 
     try {
       // Emit thinking event
@@ -243,10 +228,6 @@ export class ChatService {
 
     try {
       await this.storageAdapter.addToolExecution(connectionId, execution);
-      console.log(
-        `[ChatService] Stored tool execution for ${connectionId}:`,
-        execution.id
-      );
     } catch (error) {
       console.error("Failed to store tool execution:", error);
     }

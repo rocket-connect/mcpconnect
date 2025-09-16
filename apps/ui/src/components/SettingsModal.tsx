@@ -1,5 +1,4 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-// apps/ui/src/components/SettingsModal.tsx - Refactored to use LocalStorage Adapter
 import React, { useState, useEffect, useCallback } from "react";
 import {
   X,

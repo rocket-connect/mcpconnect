@@ -1,4 +1,3 @@
-// apps/ui/src/App.tsx - Fixed provider wrapping and connection flow
 import { useState, useEffect } from "react";
 import {
   BrowserRouter,

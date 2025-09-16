@@ -1,4 +1,3 @@
-// apps/ui/src/contexts/StorageContext.tsx - Fixed to properly load discovered tools
 import React, {
   createContext,
   useContext,
@@ -80,14 +79,11 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
   const refreshTools = useCallback(async () => {
     try {
-      console.log("[StorageContext] Refreshing tools from storage...");
       const storedTools = await adapter.get("tools");
       if (storedTools?.value) {
         const toolsData = storedTools.value as Record<string, Tool[]>;
-        console.log("[StorageContext] Loaded tools:", toolsData);
         setTools(toolsData);
       } else {
-        console.log("[StorageContext] No tools found in storage");
         setTools({});
       }
     } catch (err) {
@@ -97,17 +93,14 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
   const refreshResources = useCallback(async () => {
     try {
-      console.log("[StorageContext] Refreshing resources from storage...");
       const storedResources = await adapter.get("resources");
       if (storedResources?.value) {
         const resourcesData = storedResources.value as Record<
           string,
           Resource[]
         >;
-        console.log("[StorageContext] Loaded resources:", resourcesData);
         setResources(resourcesData);
       } else {
-        console.log("[StorageContext] No resources found in storage");
         setResources({});
       }
     } catch (err) {
@@ -117,9 +110,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
   const refreshAll = useCallback(async () => {
     try {
-      console.log("Refreshing all data from storage...");
-
-      // Use enhanced adapter methods for better performance
       const [
         storedConnections,
         storedTools,
@@ -134,16 +124,12 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         adapter.get("toolExecutions"),
       ]);
 
-      // Update all state atomically
-      console.log("[StorageContext] Setting connections:", storedConnections);
       setConnections(storedConnections);
 
       if (storedTools?.value) {
         const toolsData = storedTools.value as Record<string, Tool[]>;
-        console.log("[StorageContext] Setting tools:", toolsData);
         setTools(toolsData);
       } else {
-        console.log("[StorageContext] No tools in storage, setting empty");
         setTools({});
       }
 
@@ -152,10 +138,8 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           string,
           Resource[]
         >;
-        console.log("[StorageContext] Setting resources:", resourcesData);
         setResources(resourcesData);
       } else {
-        console.log("[StorageContext] No resources in storage, setting empty");
         setResources({});
       }
 
@@ -174,18 +158,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         >;
         setToolExecutions(executionsData);
       }
-
-      // Log final state for debugging
-      console.log("[StorageContext] Final state summary:");
-      console.log(`  - Connections: ${storedConnections.length}`);
-      console.log(
-        `  - Tools by connection:`,
-        Object.keys(storedTools?.value || {}).length
-      );
-      console.log(
-        `  - Resources by connection:`,
-        Object.keys(storedResources?.value || {}).length
-      );
     } catch (err) {
       console.error("Failed to refresh data:", err);
       setError(err instanceof Error ? err.message : String(err));
@@ -193,23 +165,18 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   }, [adapter]);
 
   const forceRefresh = useCallback(async () => {
-    console.log("Force refreshing all data...");
-
-    // Clear all state first
     setConnections([]);
     setTools({});
     setResources({});
     setConversations({});
     setToolExecutions({});
 
-    // Then refresh
     await refreshAll();
   }, [refreshAll]);
 
   const updateConnections = useCallback(
     async (newConnections: Connection[]) => {
       try {
-        console.log("[StorageContext] Updating connections:", newConnections);
         await adapter.setConnections(newConnections); // Use enhanced method
         setConnections(newConnections);
       } catch (err) {
@@ -317,7 +284,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
     async function initializeStorage() {
       try {
-        console.log("Initializing storage...");
         await adapter.initialize();
 
         if (!mounted) return;
@@ -340,9 +306,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
     async function loadExistingData() {
       try {
-        console.log("[StorageContext] Loading existing data...");
-
-        // Use enhanced adapter methods for better performance
         const [
           storedConnections,
           storedTools,
@@ -357,28 +320,12 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           adapter.get("toolExecutions"),
         ]);
 
-        // Load existing data into state
-        console.log("[StorageContext] Loaded connections:", storedConnections);
         setConnections(storedConnections);
 
         if (storedTools?.value) {
           const toolsData = storedTools.value as Record<string, Tool[]>;
-          console.log("[StorageContext] Loaded tools from storage:", toolsData);
           setTools(toolsData);
-
-          // Log each connection's tools for debugging
-          Object.entries(toolsData).forEach(
-            ([connectionId, connectionTools]) => {
-              console.log(
-                `[StorageContext] Connection ${connectionId} has ${connectionTools.length} tools:`,
-                connectionTools.map(t => t.name)
-              );
-            }
-          );
         } else {
-          console.log(
-            "[StorageContext] No tools found in storage during initialization"
-          );
           setTools({});
         }
 
@@ -387,13 +334,8 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
             string,
             Resource[]
           >;
-          console.log(
-            "[StorageContext] Loaded resources from storage:",
-            resourcesData
-          );
           setResources(resourcesData);
         } else {
-          console.log("[StorageContext] No resources found in storage");
           setResources({});
         }
 
@@ -424,23 +366,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
     };
   }, [adapter]);
-
-  // Add effect to watch for tool changes and log them
-  useEffect(() => {
-    console.log("[StorageContext] Tools state updated:", tools);
-    Object.entries(tools).forEach(([connectionId, connectionTools]) => {
-      if (connectionTools.length > 0) {
-        console.log(
-          `[StorageContext] Connection ${connectionId} tools:`,
-          connectionTools.map(t => ({
-            id: t.id,
-            name: t.name,
-            description: t.description,
-          }))
-        );
-      }
-    });
-  }, [tools]);
 
   const contextValue: StorageContextType = {
     adapter,

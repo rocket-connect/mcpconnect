@@ -84,7 +84,6 @@ export function createServer(options: ServerOptions = {}): {
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             scriptSrc: ["'self'"],
             imgSrc: ["'self'", "data:", "https:"],
-            // CRITICAL: Allow connections to local MCP servers and external APIs
             connectSrc: [
               "'self'",
               "http://localhost:*",

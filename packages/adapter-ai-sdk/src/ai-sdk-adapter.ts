@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/ai-sdk-adapter.ts
 /* eslint-disable no-case-declarations */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
@@ -145,13 +144,6 @@ export class AISDKAdapter extends LLMAdapter {
    */
   private initializeAIModel() {
     try {
-      console.log("Initializing AI model with config:", {
-        provider: this.config.provider,
-        model: this.config.model,
-        hasApiKey: !!this.config.apiKey,
-        baseUrl: this.config.baseUrl || "default",
-      });
-
       switch (this.config.provider) {
         case "anthropic": {
           const anthropicProvider = AnthropicProvider.createProviderWithCors(
@@ -159,9 +151,6 @@ export class AISDKAdapter extends LLMAdapter {
             this.config.baseUrl
           );
           this.aiModel = anthropicProvider(this.config.model);
-          console.log(
-            "Anthropic model initialized successfully with CORS configuration"
-          );
           break;
         }
         default:
@@ -211,8 +200,6 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   async initialize(): Promise<void> {
-    console.log("Initializing AISDKAdapter...");
-
     if (!this.aiModel) {
       this.initializeAIModel();
     }
@@ -224,7 +211,6 @@ export class AISDKAdapter extends LLMAdapter {
       );
     }
 
-    console.log("Testing connection...");
     const isConnected = await this.testConnection();
     if (!isConnected) {
       throw new AdapterError(
@@ -234,27 +220,18 @@ export class AISDKAdapter extends LLMAdapter {
     }
 
     this.status = AdapterStatus.CONNECTED;
-    console.log("AISDKAdapter initialized successfully");
   }
 
   async testConnection(): Promise<boolean> {
     if (!this.aiModel) {
-      console.log("testConnection: No AI model available");
       return false;
     }
 
     try {
-      console.log("Testing connection with minimal request...");
-
-      const result = await generateText({
+      await generateText({
         model: this.aiModel,
         messages: [{ role: "user", content: "Hi" }],
         maxOutputTokens: 1,
-      });
-
-      console.log("Connection test successful:", {
-        hasText: !!result.text,
-        usage: result.usage,
       });
 
       return true;
@@ -282,12 +259,6 @@ export class AISDKAdapter extends LLMAdapter {
       const aiTools = this.convertToAITools(
         options?.tools || this.config.tools
       );
-
-      console.log("Complete request:", {
-        messageCount: aiMessages.length,
-        toolCount: Object.keys(aiTools).length,
-        hasTools: Object.keys(aiTools).length > 0,
-      });
 
       const result = await generateText({
         model: this.aiModel,
@@ -414,12 +385,6 @@ export class AISDKAdapter extends LLMAdapter {
       const aiTools = this.convertToAITools(
         options?.tools || this.config.tools
       );
-
-      console.log("Stream request:", {
-        messageCount: aiMessages.length,
-        toolCount: Object.keys(aiTools).length,
-        hasTools: Object.keys(aiTools).length > 0,
-      });
 
       const result = streamText({
         model: this.aiModel,
@@ -558,26 +523,12 @@ export class AISDKAdapter extends LLMAdapter {
     }
   }
 
-  /**
-   * Convert LLM messages to AI SDK format - FIXED for v5 compatibility and MCP tool results
-   */
   private convertToAIMessages(messages: (LLMMessage | ExtendedLLMMessage)[]) {
-    console.log("Converting messages to AI SDK format:", messages.length);
-
-    return messages.map((msg, index) => {
-      console.log(`Converting message ${index}:`, {
-        role: msg.role,
-        hasContent: !!msg.content,
-        hasToolCalls: !!(msg as any).toolCalls,
-        toolCallId: (msg as any).toolCallId,
-        name: (msg as ExtendedLLMMessage).name,
-      });
-
+    return messages.map(msg => {
       const content = String(msg.content || "");
 
       switch (msg.role) {
         case "tool":
-          // FINAL ATTEMPT: Match exact AI SDK v5 ToolContent specification
           let resultData: any;
 
           try {
@@ -614,16 +565,6 @@ export class AISDKAdapter extends LLMAdapter {
 
           const toolCallId = (msg as any).toolCallId || "";
 
-          console.log(
-            `[FINAL] Creating tool message with validated structure:`,
-            {
-              toolCallId,
-              dataType: typeof resultData,
-            }
-          );
-
-          // FINAL: Use the exact structure from AI SDK v5 provider-utils
-          // Based on the ToolContent type definition
           return {
             role: "tool" as const,
             content: [
@@ -690,17 +631,12 @@ export class AISDKAdapter extends LLMAdapter {
    */
   private convertToAITools(tools?: LLMTool[]) {
     if (!tools || tools.length === 0) {
-      console.log("No tools to convert");
       return {};
     }
-
-    console.log("Converting tools to AI SDK format:", tools.length);
 
     const convertedTools = tools.reduce(
       (acc, llmTool) => {
         if (llmTool.type === "function") {
-          console.log("Converting tool:", llmTool.function.name);
-
           let parametersSchema = llmTool.function.parameters;
 
           if (!parametersSchema) {
@@ -732,8 +668,6 @@ export class AISDKAdapter extends LLMAdapter {
             };
           }
 
-          console.log("Tool parameters after normalization:", parametersSchema);
-
           const zodSchema = this.jsonSchemaToZod(parametersSchema);
 
           const aiTool = tool({
@@ -742,11 +676,6 @@ export class AISDKAdapter extends LLMAdapter {
               `Execute ${llmTool.function.name}`,
             inputSchema: zodSchema,
             execute: async (args: any) => {
-              console.log(
-                `[AI SDK Tool] Executing ${llmTool.function.name} with args:`,
-                args
-              );
-
               return {
                 toolName: llmTool.function.name,
                 arguments: args,
@@ -758,14 +687,12 @@ export class AISDKAdapter extends LLMAdapter {
           });
 
           acc[llmTool.function.name] = aiTool;
-          console.log("Added AI SDK tool:", llmTool.function.name);
         }
         return acc;
       },
       {} as Record<string, any>
     );
 
-    console.log("Final converted tools:", Object.keys(convertedTools));
     return convertedTools;
   }
 
@@ -924,10 +851,6 @@ export class AISDKAdapter extends LLMAdapter {
     this.aiModel = null;
   }
 
-  /**
-   * FIXED: Enhanced streaming with proper tool result integration
-   * Ensures tool results are sent back to the LLM for summarization
-   */
   async *sendMessageStream(
     userMessage: string,
     context: ChatContext,
@@ -943,7 +866,6 @@ export class AISDKAdapter extends LLMAdapter {
       this.config.baseUrl !== llmSettings.baseUrl;
 
     if (needsReinit) {
-      console.log("LLM settings changed, reinitializing model...");
       this.config.apiKey = llmSettings.apiKey;
       this.config.model = llmSettings.model;
       this.config.baseUrl = llmSettings.baseUrl;
@@ -958,8 +880,6 @@ export class AISDKAdapter extends LLMAdapter {
         content: userMessage,
       },
     ];
-
-    console.log("Starting message stream with tools:", tools.length);
 
     // Convert tools to LLM format
     const llmTools: LLMTool[] = tools.map(tool => {
@@ -1048,17 +968,12 @@ export class AISDKAdapter extends LLMAdapter {
           chunk.finishReason === "tool_calls" ||
           (chunk.finishReason && toolCalls.length > 0)
         ) {
-          console.log(
-            `Stream completed with ${toolCalls.length} tool calls to execute`
-          );
           break;
         }
       }
 
       // Execute tools if needed
       if (toolCalls.length > 0) {
-        console.log(`Executing ${toolCalls.length} tools via MCP...`);
-
         // Execute each tool and collect results
         for (const toolCall of toolCalls) {
           yield {
@@ -1103,30 +1018,21 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // CRITICAL FIX: Build the complete conversation including tool results
-        console.log("[FIXED] Building follow-up messages with tool results...");
-
-        // Build messages as proper LLMMessage format that convertToAIMessages can handle
         const followUpMessages: LLMMessage[] = [
-          // 1. Original user message
           {
             role: "user",
             content: userMessage,
           },
-          // 2. Assistant's initial response with tool calls
           {
             role: "assistant",
             content: fullContent || "", // Keep the text content
             toolCalls: toolCalls, // Include the tool calls
           },
-          // 3. Tool results as individual tool messages
           ...toolCalls.map((tc, index) => {
             const result = toolResults[index];
 
-            // FIXED: Extract meaningful content and properly structure it
             let resultContent: any = result?.result;
 
-            // Handle MCP tool results that have content arrays
             if (
               resultContent &&
               resultContent.content &&
@@ -1163,11 +1069,6 @@ export class AISDKAdapter extends LLMAdapter {
               };
             }
 
-            console.log(
-              `[FIXED] Tool result for ${tc.function.name}:`,
-              resultContent
-            );
-
             // Return as a tool message with proper structure for AI SDK v5
             return {
               role: "tool" as const,
@@ -1177,19 +1078,6 @@ export class AISDKAdapter extends LLMAdapter {
             } as ExtendedLLMMessage;
           }),
         ];
-
-        console.log(
-          `[FIXED] Sending ${followUpMessages.length} messages back to LLM for final response`
-        );
-        console.log(
-          "[FIXED] Follow-up messages structure:",
-          followUpMessages.map(m => ({
-            role: m.role,
-            contentType: typeof m.content,
-            hasContent: !!m.content,
-            hasToolCalls: !!(m as any).toolCalls,
-          }))
-        );
 
         // Get the LLM's final response after seeing the tool results
         let finalResponse = "";
@@ -1217,10 +1105,7 @@ export class AISDKAdapter extends LLMAdapter {
             fullContent = finalResponse;
           }
         } catch (error) {
-          console.error(
-            "[FIXED] Error getting LLM summary of tool results:",
-            error
-          );
+          console.error("Error getting LLM summary of tool results:", error);
 
           // Provide a detailed fallback summary based on actual tool results
           const toolSummaries = toolResults.map((result, idx) => {
@@ -1316,8 +1201,6 @@ export class AISDKAdapter extends LLMAdapter {
     const startTime = Date.now();
 
     try {
-      console.log(`[MCP] Executing tool ${toolName}:`, toolArgs);
-
       const mcpResult = await MCPService.executeTool(
         connection,
         toolName,
@@ -1326,13 +1209,6 @@ export class AISDKAdapter extends LLMAdapter {
 
       const endTime = Date.now();
       const duration = endTime - startTime;
-
-      console.log(`[MCP] Tool execution completed:`, {
-        toolName,
-        success: mcpResult.success,
-        duration,
-        hasResult: !!mcpResult.result,
-      });
 
       const chatMessage: ChatMessage = {
         id: executionId,
@@ -1436,7 +1312,6 @@ export class AISDKAdapter extends LLMAdapter {
       this.config.baseUrl !== llmSettings.baseUrl;
 
     if (needsReinit) {
-      console.log("LLM settings changed, reinitializing model...");
       this.config.apiKey = llmSettings.apiKey;
       this.config.model = llmSettings.model;
       this.config.baseUrl = llmSettings.baseUrl;
@@ -1502,8 +1377,6 @@ export class AISDKAdapter extends LLMAdapter {
     const toolResults: Array<{ toolCallId: string; result: any }> = [];
 
     if (response.toolCalls && response.toolCalls.length > 0) {
-      console.log(`Processing ${response.toolCalls.length} tool calls via MCP`);
-
       for (const toolCall of response.toolCalls) {
         const toolResult = await this.executeToolWithMCPStreaming(
           context.connection,
@@ -1678,10 +1551,6 @@ export class AISDKAdapter extends LLMAdapter {
 
     try {
       await this.storageAdapter.addToolExecution(connectionId, execution);
-      console.log(
-        `[AISDKAdapter] Stored tool execution for ${connectionId}:`,
-        execution.id
-      );
     } catch (error) {
       console.error("Failed to store tool execution:", error);
     }
