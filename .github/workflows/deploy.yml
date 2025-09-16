@@ -26,7 +26,6 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             cd /root/mcpconnect
-            npm i -g pnpm
             git pull origin main
             pnpm install --frozen-lockfile
             pnpm build
