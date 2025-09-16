@@ -139,7 +139,13 @@ export type MCPConfig = z.infer<typeof MCPConfigSchema>;
  * SSE Event types for MCP streaming
  */
 export interface MCPSSEEvent {
-  type: "connected" | "message" | "error" | "complete" | "tool_progress";
+  type:
+    | "connected"
+    | "message"
+    | "error"
+    | "complete"
+    | "tool_progress"
+    | "result";
   data?: any;
   id?: string;
 }
