@@ -20,12 +20,28 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Source shell configuration to load PATH
+            # Source shell configurations
             source ~/.bashrc 2>/dev/null || true
             source ~/.profile 2>/dev/null || true
 
-            # Add npm global bin to PATH
-            export PATH=$PATH:$(npm config get prefix 2>/dev/null)/bin
+            # Source nvm if it exists
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+            [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion"
+
+            # Add potential Node.js paths
+            export PATH=$PATH:/usr/local/bin:$HOME/.local/bin
+
+            # Add npm global bin to PATH if npm exists
+            if command -v npm >/dev/null 2>&1; then
+                export PATH=$PATH:$(npm config get prefix)/bin
+            fi
+
+            # Debug - show what's available
+            echo "Node version: $(node --version 2>/dev/null || echo 'not found')"
+            echo "npm version: $(npm --version 2>/dev/null || echo 'not found')"
+            echo "pnpm version: $(pnpm --version 2>/dev/null || echo 'not found')"
+            echo "pm2 version: $(pm2 --version 2>/dev/null || echo 'not found')"
 
             cd /root/mcpconnect
             git pull origin main
