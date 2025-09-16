@@ -2,217 +2,203 @@
 
 Build and debug Model Context Protocol integrations with a browser-based interface that connects directly to your MCP servers.
 
+<div align="center">
+  <img src="./docs/mcpconnect-github-ui.png" width="80%" alt="MCPConnect Interface" />
+</div>
+
+**Live Demo**: [mcp.rconnect.tech](https://mcp.rconnect.tech)
+
+## Quick Start
+
 ```bash
 npx @mcpconnect/cli
 ```
 
-## Get Started
+Opens MCPConnect at `http://localhost:3001` with a complete debugging environment.
 
-**Local development**
+## What is MCPConnect?
+
+MCPConnect is a developer-focused tool for testing and debugging Model Context Protocol (MCP) servers. It provides a visual interface to connect to MCP servers, explore their tools and resources, and interact with them through conversational AI.
+
+**Key Features:**
+
+- **Direct MCP Protocol Support** - WebSocket, HTTP, and SSE transport using standard MCP protocols
+- **Visual Tool Testing** - Interactive forms for tool execution with real-time feedback
+- **Conversational AI Integration** - Connect your own OpenAI or Anthropic API keys for chat-based interactions
+- **Request Inspector** - Debug protocol messages, monitor performance, and track executions
+- **Zero Configuration** - Works entirely in the browser with no server-side dependencies
+
+## Try It Now
+
+Visit **[mcp.rconnect.tech](https://mcp.rconnect.tech)** to use MCPConnect directly in your browser without installation. The hosted version includes:
+
+- Full MCP server connection capabilities
+- Real-time tool execution and debugging
+- Request/response inspection
+- Conversational AI integration (bring your own API key)
+- Local storage for connection persistence
+
+## Architecture
+
+MCPConnect is built as a modular TypeScript monorepo with pluggable adapters:
+
+```
+packages/
+├── base-adapters/          # Abstract interfaces for LLM and storage
+├── adapter-ai-sdk/         # AI SDK integration (Anthropic, OpenAI)
+├── adapter-localstorage/   # Browser storage implementation
+├── schemas/                # Zod validation schemas
+├── components/             # Reusable React components
+├── cli/                    # Command-line interface
+└── server/                 # Express server with UI serving
+
+apps/
+├── ui/                     # React frontend application
+└── server/                 # Server application
+```
+
+## Development Workflow
+
+MCPConnect streamlines MCP server development:
+
+1. **Start your MCP server** on any port with any transport
+2. **Run MCPConnect** to launch the debugging interface
+3. **Connect and introspect** - automatically discover tools and resources
+4. **Test tools visually** with form-based parameter input
+5. **Debug with inspector** - view raw protocol messages and performance metrics
+
+## Installation Options
+
+**Online (No Installation)**
+Visit [mcp.rconnect.tech](https://mcp.rconnect.tech) to use MCPConnect directly in your browser.
+
+**CLI (Recommended for Local Development)**
 
 ```bash
 npx @mcpconnect/cli
 ```
 
-Opens MCPConnect at `http://localhost:3000`
-
-**Embed in your app**
-
-```bash
-npm install @mcpconnect/express
-```
-
-```javascript
-import express from "express";
-import { mcpConnect } from "@mcpconnect/express";
-
-const app = express();
-app.use("/mcp", mcpConnect());
-```
-
-**Deploy to your infrastructure**
+**Self-hosted**
 
 ```bash
 git clone https://github.com/rocket-connect/mcpconnect
 cd mcpconnect
-docker build -t mcpconnect .
-docker run -p 3000:3000 mcpconnect
+pnpm install && pnpm build
+pnpm start
 ```
 
-## What It Does
+## Supported Protocols
 
-MCPConnect runs entirely in your browser using official MCP libraries to connect to any MCP server - authenticated or not. Test tools, explore resources, and debug protocol messages without server-side dependencies.
+- **HTTP** - Standard request/response MCP over HTTP
+- **WebSocket** - Real-time bidirectional MCP communication
+- **Server-Sent Events** - Streaming MCP responses (recommended)
 
-**Direct Protocol Connection**  
-WebSocket, HTTP, or stdio transport using standard MCP protocols
+Authentication supported: Bearer tokens, API keys, Basic auth, custom headers.
 
-**Visual Testing Interface**  
-Interactive forms for tool execution and resource exploration
+## LLM Integration
 
-**Bring Your Own LLM**  
-Connect OpenAI, Anthropic, Google, or local model APIs for conversational experiences
+MCPConnect supports multiple LLM providers with your own API keys:
 
-**Composable React Components**  
-Build complete chat interfaces by combining modular pieces
+- **Anthropic Claude** (3.5 Sonnet, 3 Opus, 3 Haiku)
+- **OpenAI** (GPT-4, GPT-3.5) - via AI SDK
+- **Local models** - OpenAI-compatible endpoints (Ollama, LM Studio)
 
-## Building Chat Experiences
+Configure your API key in the settings panel to enable conversational interactions with discovered MCP tools.
 
-Compose MCPConnect components to create conversational interfaces:
+## Component Library
+
+Build custom MCP interfaces with React components:
 
 ```bash
 npm install @mcpconnect/components
 ```
 
-```javascript
-import {
-  MCPProvider,
-  ChatInterface,
-  ToolExecutor,
-  ResourceProvider,
-  LLMProvider,
-} from "@mcpconnect/components";
+```typescript
+import { MCPLayout, ToolItem, ConnectionStatus } from '@mcpconnect/components';
 
-function App() {
+function CustomMCPInterface() {
   return (
-    <LLMProvider apiKey={process.env.OPENAI_API_KEY} provider="openai">
-      <MCPProvider
-        servers={[
-          { url: "ws://localhost:8080", name: "Database Tools" },
-          { url: "ws://localhost:8081", name: "File System" },
-        ]}
-      >
-        <ChatInterface>
-          <ToolExecutor />
-          <ResourceProvider />
-        </ChatInterface>
-      </MCPProvider>
-    </LLMProvider>
+    <MCPLayout
+      sidebar={<ToolsList />}
+      inspector={<RequestInspector />}
+    >
+      <ChatInterface />
+    </MCPLayout>
   );
 }
 ```
 
-## LLM Integration
+## Adapters
 
-MCPConnect supports standard model providers with your own API keys:
+MCPConnect uses a pluggable adapter system:
 
-**Supported Models**
+**Storage Adapters**
 
-- OpenAI (GPT-4, GPT-3.5)
-- Anthropic (Claude 3.5 Sonnet, Claude 3)
-- Google (Gemini Pro, Gemini Flash)
-- Local models (Ollama, LM Studio, OpenAI-compatible endpoints)
+- `@mcpconnect/adapter-localstorage` - Browser localStorage
+- Custom storage adapters for databases, cloud storage
 
-```javascript
-const config = {
-  provider: "openai",
-  apiKey: "your-key",
-  model: "gpt-4",
-  baseUrl: "https://api.openai.com/v1", // Optional for custom endpoints
-};
+**LLM Adapters**
+
+- `@mcpconnect/adapter-ai-sdk` - Vercel AI SDK integration
+- Custom adapters for other LLM providers
+
+## API
+
+**Programmatic Usage**
+
+```typescript
+import { startServer } from "@mcpconnect/server";
+
+const { url } = await startServer({
+  port: 3001,
+  cors: true,
+  helmet: true,
+});
 ```
 
-The LLM integration enables natural language responses using MCP tool results, intelligent tool suggestions, and conversational context across tool executions.
+**Testing MCP Connections**
 
-## Development Workflow
+```typescript
+import { MCPService } from "@mcpconnect/adapter-ai-sdk";
 
-Use MCPConnect to iterate on MCP server implementations:
-
-1. **Start your MCP server** on any port
-2. **Run `npx mcpconnect`** to launch the interface
-3. **Test tools visually** with real-time validation
-4. **Debug protocol messages** with the built-in inspector
-5. **Monitor performance** and error rates
-
-**Development Features**
-
-- Schema validation with instant feedback
-- Raw MCP message inspection
-- Request/response timing analysis
-- Mock data generation for testing
-
-## Custom Component Assembly
-
-Build specialized debugging or testing interfaces:
-
-```javascript
-import {
-  ServerExplorer,
-  ToolInvoker,
-  ResourceViewer,
-  MessageLog,
-} from "@mcpconnect/components";
-
-function CustomDebugger() {
-  return (
-    <div className="debug-layout">
-      <ServerExplorer />
-      <div className="main-panel">
-        <ToolInvoker />
-        <ResourceViewer />
-      </div>
-      <MessageLog />
-    </div>
-  );
+const result = await MCPService.testConnection(connection);
+if (result.isConnected) {
+  console.log(`Found ${result.tools.length} tools`);
 }
 ```
 
-## Authentication Support
+## Configuration
 
-Connect to secured MCP servers with standard authentication:
+MCPConnect stores configuration in browser localStorage:
 
-```javascript
-const serverConfig = {
-  url: "wss://api.example.com/mcp",
-  headers: {
-    Authorization: "Bearer your-token",
-    "X-API-Key": "your-api-key",
-  },
-};
-```
+- **Connections** - MCP server endpoints and authentication
+- **LLM Settings** - API keys and model preferences
+- **UI State** - Theme, layout preferences
+- **Tool Executions** - Request/response history for debugging
 
-## Local Models
+## Contributing
 
-Use local or self-hosted models with OpenAI-compatible APIs:
+MCPConnect is open source under MIT license. Built with:
 
-```javascript
-const localConfig = {
-  provider: "openai",
-  baseUrl: "http://localhost:1234/v1", // LM Studio endpoint
-  apiKey: "not-required",
-  model: "local-llama-model",
-};
-```
-
-## Self-Hosting
-
-Deploy MCPConnect in your own infrastructure:
+- **Frontend**: React, TypeScript, Tailwind CSS
+- **Backend**: Node.js, Express
+- **Protocol**: Model Context Protocol (MCP)
+- **AI Integration**: Vercel AI SDK
+- **Build**: Vite, Rollup, pnpm workspaces
 
 ```bash
 git clone https://github.com/rocket-connect/mcpconnect
 cd mcpconnect
-docker build -t mcpconnect .
-docker run -p 3000:3000 mcpconnect
+pnpm install
+pnpm dev
 ```
 
-Or build and deploy the static assets to any hosting platform.
+The development server runs the UI on `localhost:3000` with hot reload.
 
-## Use Cases
+## License
 
-**MCP Server Development**  
-Visual testing and debugging for rapid iteration
-
-**Conversational AI Applications**  
-Pre-built components for chat interfaces with MCP integration
-
-**API Exploration**  
-Interactive documentation and testing for MCP servers
-
-**Team Development**  
-Shared development environment with configuration export/import
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**Open Source**  
-MIT License - contribute on [GitHub](https://github.com/rocket-connect/mcpconnect)
-
-Built by [rconnect.tech](https://rconnect.tech) – connecting people through open source
+Built by [rconnect.tech](https://rconnect.tech) - connecting developers through open source tools.
