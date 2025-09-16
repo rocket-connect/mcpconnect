@@ -1,4 +1,4 @@
-# MCPConnect
+# MCP Connect
 
 Build and debug Model Context Protocol integrations with a browser-based interface that connects directly to your MCP servers.
 
@@ -198,7 +198,5 @@ The development server runs the UI on `localhost:3000` with hot reload.
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
----
 
 Built by [rconnect.tech](https://rconnect.tech) - connecting developers through open source tools.
