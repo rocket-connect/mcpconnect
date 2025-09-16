@@ -117,6 +117,12 @@ export const Sidebar = ({
             <h2 className="font-semibold text-gray-900 dark:text-white">
               Connections
             </h2>
+            <button
+              onClick={() => navigate("/connections")}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+            >
+              Manage
+            </button>
           </div>
           <div className="space-y-2">
             {connections.map(conn => (
