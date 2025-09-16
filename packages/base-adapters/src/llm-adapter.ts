@@ -62,8 +62,6 @@ export const LLMToolResultSchema = z.object({
   error: z.string().optional(),
 });
 
-export type LLMToolResult = z.infer<typeof LLMToolResultSchema>;
-
 /**
  * LLM usage statistics schema
  */
@@ -240,11 +238,6 @@ export abstract class LLMAdapter {
   ): AsyncIterable<LLMStreamResponse>;
 
   /**
-   * Execute tool calls and return results
-   */
-  abstract executeToolCalls(toolCalls: LLMToolCall[]): Promise<LLMToolResult[]>;
-
-  /**
    * Validate tool definition
    */
   validateTool(tool: LLMTool): boolean {
@@ -255,16 +248,6 @@ export abstract class LLMAdapter {
       return false;
     }
   }
-
-  /**
-   * Estimate token count for messages
-   */
-  abstract estimateTokens(messages: LLMMessage[]): Promise<number>;
-
-  /**
-   * Calculate cost for usage
-   */
-  abstract calculateCost(usage: LLMUsage): Promise<number>;
 
   /**
    * Clean up resources

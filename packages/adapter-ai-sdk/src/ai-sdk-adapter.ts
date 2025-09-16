@@ -9,8 +9,6 @@ import {
   LLMStreamResponse,
   LLMTool,
   LLMToolCall,
-  LLMToolResult,
-  LLMUsage,
   LLMCapabilities,
   AdapterError,
   AdapterStatus,
@@ -799,53 +797,6 @@ export class AISDKAdapter extends LLMAdapter {
     }
   }
 
-  async executeToolCalls(toolCalls: LLMToolCall[]): Promise<LLMToolResult[]> {
-    const results: LLMToolResult[] = [];
-
-    for (const toolCall of toolCalls) {
-      try {
-        const args = JSON.parse(toolCall.function.arguments);
-        const mockResult = {
-          toolName: toolCall.function.name,
-          arguments: args,
-          result: `Mock result for ${toolCall.function.name}`,
-          executedAt: new Date().toISOString(),
-        };
-
-        results.push({
-          toolCallId: toolCall.id,
-          result: mockResult,
-        });
-      } catch (error) {
-        results.push({
-          toolCallId: toolCall.id,
-          result: null,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-
-    return results;
-  }
-
-  async estimateTokens(messages: LLMMessage[]): Promise<number> {
-    const totalChars = messages.reduce(
-      (total, msg) => total + msg.content.length,
-      0
-    );
-    return Math.ceil(totalChars / 4);
-  }
-
-  async calculateCost(usage: LLMUsage): Promise<number> {
-    const capabilities = await this.getCapabilities();
-    if (!capabilities.costPerToken) return 0;
-
-    const inputCost = usage.promptTokens * capabilities.costPerToken.input;
-    const outputCost =
-      usage.completionTokens * capabilities.costPerToken.output;
-    return inputCost + outputCost;
-  }
-
   async cleanup(): Promise<void> {
     this.status = AdapterStatus.DISCONNECTED;
     this.aiModel = null;
@@ -1490,20 +1441,6 @@ export class AISDKAdapter extends LLMAdapter {
 
   static getProviderDisplayName(): string {
     return "Anthropic";
-  }
-
-  static createPendingToolMessage(toolName: string): ChatMessage {
-    return {
-      id: Math.random().toString(36).substring(2, 15),
-      isUser: false,
-      executingTool: toolName,
-      timestamp: new Date(),
-      toolExecution: {
-        toolName,
-        status: "pending",
-      },
-      isExecuting: true,
-    };
   }
 
   static createThinkingMessage(): ChatMessage {

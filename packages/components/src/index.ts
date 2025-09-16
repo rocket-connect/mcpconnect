@@ -17,8 +17,6 @@ export {
 } from "./NetworkInspector";
 export { MCPLayout, type MCPLayoutProps } from "./MCPLayout";
 
-// Theme Toggle Component
 export { ThemeToggle, type ThemeToggleProps } from "./ThemeToggle";
 
-// Utility Functions
-export { cn, formatDate, getInitials } from "./lib/utils";
+export { cn } from "./lib/utils";

@@ -136,21 +136,6 @@ export const MCPConfigSchema = BaseConfigSchema.extend({
 export type MCPConfig = z.infer<typeof MCPConfigSchema>;
 
 /**
- * SSE Event types for MCP streaming
- */
-export interface MCPSSEEvent {
-  type:
-    | "connected"
-    | "message"
-    | "error"
-    | "complete"
-    | "tool_progress"
-    | "result";
-  data?: any;
-  id?: string;
-}
-
-/**
  * Abstract base class for MCP adapters - provides interface and basic utilities only
  */
 export abstract class MCPAdapter {

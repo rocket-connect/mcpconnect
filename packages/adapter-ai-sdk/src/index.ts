@@ -20,7 +20,6 @@ export type {
   LLMStreamResponse,
   LLMTool,
   LLMToolCall,
-  LLMToolResult,
   LLMUsage,
   LLMCapabilities,
 } from "@mcpconnect/base-adapters";

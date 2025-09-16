@@ -211,7 +211,6 @@ export abstract class StorageAdapter {
     callback: (tx: StorageTransaction) => Promise<T>
   ): Promise<T>;
 
-
   async setTheme(theme: "light" | "dark" | "system"): Promise<void> {
     await this.set("theme", theme);
   }

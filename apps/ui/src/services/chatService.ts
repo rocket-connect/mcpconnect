@@ -233,11 +233,6 @@ export class ChatService {
     }
   }
 
-  // Delegate all static helper methods to AISDKAdapter
-  static createPendingToolMessage(toolName: string): ChatMessage {
-    return AISDKAdapter.createPendingToolMessage(toolName);
-  }
-
   static createThinkingMessage(): ChatMessage {
     return AISDKAdapter.createThinkingMessage();
   }
