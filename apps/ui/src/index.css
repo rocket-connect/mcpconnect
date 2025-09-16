@@ -45,51 +45,52 @@
 }
 
 .dark {
-  /* Improved dark mode colors - less jarring, better readability */
+  /* Ultra-refined dark mode colors - professional and sleek */
   --accent: #24bee1;
-  --foreground: #f8fafc; /* Slightly softer white */
+  --foreground: #f8fafc; /* Crisp white text */
   --foreground-invert: #1a2735;
-  --background: #1e293b; /* Softer dark background instead of #0f172a */
+  --background: #0d1117; /* GitHub-inspired deep background */
   --background-invert: #ffffff;
-  --hover: #334155; /* More visible hover states */
+  --hover: #21262d; /* Subtle, refined hover */
   --hover-invert: #f1f6fa;
-  --border: #475569; /* More visible borders */
+  --border: #30363d; /* Professional border color */
   --border-invert: #e6e6ff;
-  --card: #334155; /* Cards more distinct from background */
+  --card: #161b22; /* Elegant card background */
   --card-invert: #f1f6fa;
-  --muted: #cbd5e1; /* Much more readable muted text */
-  --success: #10b981; /* Slightly brighter green for dark mode */
-  --warning: #f59e0b; /* Better contrast warning color */
-  --error: #ef4444;
+  --muted: #8b949e; /* Perfect muted text contrast */
+  --success: #238636; /* GitHub green */
+  --warning: #d29922; /* Refined warning */
+  --error: #da3633; /* GitHub red */
 
-  /* Improved Shadcn-compatible variables for dark theme */
-  --border-shadcn: 217.2 32.6% 25%; /* More visible borders */
-  --input: 217.2 32.6% 25%;
+  /* Refined Shadcn-compatible variables for dark theme */
+  --border-shadcn: 210 18% 17%; /* Elegant borders */
+  --input: 210 18% 17%;
   --ring: 212.7 26.8% 83.9%;
-  --background-shadcn: 222.2 47% 11%; /* Less jarring background */
+  --background-shadcn: 220 13% 4%; /* Deep, professional background */
   --foreground-shadcn: 210 40% 98%;
   --primary: 210 40% 98%;
-  --primary-foreground: 222.2 47.4% 11.2%;
-  --secondary: 217.2 32.6% 25%; /* More visible secondary */
+  --primary-foreground: 220 13% 4%;
+  --secondary: 210 18% 11%; /* Refined secondary */
   --secondary-foreground: 210 40% 98%;
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 210 40% 98%;
-  --muted-shadcn: 217.2 32.6% 25%;
-  --muted-foreground: 215 20.2% 75%; /* Much more readable muted text */
-  --accent-shadcn: 217.2 32.6% 25%;
+  --muted-shadcn: 210 18% 11%;
+  --muted-foreground: 215 13% 56%; /* Perfect readability */
+  --accent-shadcn: 210 18% 11%;
   --accent-foreground: 210 40% 98%;
-  --popover: 222.2 47% 11%;
+  --popover: 220 13% 4%;
   --popover-foreground: 210 40% 98%;
-  --card-shadcn: 222.2 47% 15%; /* Cards more distinct */
+  --card-shadcn: 220 13% 6%; /* Subtle card elevation */
   --card-foreground: 210 40% 98%;
 }
 
 * {
   border-color: hsl(var(--border-shadcn));
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease;
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
 }
 
 body {
@@ -177,114 +178,370 @@ body {
     border-color: var(--border-invert);
   }
 
-  /* Dark mode specific improvements */
+  /* Dark mode refinements - sleek and professional */
   .dark .text-gray-400 {
-    color: #94a3b8; /* More readable than default gray-400 in dark mode */
+    color: #8b949e; /* Perfect muted text */
   }
 
   .dark .text-gray-500 {
-    color: #cbd5e1; /* Much more readable muted text */
+    color: #8b949e; /* Consistent muted text */
   }
 
   .dark .text-gray-600 {
-    color: #e2e8f0; /* Ensure good readability */
+    color: #c9d1d9; /* Readable secondary text */
   }
 
   .dark .bg-gray-900 {
-    background-color: #1e293b; /* Softer than default gray-900 */
+    background-color: #161b22; /* Elegant dark surface */
   }
 
   .dark .bg-gray-800 {
-    background-color: #334155; /* More distinct from background */
+    background-color: #21262d; /* Refined elevated surface */
   }
 
   .dark .bg-gray-950 {
-    background-color: #0f172a; /* Keep very dark for specific uses */
+    background-color: #0d1117; /* Deep background */
   }
 
-  /* Inspector panel improvements */
-  .dark [data-inspector="true"] {
-    background-color: #1e293b;
-    border-color: #475569;
+  .dark .bg-gray-50 {
+    background-color: #161b22; /* Convert light backgrounds */
   }
 
-  .dark [data-inspector="true"] .bg-gray-50 {
-    background-color: #334155;
+  .dark .bg-gray-100 {
+    background-color: #21262d; /* Convert light backgrounds */
   }
 
-  .dark [data-inspector="true"] .bg-gray-100 {
-    background-color: #475569;
+  /* Clean tool and connection styling */
+  .dark .bg-white {
+    background-color: #161b22;
   }
 
-  /* Code blocks and JSON display improvements */
-  .dark pre {
-    background-color: #0f172a !important;
-    color: #e2e8f0 !important;
-    border-color: #475569 !important;
+  .dark .border-gray-200 {
+    border-color: #30363d;
   }
 
-  .dark code {
-    background-color: #334155 !important;
-    color: #e2e8f0 !important;
+  .dark .border-gray-300 {
+    border-color: #30363d;
   }
 
-  /* Ensure buttons and interactive elements are visible */
-  .dark .opacity-0:hover {
-    opacity: 1;
+  .dark .border-gray-700 {
+    border-color: #30363d;
   }
 
-  .dark .group:hover .opacity-0 {
-    opacity: 1;
-  }
-
-  /* Status indicators */
-  .dark .text-green-600 {
-    color: #10b981;
-  }
-
-  .dark .text-red-600 {
-    color: #ef4444;
-  }
-
-  .dark .text-blue-600 {
-    color: #3b82f6;
-  }
-
-  .dark .text-orange-600 {
-    color: #f59e0b;
-  }
-
-  /* Improve hover states for better UX */
+  /* Remove aggressive hover effects, keep subtle interactions */
   .dark .hover\:bg-gray-100:hover {
-    background-color: #475569;
+    background-color: #21262d;
   }
 
   .dark .hover\:bg-gray-50:hover {
-    background-color: #334155;
+    background-color: #161b22;
   }
 
   .dark .hover\:text-gray-900:hover {
-    color: #f8fafc;
+    color: #f0f6fc;
   }
 
-  /* Chat message improvements */
+  /* Refined hover states - very subtle */
+  .dark .group:hover {
+    background-color: #161b22;
+  }
+
+  .dark .hover\:bg-gray-300:hover {
+    background-color: #30363d;
+  }
+
+  /* Inspector panel - professional styling */
+  .dark [data-inspector="true"] {
+    background-color: #0d1117;
+    border-color: #30363d;
+  }
+
+  .dark [data-inspector="true"] .bg-gray-50 {
+    background-color: #161b22;
+  }
+
+  .dark [data-inspector="true"] .bg-gray-100 {
+    background-color: #21262d;
+  }
+
+  /* Code blocks - clean and readable */
+  .dark pre {
+    background-color: #0d1117 !important;
+    color: #c9d1d9 !important;
+    border-color: #30363d !important;
+  }
+
+  .dark code {
+    background-color: #161b22 !important;
+    color: #c9d1d9 !important;
+  }
+
+  /* Status indicators - refined colors */
+  .dark .text-green-600 {
+    color: #238636;
+  }
+
+  .dark .text-red-600 {
+    color: #da3633;
+  }
+
+  .dark .text-blue-600 {
+    color: #2f81f7;
+  }
+
+  .dark .text-orange-600 {
+    color: #d29922;
+  }
+
+  /* Tool and connection item refinements */
+  .dark .bg-orange-100 {
+    background-color: rgba(210, 153, 34, 0.1);
+  }
+
+  .dark .bg-blue-100 {
+    background-color: rgba(47, 129, 247, 0.1);
+  }
+
+  .dark .bg-green-100 {
+    background-color: rgba(35, 134, 54, 0.1);
+  }
+
+  /* Form elements - clean and accessible */
+  .dark input:not([type="checkbox"]):not([type="radio"]) {
+    background-color: #0d1117;
+    border-color: #30363d;
+    color: #f0f6fc;
+  }
+
+  .dark input:focus {
+    border-color: #2f81f7;
+    box-shadow: 0 0 0 1px #2f81f7;
+  }
+
+  .dark select {
+    background-color: #0d1117;
+    border-color: #30363d;
+    color: #f0f6fc;
+  }
+
+  .dark textarea {
+    background-color: #0d1117;
+    border-color: #30363d;
+    color: #f0f6fc;
+  }
+
+  /* Clean placeholder styling */
+  .dark ::placeholder {
+    color: #6e7681;
+    opacity: 1;
+  }
+
+  .dark ::-webkit-input-placeholder {
+    color: #6e7681;
+  }
+
+  .dark ::-moz-placeholder {
+    color: #6e7681;
+    opacity: 1;
+  }
+
+  .dark :-ms-input-placeholder {
+    color: #6e7681;
+  }
+
+  /* Elegant scrollbars */
+  .dark ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .dark ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 3px;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #484f58;
+  }
+
+  /* Professional status colors */
+  .dark .bg-green-500 {
+    background-color: #238636;
+  }
+
+  .dark .bg-red-500 {
+    background-color: #da3633;
+  }
+
+  .dark .bg-blue-500 {
+    background-color: #2f81f7;
+  }
+
+  /* Clean button styling */
+  .dark .bg-gray-200 {
+    background-color: #21262d;
+    color: #f0f6fc;
+  }
+
+  /* Link styling */
+  .dark a {
+    color: #58a6ff;
+  }
+
+  .dark a:hover {
+    color: #79c0ff;
+  }
+
+  /* Ensure all borders are consistent */
+  .dark .border,
+  .dark
+    [class*="border-"]:not([class*="border-0"]):not([class*="border-none"]) {
+    border-color: #30363d;
+  }
+
+  /* Clean table styling */
+  .dark .border-gray-100 {
+    border-color: #30363d;
+  }
+
+  /* Selected states - refined highlighting */
+  .dark .bg-blue-50.dark\:bg-blue-900\/20 {
+    background-color: rgba(47, 129, 247, 0.08) !important;
+  }
+
+  .dark .border-blue-200.dark\:border-blue-800 {
+    border-color: rgba(47, 129, 247, 0.2) !important;
+  }
+
+  /* Chat message refinements */
   .dark .bg-blue-50 {
-    background-color: #1e40af20; /* Semi-transparent blue */
+    background-color: rgba(47, 129, 247, 0.05);
   }
 
   .dark .bg-green-50 {
-    background-color: #10b98120; /* Semi-transparent green */
+    background-color: rgba(35, 134, 54, 0.05);
   }
 
   .dark .bg-red-50 {
-    background-color: #ef444420; /* Semi-transparent red */
+    background-color: rgba(218, 54, 51, 0.05);
   }
 
   .dark .bg-orange-50 {
-    background-color: #f59e0b20; /* Semi-transparent orange */
+    background-color: rgba(210, 153, 34, 0.05);
   }
 
   .dark .bg-amber-50 {
-    background-color: #f59e0b20; /* Semi-transparent amber */
+    background-color: rgba(210, 153, 34, 0.05);
+  }
+
+  /* Remove all hover effects - completely clean */
+  .dark .opacity-0:hover {
+    opacity: 0; /* No hover effect */
+  }
+
+  .dark .group:hover .opacity-0 {
+    opacity: 0; /* No hover effect */
+  }
+
+  /* Ensure proper text hierarchy */
+  .dark h1,
+  .dark h2,
+  .dark h3,
+  .dark h4,
+  .dark h5,
+  .dark h6 {
+    color: #f0f6fc;
+  }
+
+  .dark p {
+    color: #c9d1d9;
+  }
+
+  .dark label {
+    color: #f0f6fc;
+  }
+
+  /* Modal overlays - refined */
+  .dark .bg-black {
+    background-color: rgba(13, 17, 23, 0.8);
+  }
+
+  /* Tab styling improvements */
+  .dark .bg-white.dark\:bg-gray-950 {
+    background-color: #0d1117 !important;
+  }
+
+  /* Force clean backgrounds for any missed elements */
+  .dark [class*="bg-white"] {
+    background-color: #161b22 !important;
+  }
+
+  /* Professional focus states */
+  .dark *:focus {
+    outline: none;
+    box-shadow: 0 0 0 1px #2f81f7;
+  }
+
+  .dark *:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #2f81f7;
+  }
+}
+
+/* Additional refinements for ultra-clean dark mode */
+.dark {
+  /* Clean rounded elements */
+  .rounded-lg,
+  .rounded-md,
+  .rounded {
+    border-color: #30363d;
+  }
+
+  /* Status indicators with perfect contrast */
+  .text-green-600 {
+    color: #238636;
+  }
+
+  .text-red-600 {
+    color: #da3633;
+  }
+
+  .text-blue-600 {
+    color: #2f81f7;
+  }
+
+  .text-yellow-600,
+  .text-amber-600 {
+    color: #d29922;
+  }
+
+  /* Perfect icon backgrounds */
+  .bg-orange-100.dark\:bg-orange-900\/30 {
+    background-color: rgba(210, 153, 34, 0.08) !important;
+  }
+
+  .bg-blue-100.dark\:bg-blue-900\/30 {
+    background-color: rgba(47, 129, 247, 0.08) !important;
+  }
+
+  .bg-green-100.dark\:bg-green-900\/30 {
+    background-color: rgba(35, 134, 54, 0.08) !important;
+  }
+
+  /* Text color refinements */
+  .text-orange-600.dark\:text-orange-400 {
+    color: #d29922 !important;
+  }
+
+  .text-blue-600.dark\:text-blue-400 {
+    color: #2f81f7 !important;
+  }
+
+  .text-green-600.dark\:text-green-400 {
+    color: #238636 !important;
   }
 }
