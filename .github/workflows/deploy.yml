@@ -25,6 +25,13 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            # Source shell configuration to load PATH
+            source ~/.bashrc 2>/dev/null || true
+            source ~/.profile 2>/dev/null || true
+
+            # Add common pnpm paths to current session
+            export PATH=$PATH:/usr/local/bin:$HOME/.local/share/pnpm:$(npm config get prefix 2>/dev/null)/bin
+
             cd /root/mcpconnect
             git pull origin main
             pnpm install --frozen-lockfile
