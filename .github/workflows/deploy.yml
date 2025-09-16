@@ -20,60 +20,9 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Source all common shell configurations
-            [ -f ~/.bashrc ] && source ~/.bashrc
-            [ -f ~/.profile ] && source ~/.profile
-            [ -f ~/.bash_profile ] && source ~/.bash_profile
-            [ -f ~/.zshrc ] && source ~/.zshrc
-            [ -f /etc/profile ] && source /etc/profile
-
-            # Add comprehensive Node.js and package manager paths
-            export PATH=$PATH:/usr/local/bin:$HOME/.local/share/pnpm:$HOME/.npm-global/bin:$(npm config get prefix 2>/dev/null)/bin:$HOME/.local/bin:/opt/node/bin
-
-            # Reload PATH from npm if available
-            if command -v npm >/dev/null 2>&1; then
-                export PATH=$PATH:$(npm config get prefix)/bin
-            fi
-
-            # Function to check if command exists
-            command_exists() {
-                command -v "$1" >/dev/null 2>&1
-            }
-
-            # Install pnpm if not present
-            if ! command_exists pnpm; then
-                echo "Installing pnpm..."
-                npm install -g pnpm
-                # Update PATH immediately after installation
-                export PATH=$PATH:$(npm config get prefix)/bin
-            fi
-
-            # Install pm2 if not present
-            if ! command_exists pm2; then
-                echo "Installing pm2..."
-                npm install -g pm2
-            fi
-
-            # Verify installations
-            echo "Node version: $(node --version)"
-            echo "npm version: $(npm --version)"
-            echo "pnpm version: $(pnpm --version)"
-            echo "pm2 version: $(pm2 --version)"
-            echo "Current PATH: $PATH"
-
-            # Navigate to project directory
             cd /root/mcpconnect
-
-            # Pull latest changes
             git pull origin main
-
-            # Install dependencies
             pnpm install --frozen-lockfile
-
-            # Build project
             pnpm build
-
-            # Reload with pm2
             pm2 reload mcpconnect
-
             echo "Deployment completed at $(date)"
