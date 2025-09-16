@@ -35,21 +35,6 @@ export const StorageQuerySchema = z.object({
   includeExpired: z.boolean().default(false),
 });
 
-export type StorageQuery = z.infer<typeof StorageQuerySchema>;
-
-/**
- * Storage result schema
- */
-export const StorageResultSchema = z.object({
-  items: z.array(StorageItemSchema),
-  total: z.number().min(0),
-  hasMore: z.boolean(),
-  nextOffset: z.number().min(0).optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
-
-export type StorageResult = z.infer<typeof StorageResultSchema>;
-
 export const StorageOptionsSchema = z.object({
   ttl: z.number().positive().optional(), // Time to live in milliseconds
   tags: z.array(z.string()).optional(),
@@ -159,28 +144,6 @@ export abstract class StorageAdapter {
    * Delete a single item
    */
   abstract delete(key: string): Promise<boolean>;
-
-  /**
-   * Store multiple items in a batch
-   */
-  abstract setBatch(
-    items: Array<{ key: string; value: unknown; options?: StorageOptions }>
-  ): Promise<void>;
-
-  /**
-   * Retrieve multiple items
-   */
-  abstract getBatch(keys: string[]): Promise<StorageItem[]>;
-
-  /**
-   * Delete multiple items
-   */
-  abstract deleteBatch(keys: string[]): Promise<number>;
-
-  /**
-   * Query items with filters
-   */
-  abstract query(query: StorageQuery): Promise<StorageResult>;
 
   /**
    * List all keys matching a pattern

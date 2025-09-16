@@ -5,8 +5,6 @@ export type {
   StorageAdapter,
   StorageConfig,
   StorageItem,
-  StorageQuery,
-  StorageResult,
   StorageOptions,
   StorageCapabilities,
   StorageTransaction,

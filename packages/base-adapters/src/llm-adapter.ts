@@ -54,15 +54,6 @@ export const LLMToolCallSchema = z.object({
 export type LLMToolCall = z.infer<typeof LLMToolCallSchema>;
 
 /**
- * LLM tool result schema
- */
-export const LLMToolResultSchema = z.object({
-  toolCallId: z.string(),
-  result: z.unknown(),
-  error: z.string().optional(),
-});
-
-/**
  * LLM usage statistics schema
  */
 export const LLMUsageSchema = z.object({

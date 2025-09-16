@@ -1,13 +1,10 @@
-// Common types and utilities (no dependencies)
 export {
   AdapterError,
   AdapterStatus,
   type BaseConfig,
-  type AdapterMetadata,
   BaseConfigSchema,
 } from "./types";
 
-// LLM Adapter exports
 export {
   LLMAdapter,
   type LLMConfig,
@@ -21,25 +18,20 @@ export {
   LLMConfigSchema,
 } from "./llm-adapter";
 
-// Storage Adapter exports (depends on types)
 export {
   StorageAdapter,
   type StorageConfig,
   type StorageItem,
-  type StorageQuery,
-  type StorageResult,
   type StorageOptions,
   type StorageCapabilities,
   type StorageTransaction,
   StorageConfigSchema,
   StorageItemSchema,
   StorageQuerySchema,
-  StorageResultSchema,
   StorageOptionsSchema,
   StorageCapabilitiesSchema,
 } from "./storage-adapter";
 
-// MCP Adapter exports (depends on types)
 export {
   MCPAdapter,
   type MCPConfig,
@@ -62,5 +54,4 @@ export {
   MCPConfigSchema,
 } from "./mcp-adapter";
 
-// Re-export zod for convenience
 export { z } from "zod";

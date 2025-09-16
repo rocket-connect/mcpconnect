@@ -15,22 +15,6 @@ export const BaseConfigSchema = z.object({
 export type BaseConfig = z.infer<typeof BaseConfigSchema>;
 
 /**
- * Adapter metadata schema
- */
-export const AdapterMetadataSchema = z.object({
-  name: z.string(),
-  version: z.string(),
-  description: z.string().optional(),
-  author: z.string().optional(),
-  capabilities: z.array(z.string()),
-  supportedVersions: z.array(z.string()).optional(),
-  created: z.date(),
-  lastModified: z.date(),
-});
-
-export type AdapterMetadata = z.infer<typeof AdapterMetadataSchema>;
-
-/**
  * Adapter status enum
  */
 export enum AdapterStatus {

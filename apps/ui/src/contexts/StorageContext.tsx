@@ -37,9 +37,6 @@ interface StorageContextType {
   addConnection: (connection: Connection) => Promise<void>;
   updateConnection: (connection: Connection) => Promise<void>;
   deleteConnection: (connectionId: string) => Promise<void>;
-  // Tool and resource refresh methods
-  refreshTools: () => Promise<void>;
-  refreshResources: () => Promise<void>;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -76,37 +73,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const refreshTools = useCallback(async () => {
-    try {
-      const storedTools = await adapter.get("tools");
-      if (storedTools?.value) {
-        const toolsData = storedTools.value as Record<string, Tool[]>;
-        setTools(toolsData);
-      } else {
-        setTools({});
-      }
-    } catch (err) {
-      console.error("Failed to refresh tools:", err);
-    }
-  }, [adapter]);
-
-  const refreshResources = useCallback(async () => {
-    try {
-      const storedResources = await adapter.get("resources");
-      if (storedResources?.value) {
-        const resourcesData = storedResources.value as Record<
-          string,
-          Resource[]
-        >;
-        setResources(resourcesData);
-      } else {
-        setResources({});
-      }
-    } catch (err) {
-      console.error("Failed to refresh resources:", err);
-    }
-  }, [adapter]);
 
   const refreshAll = useCallback(async () => {
     try {
@@ -384,8 +350,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     addConnection,
     updateConnection,
     deleteConnection,
-    refreshTools,
-    refreshResources,
   };
 
   return (

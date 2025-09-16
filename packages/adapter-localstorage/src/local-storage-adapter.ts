@@ -2,8 +2,6 @@ import {
   StorageAdapter,
   StorageConfigSchema,
   StorageItem,
-  StorageQuery,
-  StorageResult,
   StorageOptions,
   StorageCapabilities,
   StorageTransaction,
@@ -248,79 +246,6 @@ export class LocalStorageAdapter extends StorageAdapter {
     }
 
     return existed;
-  }
-
-  async setBatch(
-    items: Array<{ key: string; value: unknown; options?: StorageOptions }>
-  ): Promise<void> {
-    for (const item of items) {
-      await this.set(item.key, item.value, item.options);
-    }
-  }
-
-  async getBatch(keys: string[]): Promise<StorageItem[]> {
-    const items: StorageItem[] = [];
-
-    for (const key of keys) {
-      const item = await this.get(key);
-      if (item) {
-        items.push(item);
-      }
-    }
-
-    return items;
-  }
-
-  async deleteBatch(keys: string[]): Promise<number> {
-    let deletedCount = 0;
-
-    for (const key of keys) {
-      const deleted = await this.delete(key);
-      if (deleted) {
-        deletedCount++;
-      }
-    }
-
-    return deletedCount;
-  }
-
-  async query(query: StorageQuery): Promise<StorageResult> {
-    const allKeys = await this.keys(query.prefix);
-    let matchingItems: StorageItem[] = [];
-
-    for (const key of allKeys) {
-      if (query.limit && matchingItems.length >= query.limit) {
-        break;
-      }
-
-      const item = await this.get(key.replace(this.config.prefix, ""));
-      if (item) {
-        let matches = true;
-
-        if (query.tags && item.metadata.tags) {
-          matches = query.tags.some(tag => item.metadata.tags!.includes(tag));
-        }
-
-        if (query.type && item.metadata.type !== query.type) {
-          matches = false;
-        }
-
-        if (matches) {
-          matchingItems.push(item);
-        }
-      }
-    }
-
-    if (query.offset) {
-      matchingItems = matchingItems.slice(query.offset);
-    }
-
-    return {
-      items: matchingItems,
-      total: matchingItems.length,
-      hasMore: false,
-      metadata: { queryExecutedAt: new Date().toISOString() },
-    };
   }
 
   async keys(pattern?: string): Promise<string[]> {

@@ -157,32 +157,4 @@ export class ModelService {
   static getProviderDisplayName(_provider?: ModelProvider): string {
     return AISDKAdapter.getProviderDisplayName();
   }
-
-  /**
-   * Get model capabilities - delegates to AISDKAdapter
-   */
-  static getModelCapabilities(_model: string) {
-    // For now, return standard capabilities
-    // AISDKAdapter handles this internally
-    return {
-      supportsImages: true,
-      supportsTools: true,
-      supportsSystemMessages: true,
-    };
-  }
-
-  /**
-   * Create provider configuration - simplified for AISDKAdapter
-   */
-  static createProviderConfig(settings: LLMSettings) {
-    return {
-      name: "anthropic-adapter",
-      provider: "anthropic" as const,
-      model: settings.model,
-      apiKey: settings.apiKey,
-      baseUrl: settings.baseUrl,
-      temperature: settings.temperature,
-      maxTokens: settings.maxTokens,
-    };
-  }
 }

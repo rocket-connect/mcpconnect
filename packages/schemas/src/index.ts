@@ -1,4 +1,3 @@
-// Connection schemas
 export {
   ConnectionSchema,
   ConnectionStatusSchema,
@@ -8,7 +7,6 @@ export {
   type ConnectionType,
 } from "./connection";
 
-// Tool schemas
 export {
   ToolSchema,
   ToolExecutionRequestSchema,
@@ -20,7 +18,6 @@ export {
   type ToolExecution,
 } from "./tool";
 
-// Resource schemas
 export {
   ResourceSchema,
   ResourceAccessRequestSchema,
@@ -30,7 +27,6 @@ export {
   type ResourceAccessResponse,
 } from "./resource";
 
-// Chat schemas
 export {
   ChatMessageSchema,
   ChatConversationSchema,
@@ -40,7 +36,6 @@ export {
   type ChatSession,
 } from "./chat";
 
-// Server schemas
 export {
   ServerOptionsSchema,
   ServerStatusSchema,
@@ -50,7 +45,6 @@ export {
   type HealthCheck,
 } from "./server";
 
-// Theme schemas
 export {
   ThemeSchema,
   ThemeContextSchema,
@@ -60,7 +54,6 @@ export {
   type ThemeConfig,
 } from "./theme";
 
-// MCP Protocol schemas
 export {
   MCPVersionSchema,
   MCPTransportSchema,
@@ -81,22 +74,15 @@ export {
   type MCPInitialization,
 } from "./mcp-protocol";
 
-// API schemas
 export {
   APIHeadersSchema,
   APIErrorSchema,
   APIResponseSchema,
-  PaginatedResponseSchema,
-  PaginatedRequestSchema,
-  BulkOperationSchema,
   type APIHeaders,
   type APIError,
   type APIResponse,
-  type PaginatedRequest,
-  type BulkOperation,
 } from "./api";
 
-// UI schemas
 export {
   UIVariantSchema,
   UISizeSchema,
@@ -112,5 +98,4 @@ export {
   type UILayout,
 } from "./ui";
 
-// Re-export zod for convenience
 export { z } from "zod";

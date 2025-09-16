@@ -264,21 +264,4 @@ export class AnthropicProvider {
 
     return limits[model] || 200000;
   }
-
-  /**
-   * Get model capabilities
-   */
-  // eslint-disable-next-line no-unused-vars
-  static getModelCapabilities(_model: string): {
-    supportsImages: boolean;
-    supportsTools: boolean;
-    supportsSystemMessages: boolean;
-  } {
-    // All current Claude models support these features
-    return {
-      supportsImages: true,
-      supportsTools: true,
-      supportsSystemMessages: true,
-    };
-  }
 }
