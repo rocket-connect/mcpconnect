@@ -38,25 +38,6 @@ Visit **[mcp.rconnect.tech](https://mcp.rconnect.tech)** to use MCPConnect direc
 - Conversational AI integration (bring your own API key)
 - Local storage for connection persistence
 
-## Architecture
-
-MCPConnect is built as a modular TypeScript monorepo with pluggable adapters:
-
-```
-packages/
-├── base-adapters/          # Abstract interfaces for LLM and storage
-├── adapter-ai-sdk/         # AI SDK integration (Anthropic, OpenAI)
-├── adapter-localstorage/   # Browser storage implementation
-├── schemas/                # Zod validation schemas
-├── components/             # Reusable React components
-├── cli/                    # Command-line interface
-└── server/                 # Express server with UI serving
-
-apps/
-├── ui/                     # React frontend application
-└── server/                 # Server application
-```
-
 ## Development Workflow
 
 MCPConnect streamlines MCP server development:
@@ -90,7 +71,6 @@ pnpm start
 ## Supported Protocols
 
 - **HTTP** - Standard request/response MCP over HTTP
-- **WebSocket** - Real-time bidirectional MCP communication
 - **Server-Sent Events** - Streaming MCP responses (recommended)
 
 Authentication supported: Bearer tokens, API keys, Basic auth, custom headers.
@@ -104,68 +84,6 @@ MCPConnect supports multiple LLM providers with your own API keys:
 - **Local models** - OpenAI-compatible endpoints (Ollama, LM Studio)
 
 Configure your API key in the settings panel to enable conversational interactions with discovered MCP tools.
-
-## Component Library
-
-Build custom MCP interfaces with React components:
-
-```bash
-npm install @mcpconnect/components
-```
-
-```typescript
-import { MCPLayout, ToolItem, ConnectionStatus } from '@mcpconnect/components';
-
-function CustomMCPInterface() {
-  return (
-    <MCPLayout
-      sidebar={<ToolsList />}
-      inspector={<RequestInspector />}
-    >
-      <ChatInterface />
-    </MCPLayout>
-  );
-}
-```
-
-## Adapters
-
-MCPConnect uses a pluggable adapter system:
-
-**Storage Adapters**
-
-- `@mcpconnect/adapter-localstorage` - Browser localStorage
-- Custom storage adapters for databases, cloud storage
-
-**LLM Adapters**
-
-- `@mcpconnect/adapter-ai-sdk` - Vercel AI SDK integration
-- Custom adapters for other LLM providers
-
-## API
-
-**Programmatic Usage**
-
-```typescript
-import { startServer } from "@mcpconnect/server";
-
-const { url } = await startServer({
-  port: 3001,
-  cors: true,
-  helmet: true,
-});
-```
-
-**Testing MCP Connections**
-
-```typescript
-import { MCPService } from "@mcpconnect/adapter-ai-sdk";
-
-const result = await MCPService.testConnection(connection);
-if (result.isConnected) {
-  console.log(`Found ${result.tools.length} tools`);
-}
-```
 
 ## Configuration
 
