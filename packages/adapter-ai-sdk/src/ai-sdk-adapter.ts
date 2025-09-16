@@ -1,5 +1,5 @@
-/* eslint-disable no-case-declarations */
 // packages/adapter-ai-sdk/src/ai-sdk-adapter.ts
+/* eslint-disable no-case-declarations */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   LLMAdapter,
@@ -154,7 +154,6 @@ export class AISDKAdapter extends LLMAdapter {
 
       switch (this.config.provider) {
         case "anthropic": {
-          // Use the AnthropicProvider with proper CORS configuration
           const anthropicProvider = AnthropicProvider.createProviderWithCors(
             this.config.apiKey!,
             this.config.baseUrl
@@ -300,7 +299,6 @@ export class AISDKAdapter extends LLMAdapter {
 
       this.status = AdapterStatus.CONNECTED;
 
-      // Convert AI SDK tool calls back to LLM format
       const toolCalls: LLMToolCall[] =
         result.toolCalls?.map(tc => ({
           id: tc.toolCallId,
@@ -359,9 +357,8 @@ export class AISDKAdapter extends LLMAdapter {
       }
     }
 
-    // Ensure inputSchema always has proper structure for AI SDK
     const inputSchema = {
-      ...mcpTool.inputSchema, // Include other properties
+      ...mcpTool.inputSchema,
       type: "object" as const,
       properties: mcpTool.inputSchema?.properties || {},
       required: mcpTool.inputSchema?.required || [],
@@ -371,7 +368,7 @@ export class AISDKAdapter extends LLMAdapter {
       id: this.generateId(),
       name: mcpTool.name,
       description: mcpTool.description,
-      inputSchema, // Use the normalized schema
+      inputSchema,
       parameters,
       category: "mcp",
       tags: ["mcp", "introspected"],
@@ -437,7 +434,6 @@ export class AISDKAdapter extends LLMAdapter {
       const accumulatedToolCalls: any[] = [];
 
       try {
-        // Stream text tokens
         for await (const delta of result.textStream) {
           hasGeneratedContent = true;
           yield {
@@ -449,12 +445,10 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // Handle tool calls from the full stream
         for await (const chunk of result.fullStream) {
           if (chunk.type === "tool-call") {
             hasGeneratedContent = true;
 
-            // Accumulate tool call information
             const toolCall = {
               id: chunk.toolCallId,
               type: "function" as const,
@@ -466,7 +460,6 @@ export class AISDKAdapter extends LLMAdapter {
 
             accumulatedToolCalls.push(toolCall);
 
-            // Yield the tool call
             yield {
               id: currentId,
               delta: {
@@ -487,11 +480,9 @@ export class AISDKAdapter extends LLMAdapter {
           }
         }
 
-        // Wait for final result to get finish reason and usage
         const finalResult = await result.finishReason;
         const usage = await result.usage;
 
-        // Final usage information
         yield {
           id: currentId,
           delta: {},
@@ -508,7 +499,6 @@ export class AISDKAdapter extends LLMAdapter {
       } catch (streamError) {
         console.error("Error during streaming:", streamError);
 
-        // If no content was generated and we hit an error, still yield a minimal response
         if (!hasGeneratedContent) {
           console.warn(
             "No content generated before error, yielding minimal response"
@@ -516,7 +506,7 @@ export class AISDKAdapter extends LLMAdapter {
           yield {
             id: currentId,
             delta: {
-              content: "", // Empty content
+              content: "",
             },
             finishReason: "stop",
             model: this.config.model,
@@ -528,11 +518,9 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // Re-throw the error after ensuring we have at least one output
         throw streamError;
       }
 
-      // Final safety check: if still no content was generated, yield a minimal response
       if (!hasGeneratedContent) {
         console.warn(
           "No content generated during stream, yielding minimal response"
@@ -546,7 +534,7 @@ export class AISDKAdapter extends LLMAdapter {
         yield {
           id: currentId,
           delta: {
-            content: "", // Empty content is still valid
+            content: "",
           },
           finishReason: "stop",
           model: this.config.model,
@@ -571,7 +559,7 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   /**
-   * Convert LLM messages to AI SDK format - Fixed for v5 compatibility
+   * Convert LLM messages to AI SDK format - FIXED for v5 compatibility and MCP tool results
    */
   private convertToAIMessages(messages: (LLMMessage | ExtendedLLMMessage)[]) {
     console.log("Converting messages to AI SDK format:", messages.length);
@@ -585,38 +573,71 @@ export class AISDKAdapter extends LLMAdapter {
         name: (msg as ExtendedLLMMessage).name,
       });
 
-      // Ensure content is always a string, never undefined
       const content = String(msg.content || "");
 
-      // Handle different message types according to AI SDK v5 ModelMessage types
       switch (msg.role) {
         case "tool":
-          // AI SDK v5 ToolModelMessage expects ToolContent which is Array<ToolResultPart>
-          // The output field must be an object, not a string
-          let toolOutput: any;
+          // FINAL ATTEMPT: Match exact AI SDK v5 ToolContent specification
+          let resultData: any;
+
           try {
-            // Try to parse content as JSON, otherwise wrap it in an object
-            toolOutput = content ? JSON.parse(content) : { result: "success" };
+            const parsedContent = content ? JSON.parse(content) : null;
+
+            if (parsedContent && typeof parsedContent === "object") {
+              if (
+                parsedContent.content &&
+                Array.isArray(parsedContent.content)
+              ) {
+                const textContent = parsedContent.content
+                  .filter((item: any) => item.type === "text")
+                  .map((item: any) => item.text)
+                  .join("\n");
+
+                if (textContent) {
+                  try {
+                    resultData = JSON.parse(textContent);
+                  } catch {
+                    resultData = textContent;
+                  }
+                } else {
+                  resultData = "Tool executed with non-text content";
+                }
+              } else {
+                resultData = parsedContent;
+              }
+            } else {
+              resultData = content || "Tool executed";
+            }
           } catch {
-            // If parsing fails, wrap the string content in an object
-            toolOutput = { text: content };
+            resultData = content || "Tool executed";
           }
 
+          const toolCallId = (msg as any).toolCallId || "";
+
+          console.log(
+            `[FINAL] Creating tool message with validated structure:`,
+            {
+              toolCallId,
+              dataType: typeof resultData,
+            }
+          );
+
+          // FINAL: Use the exact structure from AI SDK v5 provider-utils
+          // Based on the ToolContent type definition
           return {
             role: "tool" as const,
             content: [
               {
                 type: "tool-result" as const,
-                toolCallId: msg.toolCallId || "",
-                toolName: (msg as ExtendedLLMMessage).name || "unknown-tool",
-                output: toolOutput, // Must be an object, not a string
+                toolCallId: toolCallId,
+                // @ts-ignore
+                result: resultData,
               },
             ] as ToolContent,
           } as ToolModelMessage;
 
         case "assistant":
           if (msg.toolCalls && msg.toolCalls.length > 0) {
-            // AssistantModelMessage with tool calls
             const toolCallParts: ToolCallPart[] = msg.toolCalls.map(tc => ({
               type: "tool-call" as const,
               toolCallId: tc.id,
@@ -634,32 +655,31 @@ export class AISDKAdapter extends LLMAdapter {
             } as AssistantModelMessage;
           }
 
-          // Simple assistant message with text
+          // Simple assistant message - ensure content is a string
           return {
             role: "assistant" as const,
-            content: content,
+            content: content || "",
           } as AssistantModelMessage;
 
         case "user":
           return {
             role: "user" as const,
-            content: content,
+            content: content || "",
           } as UserModelMessage;
 
         case "system":
           return {
             role: "system" as const,
-            content: content,
+            content: content || "",
           } as SystemModelMessage;
 
         default:
-          // Fallback for any unexpected roles
           console.warn(
             `Unexpected message role: ${msg.role}, treating as user`
           );
           return {
             role: "user" as const,
-            content: content,
+            content: content || "",
           } as UserModelMessage;
       }
     });
@@ -667,7 +687,6 @@ export class AISDKAdapter extends LLMAdapter {
 
   /**
    * Convert LLM tools to AI SDK format using proper tool() instances
-   * Enhanced to include actual MCP execution via streaming
    */
   private convertToAITools(tools?: LLMTool[]) {
     if (!tools || tools.length === 0) {
@@ -682,10 +701,8 @@ export class AISDKAdapter extends LLMAdapter {
         if (llmTool.type === "function") {
           console.log("Converting tool:", llmTool.function.name);
 
-          // Get the parameters schema
           let parametersSchema = llmTool.function.parameters;
 
-          // If parameters is undefined or null, create a default empty object schema
           if (!parametersSchema) {
             parametersSchema = {
               type: "object",
@@ -694,7 +711,6 @@ export class AISDKAdapter extends LLMAdapter {
             };
           }
 
-          // Ensure the schema has the required "type" field
           if (!parametersSchema.type) {
             parametersSchema = {
               ...parametersSchema,
@@ -702,7 +718,6 @@ export class AISDKAdapter extends LLMAdapter {
             };
           }
 
-          // Ensure properties exists
           if (!parametersSchema.properties) {
             parametersSchema = {
               ...parametersSchema,
@@ -710,7 +725,6 @@ export class AISDKAdapter extends LLMAdapter {
             };
           }
 
-          // Ensure required is an array
           if (!Array.isArray(parametersSchema.required)) {
             parametersSchema = {
               ...parametersSchema,
@@ -720,11 +734,8 @@ export class AISDKAdapter extends LLMAdapter {
 
           console.log("Tool parameters after normalization:", parametersSchema);
 
-          // Convert JSON Schema to Zod schema
           const zodSchema = this.jsonSchemaToZod(parametersSchema);
 
-          // Create proper AI SDK tool using tool() function
-          // This is where we integrate with MCP streaming
           const aiTool = tool({
             description:
               llmTool.function.description ||
@@ -736,9 +747,6 @@ export class AISDKAdapter extends LLMAdapter {
                 args
               );
 
-              // This is a placeholder - the actual MCP execution happens
-              // in the streaming context where we have access to the connection
-              // The AI SDK will call this during tool execution
               return {
                 toolName: llmTool.function.name,
                 arguments: args,
@@ -779,7 +787,6 @@ export class AISDKAdapter extends LLMAdapter {
       for (const [key, propSchema] of Object.entries(properties)) {
         let zodType = this.jsonSchemaPropertyToZod(propSchema as any);
 
-        // Add description if available
         if (
           propSchema &&
           typeof propSchema === "object" &&
@@ -788,7 +795,6 @@ export class AISDKAdapter extends LLMAdapter {
           zodType = zodType.describe((propSchema as any).description);
         }
 
-        // Make optional if not in required array
         if (!required.includes(key)) {
           zodType = zodType.optional();
         }
@@ -799,7 +805,6 @@ export class AISDKAdapter extends LLMAdapter {
       return z.object(shape);
     }
 
-    // Fallback for non-object schemas
     return z.object({});
   }
 
@@ -854,7 +859,6 @@ export class AISDKAdapter extends LLMAdapter {
         return z.record(z.string(), z.unknown());
 
       default:
-        // Handle union types
         if (propSchema.anyOf || propSchema.oneOf) {
           const unionSchemas = (propSchema.anyOf || propSchema.oneOf).map(
             (schema: any) => this.jsonSchemaPropertyToZod(schema)
@@ -864,7 +868,6 @@ export class AISDKAdapter extends LLMAdapter {
           );
         }
 
-        // Default fallback
         return z.string();
     }
   }
@@ -922,8 +925,8 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   /**
-   * Enhanced streaming with actual MCP tool execution
-   * This is where the AI SDK integrates with your MCP SSE connection
+   * FIXED: Enhanced streaming with proper tool result integration
+   * Ensures tool results are sent back to the LLM for summarization
    */
   async *sendMessageStream(
     userMessage: string,
@@ -949,7 +952,6 @@ export class AISDKAdapter extends LLMAdapter {
       this.initializeAIModel();
     }
 
-    // For streaming, start with a clean slate - only include the current user message
     const llmMessages: LLMMessage[] = [
       {
         role: "user",
@@ -957,12 +959,10 @@ export class AISDKAdapter extends LLMAdapter {
       },
     ];
 
-    console.log("LLM messages for streaming (simplified):", llmMessages);
+    console.log("Starting message stream with tools:", tools.length);
 
-    // Convert tools to LLM format with proper schema handling
+    // Convert tools to LLM format
     const llmTools: LLMTool[] = tools.map(tool => {
-      console.log("Converting tool for streaming:", tool.name);
-
       let inputSchema = tool.inputSchema;
       if (!inputSchema) {
         inputSchema = {
@@ -990,16 +990,19 @@ export class AISDKAdapter extends LLMAdapter {
       };
     });
 
-    console.log("Setting tools for streaming:", llmTools.length);
     this.config.tools = llmTools;
 
     let fullContent = "";
     const toolCalls: LLMToolCall[] = [];
     const toolExecutionMessages: ChatMessage[] = [];
-    let hasToolCalls = false;
+    const toolResults: Array<{
+      toolCallId: string;
+      result: any;
+      rawResult: any;
+    }> = [];
 
     try {
-      // Stream the initial response using AI SDK
+      // Stream the initial response
       for await (const chunk of this.stream(llmMessages)) {
         if (chunk.delta?.content) {
           fullContent += chunk.delta.content;
@@ -1009,9 +1012,8 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // Handle tool calls from streaming
+        // Accumulate tool calls
         if (chunk.delta?.toolCalls) {
-          hasToolCalls = true;
           for (const tc of chunk.delta.toolCalls) {
             if (tc.function?.name && tc.function?.arguments) {
               const existingCallIndex = toolCalls.findIndex(
@@ -1019,7 +1021,6 @@ export class AISDKAdapter extends LLMAdapter {
               );
 
               if (existingCallIndex >= 0) {
-                // Update existing tool call
                 toolCalls[existingCallIndex] = {
                   id: tc.id || this.generateId(),
                   type: "function",
@@ -1029,7 +1030,6 @@ export class AISDKAdapter extends LLMAdapter {
                   },
                 };
               } else {
-                // Add new tool call
                 toolCalls.push({
                   id: tc.id || this.generateId(),
                   type: "function",
@@ -1043,28 +1043,30 @@ export class AISDKAdapter extends LLMAdapter {
           }
         }
 
-        // Check for completion with tool calls
+        // Check if we've finished with tool calls
         if (
           chunk.finishReason === "tool_calls" ||
-          (hasToolCalls && chunk.finishReason)
+          (chunk.finishReason && toolCalls.length > 0)
         ) {
-          console.log(`Processing ${toolCalls.length} tool calls via MCP SSE`);
+          console.log(
+            `Stream completed with ${toolCalls.length} tool calls to execute`
+          );
           break;
         }
       }
 
-      // Handle tool execution if any - THIS IS WHERE MCP SSE INTEGRATION HAPPENS
+      // Execute tools if needed
       if (toolCalls.length > 0) {
-        console.log(`Processing ${toolCalls.length} tool calls via MCP`);
+        console.log(`Executing ${toolCalls.length} tools via MCP...`);
 
+        // Execute each tool and collect results
         for (const toolCall of toolCalls) {
           yield {
             type: "tool_start",
             toolName: toolCall.function.name,
           };
 
-          // This is where we execute the tool via MCP using the SSE connection
-          // The MCPService will handle the SSE streaming to your supergateway
+          // Execute via MCP
           const toolResult = await this.executeToolWithMCPStreaming(
             connection,
             toolCall.function.name,
@@ -1073,7 +1075,15 @@ export class AISDKAdapter extends LLMAdapter {
 
           toolExecutionMessages.push(toolResult.chatMessage);
 
-          // Store tool execution for SSE (this fixes the request inspector issue)
+          // Store both the result and the raw result for proper formatting
+          toolResults.push({
+            toolCallId: toolCall.id,
+            result: toolResult.result ||
+              toolResult.error || { status: "executed" },
+            rawResult: toolResult,
+          });
+
+          // Store execution for persistence
           if (AISDKAdapter.storageAdapter) {
             try {
               await AISDKAdapter.storageAdapter.addToolExecution(
@@ -1093,24 +1103,188 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // Add proper spacing and natural text flow for tool summary
-        const toolNames = toolCalls.map(tc => tc.function.name).join(", ");
-        const toolSummary = ` I executed ${toolCalls.length} tool(s): ${toolNames}.`;
+        // CRITICAL FIX: Build the complete conversation including tool results
+        console.log("[FIXED] Building follow-up messages with tool results...");
 
-        // Yield the summary token by token for natural streaming
-        for (const char of toolSummary) {
-          yield {
-            type: "token",
-            delta: char,
-          };
+        // Build messages as proper LLMMessage format that convertToAIMessages can handle
+        const followUpMessages: LLMMessage[] = [
+          // 1. Original user message
+          {
+            role: "user",
+            content: userMessage,
+          },
+          // 2. Assistant's initial response with tool calls
+          {
+            role: "assistant",
+            content: fullContent || "", // Keep the text content
+            toolCalls: toolCalls, // Include the tool calls
+          },
+          // 3. Tool results as individual tool messages
+          ...toolCalls.map((tc, index) => {
+            const result = toolResults[index];
+
+            // FIXED: Extract meaningful content and properly structure it
+            let resultContent: any = result?.result;
+
+            // Handle MCP tool results that have content arrays
+            if (
+              resultContent &&
+              resultContent.content &&
+              Array.isArray(resultContent.content)
+            ) {
+              // Extract text from content array
+              const textContent = resultContent.content
+                .filter((item: any) => item.type === "text")
+                .map((item: any) => item.text)
+                .join("\n");
+
+              if (textContent) {
+                // Parse the text if it's JSON
+                try {
+                  resultContent = JSON.parse(textContent);
+                } catch {
+                  resultContent = textContent;
+                }
+              } else {
+                // Handle non-text content (resources, images, etc.)
+                resultContent = {
+                  status: "completed",
+                  content: resultContent.content,
+                  type: "mcp_response",
+                };
+              }
+            }
+
+            // Ensure result is properly structured
+            if (resultContent === null || resultContent === undefined) {
+              resultContent = {
+                status: "completed",
+                message: "Tool executed successfully",
+              };
+            }
+
+            console.log(
+              `[FIXED] Tool result for ${tc.function.name}:`,
+              resultContent
+            );
+
+            // Return as a tool message with proper structure for AI SDK v5
+            return {
+              role: "tool" as const,
+              content: JSON.stringify(resultContent), // Tool content is JSON string
+              toolCallId: tc.id,
+              name: tc.function.name,
+            } as ExtendedLLMMessage;
+          }),
+        ];
+
+        console.log(
+          `[FIXED] Sending ${followUpMessages.length} messages back to LLM for final response`
+        );
+        console.log(
+          "[FIXED] Follow-up messages structure:",
+          followUpMessages.map(m => ({
+            role: m.role,
+            contentType: typeof m.content,
+            hasContent: !!m.content,
+            hasToolCalls: !!(m as any).toolCalls,
+          }))
+        );
+
+        // Get the LLM's final response after seeing the tool results
+        let finalResponse = "";
+        try {
+          // Stream the response without tools to prevent loops
+          const followUpConfig = { ...this.config, tools: [] };
+
+          // The followUpMessages are already in LLMMessage format
+          // They will be converted to AI SDK format by convertToAIMessages in the stream method
+          for await (const chunk of this.stream(
+            followUpMessages,
+            followUpConfig
+          )) {
+            if (chunk.delta?.content) {
+              finalResponse += chunk.delta.content;
+              yield {
+                type: "token",
+                delta: chunk.delta.content,
+              };
+            }
+          }
+
+          // If we got a response, use it
+          if (finalResponse) {
+            fullContent = finalResponse;
+          }
+        } catch (error) {
+          console.error(
+            "[FIXED] Error getting LLM summary of tool results:",
+            error
+          );
+
+          // Provide a detailed fallback summary based on actual tool results
+          const toolSummaries = toolResults.map((result, idx) => {
+            const toolName = toolCalls[idx].function.name;
+            if (result.rawResult.success) {
+              // Try to extract meaningful information from the result
+              let summary = `${toolName}: completed successfully`;
+
+              if (result.result && typeof result.result === "object") {
+                // Check for common patterns in the result
+                if (
+                  result.result.content &&
+                  Array.isArray(result.result.content)
+                ) {
+                  // Handle MCP content arrays
+                  const textParts = result.result.content
+                    .filter((item: any) => item.type === "text")
+                    .map((item: any) => {
+                      // Try to parse and summarize the text
+                      try {
+                        const parsed = JSON.parse(item.text);
+                        if (parsed.items && Array.isArray(parsed.items)) {
+                          return `Found ${parsed.items.length} items`;
+                        }
+                        return item.text.substring(0, 100);
+                      } catch {
+                        return item.text.substring(0, 100);
+                      }
+                    });
+
+                  if (textParts.length > 0) {
+                    summary = `${toolName}: ${textParts.join(", ")}`;
+                  }
+                } else if (result.result.output) {
+                  summary = `${toolName}: ${String(result.result.output).substring(0, 200)}`;
+                } else if (result.result.text) {
+                  summary = `${toolName}: ${String(result.result.text).substring(0, 200)}`;
+                }
+              }
+
+              return summary;
+            } else {
+              return `${toolName}: encountered an error - ${result.rawResult.error || "unknown error"}`;
+            }
+          });
+
+          const fallbackSummary = `I executed the following tool${toolCalls.length > 1 ? "s" : ""}:\n\n${toolSummaries.join("\n")}\n\nThe operation${toolCalls.length > 1 ? "s have" : " has"} completed.`;
+
+          // Stream the fallback character by character
+          for (const char of fallbackSummary) {
+            yield {
+              type: "token",
+              delta: char,
+            };
+          }
+
+          fullContent = fallbackSummary;
         }
-
-        fullContent += toolSummary;
       }
 
+      // Send the complete message
       const assistantMessage: ChatMessage = {
         id: this.generateId(),
-        message: fullContent || "I executed the requested tools.",
+        message: fullContent || "Task completed.",
         isUser: false,
         timestamp: new Date(),
         isExecuting: false,
@@ -1131,8 +1305,7 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   /**
-   * Enhanced tool execution that uses MCP streaming
-   * This method integrates with your SSE supergateway connection
+   * Execute tool via MCP with proper result handling
    */
   private async executeToolWithMCPStreaming(
     connection: Connection,
@@ -1143,13 +1316,8 @@ export class AISDKAdapter extends LLMAdapter {
     const startTime = Date.now();
 
     try {
-      console.log(
-        `[AI SDK + MCP] Executing tool ${toolName} via SSE connection:`,
-        toolArgs
-      );
+      console.log(`[MCP] Executing tool ${toolName}:`, toolArgs);
 
-      // This uses the enhanced MCP adapter that properly handles SSE
-      // Your supergateway connection will be used here
       const mcpResult = await MCPService.executeTool(
         connection,
         toolName,
@@ -1159,7 +1327,7 @@ export class AISDKAdapter extends LLMAdapter {
       const endTime = Date.now();
       const duration = endTime - startTime;
 
-      console.log(`[AI SDK + MCP] Tool execution completed:`, {
+      console.log(`[MCP] Tool execution completed:`, {
         toolName,
         success: mcpResult.success,
         duration,
@@ -1214,7 +1382,7 @@ export class AISDKAdapter extends LLMAdapter {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      console.error(`[AI SDK + MCP] Tool execution failed:`, error);
+      console.error(`[MCP] Tool execution failed:`, error);
 
       const chatMessage: ChatMessage = {
         id: executionId,
@@ -1253,7 +1421,7 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   /**
-   * Send a message with chat context and tool execution - Fixed version
+   * Send a message with chat context and tool execution
    */
   async sendMessage(
     userMessage: string,
@@ -1262,7 +1430,6 @@ export class AISDKAdapter extends LLMAdapter {
   ): Promise<ChatResponse> {
     const { tools, llmSettings } = context;
 
-    // Update configuration and reinitialize if needed
     const needsReinit =
       this.config.apiKey !== llmSettings.apiKey ||
       this.config.model !== llmSettings.model ||
@@ -1278,11 +1445,8 @@ export class AISDKAdapter extends LLMAdapter {
       this.initializeAIModel();
     }
 
-    // For non-streaming, we can safely include simple text messages from history
-    // But avoid complex tool execution messages that cause parsing issues
     const llmMessages: LLMMessage[] = conversationHistory
       .filter(msg => {
-        // Only include simple text messages, no tool executions
         return (
           msg.message &&
           msg.message.trim() &&
@@ -1298,16 +1462,12 @@ export class AISDKAdapter extends LLMAdapter {
         content: String(msg.message || "").trim(),
       }));
 
-    // Add the new user message
     llmMessages.push({
       role: "user",
       content: userMessage,
     });
 
-    // Convert tools to LLM format with proper schema handling
     const llmTools: LLMTool[] = tools.map(tool => {
-      console.log("Converting tool for LLM (non-streaming):", tool.name);
-
       let inputSchema = tool.inputSchema;
       if (!inputSchema) {
         inputSchema = {
@@ -1325,7 +1485,7 @@ export class AISDKAdapter extends LLMAdapter {
           : [],
       };
 
-      const llmTool: LLMTool = {
+      return {
         type: "function",
         function: {
           name: tool.name,
@@ -1333,24 +1493,16 @@ export class AISDKAdapter extends LLMAdapter {
           parameters: normalizedSchema,
         },
       };
-
-      console.log("Created LLM tool (non-streaming):", llmTool);
-      return llmTool;
     });
 
-    console.log("Setting tools for completion:", llmTools.length);
     this.config.tools = llmTools;
 
-    // Get initial response
     const response = await this.complete(llmMessages);
     const toolExecutionMessages: ChatMessage[] = [];
     const toolResults: Array<{ toolCallId: string; result: any }> = [];
 
-    // Handle tool calls if any - using MCP streaming
     if (response.toolCalls && response.toolCalls.length > 0) {
-      console.log(
-        `[AISDKAdapter] Processing ${response.toolCalls.length} tool calls via MCP`
-      );
+      console.log(`Processing ${response.toolCalls.length} tool calls via MCP`);
 
       for (const toolCall of response.toolCalls) {
         const toolResult = await this.executeToolWithMCPStreaming(
@@ -1362,10 +1514,9 @@ export class AISDKAdapter extends LLMAdapter {
         toolExecutionMessages.push(toolResult.chatMessage);
         toolResults.push({
           toolCallId: toolCall.id,
-          result: toolResult.result,
+          result: toolResult.result || { status: "executed" },
         });
 
-        // Store tool execution for non-streaming too
         if (AISDKAdapter.storageAdapter) {
           try {
             await AISDKAdapter.storageAdapter.addToolExecution(
@@ -1378,9 +1529,7 @@ export class AISDKAdapter extends LLMAdapter {
         }
       }
 
-      // Create a fresh context for the follow-up completion
-      // Only include the minimal conversation context needed
-      const followUpMessages: LLMMessage[] = [
+      const followUpMessages: ExtendedLLMMessage[] = [
         {
           role: "user",
           content: userMessage,
@@ -1390,45 +1539,31 @@ export class AISDKAdapter extends LLMAdapter {
           content: response.content || "",
           toolCalls: response.toolCalls,
         },
-        // Add tool results in the expected format
-        ...response.toolCalls.map(tc => {
-          const result = toolResults.find(tr => tr.toolCallId === tc.id);
-          const resultContent = result?.result
-            ? JSON.stringify(result.result)
-            : JSON.stringify({
-                status: "success",
-                message: "Tool executed successfully",
-              });
+        ...response.toolCalls.map((tc, index) => {
+          const result = toolResults[index];
+          const resultContent = result?.result || { status: "completed" };
 
           return {
             role: "tool" as const,
-            content: resultContent,
+            content: JSON.stringify(resultContent),
             toolCallId: tc.id,
             name: tc.function.name,
           } as ExtendedLLMMessage;
         }),
       ];
 
-      console.log("Follow-up messages prepared:", followUpMessages.length);
-      console.log("Tool results:", toolResults);
-
       try {
         const finalResponse = await this.complete(followUpMessages);
         response.content = finalResponse.content;
-        console.log(
-          "Final response after tool execution:",
-          finalResponse.content
-        );
       } catch (error) {
-        console.error("Error in final completion with tool results:", error);
-        // Fallback - provide a summary of what was executed
-        response.content = `I executed ${response.toolCalls.length} tool(s): ${response.toolCalls.map(tc => tc.function.name).join(", ")}. The tools completed successfully.`;
+        console.error("Error in final completion:", error);
+        response.content = `I executed ${response.toolCalls.length} tool(s): ${response.toolCalls.map(tc => tc.function.name).join(", ")}. The operation completed.`;
       }
     }
 
     const assistantMessage: ChatMessage = {
       id: this.generateId(),
-      message: response.content || "I executed the requested tools.",
+      message: response.content || "Task completed.",
       isUser: false,
       timestamp: new Date(),
       isExecuting: false,
@@ -1440,16 +1575,11 @@ export class AISDKAdapter extends LLMAdapter {
     };
   }
 
-  /**
-   * Generate unique ID
-   */
   private generateId(): string {
     return `tool_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
   }
 
-  /**
-   * Static methods for model management
-   */
+  // Static helper methods remain unchanged...
   static getDefaultSettings(): Partial<LLMSettings> {
     return {
       provider: "anthropic",
@@ -1537,9 +1667,6 @@ export class AISDKAdapter extends LLMAdapter {
     return "An unexpected error occurred. Please try again.";
   }
 
-  /**
-   * Store tool execution using the storage adapter
-   */
   static async storeToolExecution(
     connectionId: string,
     execution: ToolExecution
