@@ -1,3 +1,4 @@
+// apps/ui/src/components/ChatInterface.tsx - Updated with Share Feature
 /* eslint-disable react-hooks/exhaustive-deps */
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
@@ -11,6 +12,7 @@ import {
   Settings,
   Zap,
   ZapOff,
+  Share2,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
@@ -18,6 +20,7 @@ import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
 import { ChatService, SSEEvent } from "../services/chatService";
 import { SettingsModal } from "./SettingsModal";
+import { ShareModal } from "./ShareModal";
 import { nanoid } from "nanoid";
 
 interface ChatInterfaceProps {
@@ -25,17 +28,19 @@ interface ChatInterfaceProps {
 }
 
 export const ChatInterface = (_args: ChatInterfaceProps) => {
-  const { connectionId, chatId } = useParams();
+  const { connectionId, chatId, toolId } = useParams();
   const navigate = useNavigate();
   const {
     connections,
     tools,
     conversations,
+    toolExecutions,
+    disabledTools,
     updateConversations,
     refreshAll,
     getEnabledTools,
     isToolEnabled,
-    onToolStateChange, // NEW: Subscribe to tool state changes
+    onToolStateChange,
   } = useStorage();
   const { expandedToolCall: inspectorExpandedTool, syncToolCallState } =
     useInspector();
@@ -49,11 +54,12 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const [streamingStatus, setStreamingStatus] = useState<string>("");
   const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
-  // NEW: Reactive tool state - forces re-render when tool enablement changes
-  const [toolStateVersion, setToolStateVersion] = useState(0);
+  // Reactive tool state - forces re-render when tool enablement changes
+  const [, setToolStateVersion] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingMessageRef = useRef<string>("");
@@ -77,20 +83,12 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     loadSettings();
   }, []);
 
-  // NEW: Listen for tool state changes and force re-render
+  // Listen for tool state changes and force re-render
   useEffect(() => {
     if (!connectionId) return;
 
-    console.log(
-      `[ChatInterface] Setting up tool state listener for ${connectionId}`
-    );
-
     const cleanup = onToolStateChange(changedConnectionId => {
       if (changedConnectionId === connectionId) {
-        console.log(
-          `[ChatInterface] Tool state changed for ${connectionId}, updating UI`
-        );
-        // Force re-render by incrementing version
         setToolStateVersion(prev => prev + 1);
       }
     });
@@ -139,33 +137,24 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const currentMessages = currentConversation?.messages || [];
   const allConnectionTools = connectionId ? tools[connectionId] || [] : [];
 
-  // NEW: Get enabled tools reactively - this will update when toolStateVersion changes
+  // Get enabled tools reactively - this will update when toolStateVersion changes
   const enabledConnectionTools = connectionId
     ? getEnabledTools(connectionId)
     : [];
 
-  // NEW: Calculate disabled tools count reactively
+  // Calculate disabled tools count reactively
   const disabledToolsCount =
     allConnectionTools.length - enabledConnectionTools.length;
 
-  // DEBUG: Log tool state changes
-  useEffect(() => {
-    if (connectionId) {
-      console.log(`[ChatInterface] Tool state update for ${connectionId}:`, {
-        toolStateVersion,
-        totalTools: allConnectionTools.length,
-        enabledTools: enabledConnectionTools.length,
-        disabledTools: disabledToolsCount,
-        enabledToolNames: enabledConnectionTools.map(t => t.name),
-      });
-    }
-  }, [
-    connectionId,
-    toolStateVersion,
-    allConnectionTools.length,
-    enabledConnectionTools.length,
-    disabledToolsCount,
-  ]);
+  // Get current tool executions for sharing
+  const currentToolExecutions = connectionId
+    ? toolExecutions[connectionId] || []
+    : [];
+
+  // Get current disabled tools for sharing
+  const currentDisabledTools = connectionId
+    ? disabledTools[connectionId] || new Set()
+    : new Set();
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -175,6 +164,15 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const handleToolCallExpand = (messageId: string, _toolName?: string) => {
     const isCurrentlyExpanded = isToolCallExpanded(messageId);
     syncToolCallState(messageId, !isCurrentlyExpanded);
+  };
+
+  // Handle share button click
+  const handleShareChat = () => {
+    if (!currentConnection || !currentConversation) {
+      console.warn("Cannot share - missing connection or conversation");
+      return;
+    }
+    setIsShareOpen(true);
   };
 
   // Create a new chat conversation
@@ -297,7 +295,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   // Handle streaming toggle
   const handleStreamingToggle = () => {
     if (isStreaming) {
-      // Cancel current streaming
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -395,7 +392,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             setStreamingStatus("");
             streamingMessageRef.current = "";
 
-            // Create a proper error message for display
             const errorText =
               event.data?.error || "An error occurred during streaming";
 
@@ -428,7 +424,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     [currentMessages, messageInput, refreshAll, updateConversationMessages]
   );
 
-  // NEW: Updated send message to use fresh enabled tools
+  // Send message with fresh enabled tools
   const handleSendMessage = async () => {
     if (
       !messageInput.trim() ||
@@ -447,7 +443,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       return;
     }
 
-    // Create abort controller for this request
     abortControllerRef.current = new AbortController();
 
     try {
@@ -459,18 +454,11 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const originalMessage = messageInput.trim();
       setMessageInput("");
 
-      // NEW: Get the latest enabled tools at the time of sending
       const currentEnabledTools = getEnabledTools(connectionId);
 
-      console.log(
-        `[ChatInterface] Sending message with ${currentEnabledTools.length} enabled tools:`,
-        currentEnabledTools.map(t => t.name)
-      );
-
-      // Use fresh enabled tools for the chat context
       const chatContext = {
         connection: currentConnection,
-        tools: currentEnabledTools, // This is now fresh at send time
+        tools: currentEnabledTools,
         llmSettings,
       };
 
@@ -483,7 +471,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       );
 
       if (streamingEnabled) {
-        // Use streaming approach
         await ChatService.sendMessageWithStreaming(
           originalMessage,
           chatContext,
@@ -491,7 +478,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           handleStreamingEvent
         );
       } else {
-        // Fallback to non-streaming approach
         const userMessage: ChatMessageType = {
           id: nanoid(),
           message: originalMessage,
@@ -607,7 +593,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       message.toolExecution || message.isExecuting || message.executingTool;
     const toolName = message.executingTool || message.toolExecution?.toolName;
 
-    // Show warning if tool was disabled after execution
     const toolWasDisabled =
       toolName && connectionId && !isToolEnabled(connectionId, toolName);
 
@@ -930,15 +915,31 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               </div>
             </div>
 
-            {showApiWarning && (
-              <button
-                onClick={() => setIsSettingsOpen(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-              >
-                <Settings className="w-4 h-4" />
-                Configure Claude
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Share Button */}
+              {!showApiWarning &&
+                currentConversation &&
+                currentMessages.length > 0 && (
+                  <button
+                    onClick={handleShareChat}
+                    className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
+                    title="Share this chat session"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share Chat
+                  </button>
+                )}
+
+              {showApiWarning && (
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  Configure Claude
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1028,6 +1029,19 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 {disabledToolsCount} tool
                 {disabledToolsCount === 1 ? " is" : "s are"} disabled and won't
                 be used in conversations
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Share URL Notice */}
+        {currentMessages.length > 0 && !showApiWarning && (
+          <div className="flex-shrink-0 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 px-6 py-2">
+            <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200">
+              <Share2 className="w-4 h-4" />
+              <span>
+                You can share this complete chat session with your friends using
+                the Share button
               </span>
             </div>
           </div>
@@ -1171,6 +1185,20 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
       {/* Settings Modal */}
       <SettingsModal isOpen={isSettingsOpen} onClose={handleSettingsClose} />
+
+      {/* Share Modal */}
+      {currentConnection && currentConversation && (
+        <ShareModal
+          isOpen={isShareOpen}
+          onClose={() => setIsShareOpen(false)}
+          connection={currentConnection}
+          conversation={currentConversation}
+          tools={allConnectionTools}
+          toolExecutions={currentToolExecutions}
+          disabledTools={currentDisabledTools as Set<string>}
+          selectedToolId={toolId}
+        />
+      )}
     </>
   );
 };

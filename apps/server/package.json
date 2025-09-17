@@ -26,7 +26,7 @@
     "dev": "concurrently \"pnpm dev:ui\" \"pnpm dev:server\"",
     "dev:ui": "pnpm --filter @mcpconnect/ui dev",
     "dev:server": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node --max-http-header-size=10485760 dist/index.js",
     "clean": "rm -rf dist && rm tsconfig.tsbuildinfo",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",

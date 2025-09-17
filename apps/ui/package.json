@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "build": "tsc && vite build",
-    "dev": "vite",
+    "dev": "NODE_OPTIONS='--max-http-header-size=10485760' vite",
     "preview": "vite preview",
     "clean": "rm -rf dist .vite && rm tsconfig.tsbuildinfo",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",

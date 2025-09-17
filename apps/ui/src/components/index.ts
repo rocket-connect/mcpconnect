@@ -7,3 +7,5 @@ export { ConnectionView } from "./ConnectionView";
 export { ConnectionModal } from "./ConnectionModal";
 export { ResourceView } from "./ResourceView";
 export { SettingsModal } from "./SettingsModal";
+export { ShareView } from "./ShareView";
+export { ShareUrlHandler } from "./ShareUrlHandler";

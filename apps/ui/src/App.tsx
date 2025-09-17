@@ -1,3 +1,4 @@
+// apps/ui/src/App.tsx - Updated with Share Routes
 import { useState } from "react";
 import {
   BrowserRouter,
@@ -14,6 +15,8 @@ import {
   ChatInterface,
   ConnectionView,
   ResourceView,
+  ShareView,
+  ShareUrlHandler,
 } from "./components";
 import { useStorage } from "./contexts/StorageContext";
 import { InspectorProvider, InspectorUI } from "./contexts/InspectorProvider";
@@ -97,59 +100,80 @@ function AppContent() {
 
   return (
     <InspectorProvider>
-      <MCPLayout
-        header={<Header />}
-        sidebar={<Sidebar connections={connections} resources={resources} />}
-        inspector={<InspectorUI />}
-      >
-        <Routes>
-          {/* Default redirect to connections */}
-          <Route path="/" element={<Navigate to="/connections" replace />} />
+      {/* Add ShareUrlHandler to handle routing issues */}
+      <ShareUrlHandler />
+      <Routes>
+        {/* Share routes - These need to be outside the main layout */}
+        <Route path="/share/:shareData" element={<ShareView />} />
 
-          {/* Connections overview */}
-          <Route
-            path="/connections"
-            element={<ConnectionView connections={connections} />}
-          />
+        {/* Main app routes with layout */}
+        <Route
+          path="/*"
+          element={
+            <MCPLayout
+              header={<Header />}
+              sidebar={
+                <Sidebar connections={connections} resources={resources} />
+              }
+              inspector={<InspectorUI />}
+            >
+              <Routes>
+                {/* Default redirect to connections */}
+                <Route
+                  path="/"
+                  element={<Navigate to="/connections" replace />}
+                />
 
-          {/* Connection detail redirect to first chat */}
-          <Route
-            path="/connections/:connectionId"
-            element={<ConnectionChatRedirect />}
-          />
+                {/* Connections overview */}
+                <Route
+                  path="/connections"
+                  element={<ConnectionView connections={connections} />}
+                />
 
-          {/* Basic connection chat redirect */}
-          <Route
-            path="/connections/:connectionId/chat"
-            element={<ConnectionChatRedirect />}
-          />
+                {/* Connection detail redirect to first chat */}
+                <Route
+                  path="/connections/:connectionId"
+                  element={<ConnectionChatRedirect />}
+                />
 
-          {/* Specific chat within a connection */}
-          <Route
-            path="/connections/:connectionId/chat/:chatId"
-            element={<ChatInterface />}
-          />
+                {/* Basic connection chat redirect */}
+                <Route
+                  path="/connections/:connectionId/chat"
+                  element={<ConnectionChatRedirect />}
+                />
 
-          {/* Tool execution within a specific chat */}
-          <Route
-            path="/connections/:connectionId/chat/:chatId/tools/:toolId"
-            element={<ChatInterface expandedToolCall={true} />}
-          />
+                {/* Specific chat within a connection */}
+                <Route
+                  path="/connections/:connectionId/chat/:chatId"
+                  element={<ChatInterface />}
+                />
 
-          {/* Connection-specific resources routes */}
-          <Route
-            path="/connections/:connectionId/resources"
-            element={<ResourceView selectedResource={selectedResource} />}
-          />
-          <Route
-            path="/connections/:connectionId/resources/:resourceId"
-            element={<ResourceView selectedResource={selectedResource} />}
-          />
+                {/* Tool execution within a specific chat */}
+                <Route
+                  path="/connections/:connectionId/chat/:chatId/tools/:toolId"
+                  element={<ChatInterface expandedToolCall={true} />}
+                />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/connections" replace />} />
-        </Routes>
-      </MCPLayout>
+                {/* Connection-specific resources routes */}
+                <Route
+                  path="/connections/:connectionId/resources"
+                  element={<ResourceView selectedResource={selectedResource} />}
+                />
+                <Route
+                  path="/connections/:connectionId/resources/:resourceId"
+                  element={<ResourceView selectedResource={selectedResource} />}
+                />
+
+                {/* Fallback */}
+                <Route
+                  path="*"
+                  element={<Navigate to="/connections" replace />}
+                />
+              </Routes>
+            </MCPLayout>
+          }
+        />
+      </Routes>
     </InspectorProvider>
   );
 }
