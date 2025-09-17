@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -7,12 +7,11 @@ import {
   useParams,
 } from "react-router-dom";
 import { MCPLayout } from "@mcpconnect/components";
-import { Tool, Resource } from "@mcpconnect/schemas";
+import { Resource } from "@mcpconnect/schemas";
 import {
   Header,
   Sidebar,
   ChatInterface,
-  ToolInterface,
   ConnectionView,
   ResourceView,
 } from "./components";
@@ -20,21 +19,10 @@ import { useStorage } from "./contexts/StorageContext";
 import { InspectorProvider, InspectorUI } from "./contexts/InspectorProvider";
 
 function AppContent() {
-  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(
-    null
-  );
+  const [selectedResource] = useState<Resource | null>(null);
 
-  const { connections, tools, resources, conversations, isLoading, error } =
+  const { connections, resources, conversations, isLoading, error } =
     useStorage();
-
-  const handleToolSelect = (tool: Tool) => {
-    setSelectedTool(tool);
-  };
-
-  const handleResourceSelect = (resource: Resource) => {
-    setSelectedResource(resource);
-  };
 
   if (isLoading) {
     return (
@@ -107,51 +95,11 @@ function AppContent() {
     }
   };
 
-  const ConnectionToolLoader = () => {
-    const { connectionId, toolId } = useParams<{
-      connectionId: string;
-      toolId: string;
-    }>();
-
-    useEffect(() => {
-      if (connectionId && toolId) {
-        const connectionTools = tools[connectionId] || [];
-        const tool = connectionTools.find(t => t.id === toolId);
-        if (tool) {
-          setSelectedTool(tool);
-        } else {
-          setSelectedTool(null);
-        }
-      } else {
-        setSelectedTool(null);
-      }
-    }, [connectionId, toolId]);
-
-    return <ToolInterface selectedTool={selectedTool} />;
-  };
-
-  const ConnectionToolsOverview = () => {
-    useEffect(() => {
-      setSelectedTool(null);
-    }, []);
-
-    return <ToolInterface selectedTool={null} />;
-  };
-
   return (
     <InspectorProvider>
       <MCPLayout
         header={<Header />}
-        sidebar={
-          <Sidebar
-            connections={connections}
-            tools={tools}
-            resources={resources}
-            onToolSelect={handleToolSelect}
-            onResourceSelect={handleResourceSelect}
-            selectedTool={selectedTool}
-          />
-        }
+        sidebar={<Sidebar connections={connections} resources={resources} />}
         inspector={<InspectorUI />}
       >
         <Routes>
@@ -186,16 +134,6 @@ function AppContent() {
           <Route
             path="/connections/:connectionId/chat/:chatId/tools/:toolId"
             element={<ChatInterface expandedToolCall={true} />}
-          />
-
-          {/* Connection-specific tools routes */}
-          <Route
-            path="/connections/:connectionId/tools"
-            element={<ConnectionToolsOverview />}
-          />
-          <Route
-            path="/connections/:connectionId/tools/:toolId"
-            element={<ConnectionToolLoader />}
           />
 
           {/* Connection-specific resources routes */}
