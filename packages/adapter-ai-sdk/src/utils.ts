@@ -9,7 +9,6 @@ import { Tool, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import {
   ExtendedLLMMessage,
   AIModelMessage,
-  ToolResultForLLM,
   LLMSettings,
   AISDKConfig,
 } from "./types";
@@ -558,58 +557,4 @@ export function toolsToLLMFormat(tools: Tool[]): LLMTool[] {
       },
     };
   });
-}
-
-/**
- * Create fallback summary for tool executions
- */
-export function createFallbackToolSummary(
-  toolCalls: any[],
-  toolResults: ToolResultForLLM[]
-): string {
-  const toolSummaries = toolResults.map((result, idx) => {
-    const toolName = toolCalls[idx].function.name;
-
-    // Check for errors first
-    if (result.error) {
-      return `${toolName}: encountered an error - ${result.error}`;
-    }
-
-    // Check if the raw result indicates success
-    if (result.rawResult?.success) {
-      let summary = `${toolName}: completed successfully`;
-
-      if (result.result && typeof result.result === "object") {
-        if (result.result.content && Array.isArray(result.result.content)) {
-          const textParts = result.result.content
-            .filter((item: any) => item.type === "text")
-            .map((item: any) => {
-              try {
-                const parsed = JSON.parse(item.text);
-                if (parsed.items && Array.isArray(parsed.items)) {
-                  return `Found ${parsed.items.length} items`;
-                }
-                return item.text.substring(0, 100);
-              } catch {
-                return item.text.substring(0, 100);
-              }
-            });
-
-          if (textParts.length > 0) {
-            summary = `${toolName}: ${textParts.join(", ")}`;
-          }
-        } else if (result.result.output) {
-          summary = `${toolName}: ${String(result.result.output).substring(0, 200)}`;
-        } else if (result.result.text) {
-          summary = `${toolName}: ${String(result.result.text).substring(0, 200)}`;
-        }
-      }
-
-      return summary;
-    } else {
-      return `${toolName}: encountered an error - ${result.rawResult?.error || "unknown error"}`;
-    }
-  });
-
-  return `I executed the following tool${toolCalls.length > 1 ? "s" : ""}:\n\n${toolSummaries.join("\n")}\n\nThe operation${toolCalls.length > 1 ? "s have" : " has"} completed.`;
 }

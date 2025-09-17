@@ -12,13 +12,10 @@ import {
 import { z } from "zod";
 import {
   LanguageModel,
-  AssistantContent,
   AssistantModelMessage,
   UserModelMessage,
   SystemModelMessage,
   ToolModelMessage,
-  ToolContent,
-  ToolCallPart,
 } from "ai";
 
 /**
