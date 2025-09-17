@@ -10,7 +10,6 @@ export const ResourceSchema = z.object({
   uri: z.string().optional(),
   mimeType: z.string().optional(),
   size: z.number().optional(),
-  lastModified: z.date().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   permissions: z
     .object({

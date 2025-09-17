@@ -117,13 +117,6 @@ export type AIModelMessage =
   | ToolModelMessage;
 
 /**
- * AI Content Types
- */
-export type AIAssistantContent = AssistantContent;
-export type AIToolContent = ToolContent;
-export type AIToolCallPart = ToolCallPart;
-
-/**
  * Tool result for LLM consumption
  */
 export interface ToolResultForLLM {

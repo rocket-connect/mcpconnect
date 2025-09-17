@@ -28,17 +28,6 @@ export const MCPServerInfoSchema = z.object({
 export type MCPServerInfo = z.infer<typeof MCPServerInfoSchema>;
 
 /**
- * MCP initialization schema
- */
-export const MCPInitializationSchema = z.object({
-  protocolVersion: z.string(),
-  capabilities: MCPCapabilitiesSchema,
-  serverInfo: MCPServerInfoSchema,
-});
-
-export type MCPInitialization = z.infer<typeof MCPInitializationSchema>;
-
-/**
  * MCP tool definition schema
  */
 export const MCPToolDefinitionSchema = z.object({

@@ -11,9 +11,6 @@ export type {
   ToolResultForLLM,
   AIModel,
   AIModelMessage,
-  AIAssistantContent,
-  AIToolContent,
-  AIToolCallPart,
 } from "./types";
 
 export { AnthropicProvider } from "./providers/anthropic";

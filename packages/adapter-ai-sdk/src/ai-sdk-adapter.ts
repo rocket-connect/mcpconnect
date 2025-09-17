@@ -44,7 +44,6 @@ import {
   formatToolResultForLLM,
   conversationToLLMMessages,
   toolsToLLMFormat,
-  createFallbackToolSummary,
 } from "./utils";
 
 /**
@@ -387,8 +386,7 @@ export class AISDKAdapter extends LLMAdapter {
   async *sendMessageStream(
     userMessage: string,
     context: ChatContext,
-    // eslint-disable-next-line no-unused-vars
-    _conversationHistory: ChatMessage[] = []
+    conversationHistory: ChatMessage[] = []
   ): AsyncIterable<StreamingChatResponse> {
     const { tools, llmSettings, connection } = context;
 
@@ -398,7 +396,9 @@ export class AISDKAdapter extends LLMAdapter {
       this.initializeAIModel();
     }
 
+    // Start with conversation history + new user message
     const llmMessages: LLMMessage[] = [
+      ...conversationToLLMMessages(conversationHistory),
       {
         role: "user",
         content: userMessage,
@@ -407,68 +407,110 @@ export class AISDKAdapter extends LLMAdapter {
 
     // Convert tools to LLM format
     const llmTools: LLMTool[] = toolsToLLMFormat(tools);
-
     this.config.tools = llmTools;
 
     let fullContent = "";
-    const toolCalls: LLMToolCall[] = [];
-    const toolExecutionMessages: ChatMessage[] = [];
-    const toolResults: ToolResultForLLM[] = [];
+    const allToolExecutionMessages: ChatMessage[] = [];
+    const currentMessages = [...llmMessages];
+
+    // Continue until no more tool calls are needed
+    const maxIterations = 5; // Prevent infinite loops
+    let iteration = 0;
 
     try {
-      // Stream the initial response
-      for await (const chunk of this.stream(llmMessages)) {
-        if (chunk.delta?.content) {
-          fullContent += chunk.delta.content;
-          yield {
-            type: "token",
-            delta: chunk.delta.content,
-          };
-        }
+      while (iteration < maxIterations) {
+        iteration++;
+        console.log(`[Tool Chain] Iteration ${iteration}`);
 
-        // Accumulate tool calls
-        if (chunk.delta?.toolCalls) {
-          for (const tc of chunk.delta.toolCalls) {
-            if (tc.function?.name && tc.function?.arguments) {
-              const existingCallIndex = toolCalls.findIndex(
-                call => call.id === tc.id
-              );
+        const toolCalls: LLMToolCall[] = [];
+        const toolResults: ToolResultForLLM[] = [];
+        let iterationContent = "";
 
-              if (existingCallIndex >= 0) {
-                toolCalls[existingCallIndex] = {
-                  id: tc.id || generateId(),
-                  type: "function",
-                  function: {
-                    name: tc.function.name,
-                    arguments: tc.function.arguments,
-                  },
-                };
-              } else {
-                toolCalls.push({
-                  id: tc.id || generateId(),
-                  type: "function",
-                  function: {
-                    name: tc.function.name,
-                    arguments: tc.function.arguments,
-                  },
-                });
+        // Stream the LLM response
+        for await (const chunk of this.stream(currentMessages)) {
+          if (chunk.delta?.content) {
+            iterationContent += chunk.delta.content;
+            yield {
+              type: "token",
+              delta: chunk.delta.content,
+            };
+          }
+
+          // Accumulate tool calls
+          if (chunk.delta?.toolCalls) {
+            for (const tc of chunk.delta.toolCalls) {
+              if (tc.function?.name && tc.function?.arguments) {
+                const existingCallIndex = toolCalls.findIndex(
+                  call => call.id === tc.id
+                );
+
+                if (existingCallIndex >= 0) {
+                  toolCalls[existingCallIndex] = {
+                    id: tc.id || generateId(),
+                    type: "function",
+                    function: {
+                      name: tc.function.name,
+                      arguments: tc.function.arguments,
+                    },
+                  };
+                } else {
+                  toolCalls.push({
+                    id: tc.id || generateId(),
+                    type: "function",
+                    function: {
+                      name: tc.function.name,
+                      arguments: tc.function.arguments,
+                    },
+                  });
+                }
               }
             }
           }
+
+          // Check if we've finished with tool calls
+          if (
+            chunk.finishReason === "tool_calls" ||
+            (chunk.finishReason && toolCalls.length > 0)
+          ) {
+            break;
+          }
+
+          // If we get a stop reason without tool calls, we're done
+          if (chunk.finishReason === "stop" && toolCalls.length === 0) {
+            fullContent += iterationContent;
+            // Send the complete message
+            const assistantMessage = createAssistantMessage(fullContent);
+            yield {
+              type: "message_complete",
+              assistantMessage,
+              toolExecutionMessages: allToolExecutionMessages,
+            };
+            return;
+          }
         }
 
-        // Check if we've finished with tool calls
-        if (
-          chunk.finishReason === "tool_calls" ||
-          (chunk.finishReason && toolCalls.length > 0)
-        ) {
+        fullContent += iterationContent;
+
+        // If no tool calls in this iteration, we're done
+        if (toolCalls.length === 0) {
+          console.log(
+            `[Tool Chain] No tool calls in iteration ${iteration}, ending`
+          );
           break;
         }
-      }
 
-      // Execute tools if needed
-      if (toolCalls.length > 0) {
-        // Execute each tool and collect results
+        console.log(
+          `[Tool Chain] Executing ${toolCalls.length} tools in iteration ${iteration}`
+        );
+
+        // Add the assistant message with tool calls to the conversation
+        currentMessages.push({
+          role: "assistant",
+          content: iterationContent || "",
+          toolCalls: toolCalls,
+        });
+
+        // Execute each tool and add results to conversation
         for (const toolCall of toolCalls) {
           yield {
             type: "tool_start",
@@ -482,7 +524,7 @@ export class AISDKAdapter extends LLMAdapter {
             JSON.parse(toolCall.function.arguments)
           );
 
-          toolExecutionMessages.push(toolResult.chatMessage);
+          allToolExecutionMessages.push(toolResult.chatMessage);
 
           // Store both the result and the raw result for proper formatting
           toolResults.push({
@@ -504,6 +546,18 @@ export class AISDKAdapter extends LLMAdapter {
             }
           }
 
+          // Add tool result to conversation immediately
+          const toolMessage = {
+            role: "tool" as const,
+            content: toolResult.error
+              ? JSON.stringify({ error: toolResult.error })
+              : JSON.stringify(toolResult.result || { status: "executed" }),
+            toolCallId: toolCall.id,
+            name: toolCall.function.name,
+          };
+
+          currentMessages.push(toolMessage);
+
           yield {
             type: "tool_end",
             toolName: toolCall.function.name,
@@ -512,109 +566,22 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // Build complete conversation with tool results
-        // CRITICAL FIX: Structure the conversation properly for AI SDK v5
-        const followUpMessages: LLMMessage[] = [
-          {
-            role: "user",
-            content: userMessage,
-          },
-          {
-            role: "assistant",
-            content: fullContent || "",
-            toolCalls: toolCalls, // Include the tool calls in the assistant message
-          },
-          // Add tool result messages in the correct format
-          ...toolCalls.map((tc, index) => {
-            const result = toolResults[index];
-            const content = result.error
-              ? JSON.stringify({ error: result.error })
-              : JSON.stringify(result.result || { status: "executed" });
-
-            return {
-              role: "tool" as const,
-              content,
-              toolCallId: tc.id,
-              name: tc.function.name,
-            };
-          }),
-        ];
-
         console.log(
-          "Follow-up messages for AI SDK:",
-          JSON.stringify(followUpMessages, null, 2)
+          `[Tool Chain] Added ${toolCalls.length} tool results to conversation`
         );
 
-        // Convert to AI SDK format
-        const aiMessages = convertToAIMessages(followUpMessages);
-
-        console.log(
-          "Converted AI messages:",
-          JSON.stringify(aiMessages, null, 2)
-        );
-
-        // Get the LLM's final response after seeing the tool results
-        let finalResponse = "";
-        try {
-          // Stream the response without tools to prevent loops
-          const followUpConfig = { ...this.config, tools: [] };
-
-          console.log("Sending follow-up with tool results:", {
-            messageCount: followUpMessages.length,
-            hasToolResults: followUpMessages.some(m => m.role === "tool"),
-            toolResultsPreview: followUpMessages
-              .filter(m => m.role === "tool")
-              .map(m => ({
-                toolCallId: (m as any).toolCallId,
-                contentLength: m.content?.length,
-              })),
-          });
-
-          for await (const chunk of this.stream(
-            followUpMessages,
-            followUpConfig
-          )) {
-            if (chunk.delta?.content) {
-              finalResponse += chunk.delta.content;
-              yield {
-                type: "token",
-                delta: chunk.delta.content,
-              };
-            }
-          }
-
-          // If we got a response, use it
-          if (finalResponse) {
-            fullContent = finalResponse;
-          }
-        } catch (error) {
-          console.error("Error getting LLM summary of tool results:", error);
-
-          // Provide a detailed fallback summary based on actual tool results
-          const fallbackSummary = createFallbackToolSummary(
-            toolCalls,
-            toolResults
-          );
-
-          // Stream the fallback character by character
-          for (const char of fallbackSummary) {
-            yield {
-              type: "token",
-              delta: char,
-            };
-          }
-
-          fullContent = fallbackSummary;
-        }
+        // Continue the loop to see if the LLM wants to make more tool calls
+        // The conversation now includes all previous messages + tool results
       }
 
-      // Send the complete message
-      const assistantMessage = createAssistantMessage(fullContent);
+      // Final response after all tool iterations
+      console.log(`[Tool Chain] Completed after ${iteration} iterations`);
 
+      const assistantMessage = createAssistantMessage(fullContent);
       yield {
         type: "message_complete",
         assistantMessage,
-        toolExecutionMessages,
+        toolExecutionMessages: allToolExecutionMessages,
       };
     } catch (error) {
       console.error("Stream error:", error);
