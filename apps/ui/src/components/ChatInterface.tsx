@@ -35,6 +35,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     refreshAll,
     getEnabledTools,
     isToolEnabled,
+    onToolStateChange, // NEW: Subscribe to tool state changes
   } = useStorage();
   const { expandedToolCall: inspectorExpandedTool, syncToolCallState } =
     useInspector();
@@ -50,6 +51,10 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+
+  // NEW: Reactive tool state - forces re-render when tool enablement changes
+  const [toolStateVersion, setToolStateVersion] = useState(0);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingMessageRef = useRef<string>("");
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -71,6 +76,27 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
     loadSettings();
   }, []);
+
+  // NEW: Listen for tool state changes and force re-render
+  useEffect(() => {
+    if (!connectionId) return;
+
+    console.log(
+      `[ChatInterface] Setting up tool state listener for ${connectionId}`
+    );
+
+    const cleanup = onToolStateChange(changedConnectionId => {
+      if (changedConnectionId === connectionId) {
+        console.log(
+          `[ChatInterface] Tool state changed for ${connectionId}, updating UI`
+        );
+        // Force re-render by incrementing version
+        setToolStateVersion(prev => prev + 1);
+      }
+    });
+
+    return cleanup;
+  }, [connectionId, onToolStateChange]);
 
   // Reload settings when settings modal closes
   const handleSettingsClose = useCallback(async () => {
@@ -113,12 +139,33 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const currentMessages = currentConversation?.messages || [];
   const allConnectionTools = connectionId ? tools[connectionId] || [] : [];
 
-  // Get only enabled tools for this connection
+  // NEW: Get enabled tools reactively - this will update when toolStateVersion changes
   const enabledConnectionTools = connectionId
     ? getEnabledTools(connectionId)
     : [];
+
+  // NEW: Calculate disabled tools count reactively
   const disabledToolsCount =
     allConnectionTools.length - enabledConnectionTools.length;
+
+  // DEBUG: Log tool state changes
+  useEffect(() => {
+    if (connectionId) {
+      console.log(`[ChatInterface] Tool state update for ${connectionId}:`, {
+        toolStateVersion,
+        totalTools: allConnectionTools.length,
+        enabledTools: enabledConnectionTools.length,
+        disabledTools: disabledToolsCount,
+        enabledToolNames: enabledConnectionTools.map(t => t.name),
+      });
+    }
+  }, [
+    connectionId,
+    toolStateVersion,
+    allConnectionTools.length,
+    enabledConnectionTools.length,
+    disabledToolsCount,
+  ]);
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -356,7 +403,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     [currentMessages, messageInput, refreshAll]
   );
 
-  // Send message using ChatService with SSE streaming - now uses only enabled tools
+  // NEW: Updated send message to use fresh enabled tools
   const handleSendMessage = async () => {
     if (
       !messageInput.trim() ||
@@ -387,10 +434,18 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const originalMessage = messageInput.trim();
       setMessageInput("");
 
-      // Use only enabled tools for the chat context
+      // NEW: Get the latest enabled tools at the time of sending
+      const currentEnabledTools = getEnabledTools(connectionId);
+
+      console.log(
+        `[ChatInterface] Sending message with ${currentEnabledTools.length} enabled tools:`,
+        currentEnabledTools.map(t => t.name)
+      );
+
+      // Use fresh enabled tools for the chat context
       const chatContext = {
         connection: currentConnection,
-        tools: enabledConnectionTools, // This now filters out disabled tools
+        tools: currentEnabledTools, // This is now fresh at send time
         llmSettings,
       };
 

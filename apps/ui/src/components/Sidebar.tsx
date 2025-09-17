@@ -23,10 +23,14 @@ export const Sidebar = ({
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
-  const { conversations, adapter } = useStorage();
-  const [toolSearchQuery, setToolSearchQuery] = useState("");
+  const {
+    conversations,
+    disabledTools,
+    updateDisabledTools, // NEW: Use reactive method
+    isToolEnabled, // NEW: Use reactive method
+  } = useStorage();
 
-  const [disabledTools, setDisabledTools] = useState<Set<string>>(new Set());
+  const [toolSearchQuery, setToolSearchQuery] = useState("");
 
   // Manual URL parsing as backup since useParams seems to be failing
   const urlParts = location.pathname.split("/");
@@ -64,7 +68,6 @@ export const Sidebar = ({
   };
 
   // Only show tools when a connection is selected
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const toolsToShow = currentConnectionId
     ? tools[currentConnectionId] || []
     : [];
@@ -87,53 +90,58 @@ export const Sidebar = ({
     return filtered;
   }, [toolsToShow, toolSearchQuery]);
 
-  // Tool management functions
+  // NEW: Tool management functions using reactive storage context
   const toggleTool = async (toolId: string) => {
-    const newDisabledTools = new Set(disabledTools);
+    if (!currentConnectionId) return;
+
+    const currentDisabled = disabledTools[currentConnectionId] || new Set();
+    const newDisabledTools = new Set(currentDisabled);
+
     if (newDisabledTools.has(toolId)) {
       newDisabledTools.delete(toolId);
+      console.log(
+        `[Sidebar] Enabling tool ${toolId} for connection ${currentConnectionId}`
+      );
     } else {
       newDisabledTools.add(toolId);
-    }
-    setDisabledTools(newDisabledTools);
-
-    // Persist to storage
-    try {
-      await adapter.set(
-        `disabled-tools-${currentConnectionId}`,
-        Array.from(newDisabledTools)
+      console.log(
+        `[Sidebar] Disabling tool ${toolId} for connection ${currentConnectionId}`
       );
-    } catch (error) {
-      console.error("Failed to save disabled tools:", error);
     }
+
+    // Use the reactive method that notifies listeners
+    await updateDisabledTools(currentConnectionId, newDisabledTools);
   };
 
   const enableAllTools = async () => {
-    setDisabledTools(new Set());
-    try {
-      await adapter.set(`disabled-tools-${currentConnectionId}`, []);
-    } catch (error) {
-      console.error("Failed to save disabled tools:", error);
-    }
+    if (!currentConnectionId) return;
+
+    console.log(
+      `[Sidebar] Enabling all tools for connection ${currentConnectionId}`
+    );
+    // Use the reactive method with empty Set (all tools enabled)
+    await updateDisabledTools(currentConnectionId, new Set());
   };
 
   const disableAllTools = async () => {
+    if (!currentConnectionId) return;
+
     const allToolIds = new Set(toolsToShow.map(tool => tool.id));
-    setDisabledTools(allToolIds);
-    try {
-      await adapter.set(
-        `disabled-tools-${currentConnectionId}`,
-        Array.from(allToolIds)
-      );
-    } catch (error) {
-      console.error("Failed to save disabled tools:", error);
-    }
+    console.log(
+      `[Sidebar] Disabling all ${allToolIds.size} tools for connection ${currentConnectionId}`
+    );
+
+    // Use the reactive method with all tool IDs disabled
+    await updateDisabledTools(currentConnectionId, allToolIds);
   };
 
   const toggleSelectedTools = async () => {
+    if (!currentConnectionId) return;
+
     // Toggle all currently filtered/visible tools
     const visibleToolIds = filteredTools.map(tool => tool.id);
-    const newDisabledTools = new Set(disabledTools);
+    const currentDisabled = disabledTools[currentConnectionId] || new Set();
+    const newDisabledTools = new Set(currentDisabled);
 
     // If any visible tool is enabled, disable all visible tools
     // Otherwise, enable all visible tools
@@ -142,52 +150,24 @@ export const Sidebar = ({
     if (hasEnabledTool) {
       // Disable all visible tools
       visibleToolIds.forEach(id => newDisabledTools.add(id));
+      console.log(
+        `[Sidebar] Disabling ${visibleToolIds.length} visible tools for connection ${currentConnectionId}`
+      );
     } else {
       // Enable all visible tools
       visibleToolIds.forEach(id => newDisabledTools.delete(id));
-    }
-
-    setDisabledTools(newDisabledTools);
-    try {
-      await adapter.set(
-        `disabled-tools-${currentConnectionId}`,
-        Array.from(newDisabledTools)
+      console.log(
+        `[Sidebar] Enabling ${visibleToolIds.length} visible tools for connection ${currentConnectionId}`
       );
-    } catch (error) {
-      console.error("Failed to save disabled tools:", error);
     }
-  };
 
-  // Load disabled tools on connection change
-  useEffect(() => {
-    if (currentConnectionId) {
-      const loadDisabledTools = async () => {
-        try {
-          const stored = await adapter.get(
-            `disabled-tools-${currentConnectionId}`
-          );
-          if (stored?.value && Array.isArray(stored.value)) {
-            setDisabledTools(new Set(stored.value));
-          } else {
-            setDisabledTools(new Set());
-          }
-        } catch (error) {
-          console.error("Failed to load disabled tools:", error);
-          setDisabledTools(new Set());
-        }
-      };
-      loadDisabledTools();
-    }
-  }, [currentConnectionId, adapter]);
+    // Use the reactive method
+    await updateDisabledTools(currentConnectionId, newDisabledTools);
+  };
 
   // Helper function to check if a tool is selected
   const isToolSelected = (tool: Tool): boolean => {
     return currentToolId === tool.id || selectedTool?.id === tool.id;
-  };
-
-  // Helper function to check if a tool is enabled
-  const isToolEnabled = (toolId: string): boolean => {
-    return !disabledTools.has(toolId);
   };
 
   // Helper function to truncate text with tooltip
@@ -210,8 +190,9 @@ export const Sidebar = ({
     );
   };
 
+  // NEW: Calculate counts reactively using the storage context methods
   const enabledCount = filteredTools.filter(tool =>
-    isToolEnabled(tool.id)
+    currentConnectionId ? isToolEnabled(currentConnectionId, tool.id) : true
   ).length;
   const totalCount = filteredTools.length;
 
@@ -361,7 +342,9 @@ export const Sidebar = ({
                 </div>
               ) : (
                 filteredTools.map((tool, idx) => {
-                  const enabled = isToolEnabled(tool.id);
+                  const enabled = currentConnectionId
+                    ? isToolEnabled(currentConnectionId, tool.id)
+                    : true;
                   const selected = isToolSelected(tool);
 
                   return (
@@ -438,7 +421,7 @@ export const Sidebar = ({
                           </div>
                         </div>
 
-                        {/* Toggle button */}
+                        {/* Toggle button - Now uses reactive method */}
                         <button
                           onClick={e => {
                             e.stopPropagation();

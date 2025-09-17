@@ -38,13 +38,17 @@ interface StorageContextType {
   addConnection: (connection: Connection) => Promise<void>;
   updateConnection: (connection: Connection) => Promise<void>;
   deleteConnection: (connectionId: string) => Promise<void>;
-  // Tool management methods
+  // Tool management methods - WITH REACTIVITY
   getEnabledTools: (connectionId: string) => Tool[];
   updateDisabledTools: (
     connectionId: string,
     disabledToolIds: Set<string>
   ) => Promise<void>;
   isToolEnabled: (connectionId: string, toolId: string) => boolean;
+  // NEW: Tool state change listener
+  onToolStateChange: (callback: (connectionId: string) => void) => () => void;
+  // NEW: Force tool state refresh for specific connection
+  refreshToolState: (connectionId: string) => Promise<void>;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -85,6 +89,42 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // NEW: Tool state change listeners
+  const [toolStateListeners, setToolStateListeners] = useState<
+    Set<(connectionId: string) => void>
+  >(new Set());
+
+  // NEW: Notify listeners when tool state changes
+  const notifyToolStateChange = useCallback(
+    (connectionId: string) => {
+      toolStateListeners.forEach(listener => {
+        try {
+          listener(connectionId);
+        } catch (error) {
+          console.error("Error in tool state listener:", error);
+        }
+      });
+    },
+    [toolStateListeners]
+  );
+
+  // NEW: Add tool state change listener
+  const onToolStateChange = useCallback(
+    (callback: (connectionId: string) => void) => {
+      setToolStateListeners(prev => new Set(prev).add(callback));
+
+      // Return cleanup function
+      return () => {
+        setToolStateListeners(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(callback);
+          return newSet;
+        });
+      };
+    },
+    []
+  );
+
   // Load disabled tools for a specific connection
   const loadDisabledTools = useCallback(
     async (connectionId: string): Promise<Set<string>> => {
@@ -102,6 +142,29 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       return new Set();
     },
     [adapter]
+  );
+
+  // NEW: Refresh tool state for specific connection
+  const refreshToolState = useCallback(
+    async (connectionId: string) => {
+      try {
+        const newDisabledTools = await loadDisabledTools(connectionId);
+
+        setDisabledTools(prev => ({
+          ...prev,
+          [connectionId]: newDisabledTools,
+        }));
+
+        // Notify listeners that tool state changed
+        notifyToolStateChange(connectionId);
+      } catch (error) {
+        console.error(
+          `Failed to refresh tool state for ${connectionId}:`,
+          error
+        );
+      }
+    },
+    [loadDisabledTools, notifyToolStateChange]
   );
 
   // Load disabled tools for all connections
@@ -301,7 +364,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     ]
   );
 
-  // Tool management methods
+  // UPDATED: Tool management methods with reactivity
   const updateDisabledTools = useCallback(
     async (connectionId: string, disabledToolIds: Set<string>) => {
       try {
@@ -309,17 +372,23 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           `disabled-tools-${connectionId}`,
           Array.from(disabledToolIds)
         );
+
+        // Update local state immediately
         setDisabledTools(prev => ({
           ...prev,
           [connectionId]: disabledToolIds,
         }));
+
+        // Notify all listeners that tool state changed
+        notifyToolStateChange(connectionId);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [adapter]
+    [adapter, notifyToolStateChange]
   );
 
+  // UPDATED: Always get fresh tool state
   const getEnabledTools = useCallback(
     (connectionId: string): Tool[] => {
       const allTools = tools[connectionId] || [];
@@ -327,7 +396,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
       return allTools.filter(tool => !disabled.has(tool.id));
     },
-    [tools, disabledTools]
+    [tools, disabledTools] // This will cause re-computation when disabledTools changes
   );
 
   const isToolEnabled = useCallback(
@@ -456,6 +525,9 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     getEnabledTools,
     updateDisabledTools,
     isToolEnabled,
+    // NEW exports
+    onToolStateChange,
+    refreshToolState,
   };
 
   return (
