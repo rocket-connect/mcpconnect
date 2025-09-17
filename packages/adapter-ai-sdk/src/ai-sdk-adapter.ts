@@ -2,7 +2,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   LLMAdapter,
-  LLMConfigSchema,
   LLMConfig,
   LLMMessage,
   LLMResponse,
@@ -13,114 +12,40 @@ import {
   AdapterError,
   AdapterStatus,
   StorageAdapter,
-  MCPToolDefinition,
 } from "@mcpconnect/base-adapters";
-import {
-  Connection,
-  Tool,
-  ChatMessage,
-  ToolExecution,
-} from "@mcpconnect/schemas";
-import { z } from "zod";
+import { Connection, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import { MCPService } from "./mcp-service";
 import { AnthropicProvider } from "./providers/anthropic";
+import { generateText, streamText } from "ai";
 import {
-  generateText,
-  streamText,
-  LanguageModel,
-  tool,
-  ToolCallPart,
-  ToolContent,
-  AssistantContent,
-  AssistantModelMessage,
-  UserModelMessage,
-  SystemModelMessage,
-  ToolModelMessage,
-} from "ai";
-
-/**
- * Extended LLM message interface for AI SDK compatibility
- */
-interface ExtendedLLMMessage extends LLMMessage {
-  name?: string; // Tool name for tool messages
-}
-
-/**
- * AI SDK-specific configuration schema
- */
-export const AISDKConfigSchema = LLMConfigSchema.extend({
-  provider: z.enum(["anthropic"]),
-  modelProvider: z.unknown().optional(),
-}).transform(data => ({
-  ...data,
-  baseUrl: data.baseUrl === "" ? undefined : data.baseUrl,
-}));
-
-export type AISDKConfig = z.infer<typeof AISDKConfigSchema>;
-
-/**
- * Chat context for tool-enabled conversations
- */
-export interface ChatContext {
-  connection: Connection;
-  tools: Tool[];
-  llmSettings: LLMSettings;
-}
-
-/**
- * Chat response with tool executions
- */
-export interface ChatResponse {
-  assistantMessage: ChatMessage;
-  toolExecutionMessages: ChatMessage[];
-}
-
-/**
- * Streaming chat response for SSE
- */
-export interface StreamingChatResponse {
-  type: "token" | "tool_start" | "tool_end" | "message_complete" | "error";
-  content?: string;
-  delta?: string;
-  toolName?: string;
-  toolResult?: any;
-  toolExecution?: ToolExecution;
-  assistantMessage?: ChatMessage;
-  toolExecutionMessages?: ChatMessage[];
-  error?: string;
-}
-
-/**
- * Tool execution result
- */
-export interface ToolExecutionResult {
-  success: boolean;
-  result?: any;
-  error?: string;
-  toolExecution: ToolExecution;
-  chatMessage: ChatMessage;
-}
-
-/**
- * LLM Settings for model configuration
- */
-export interface LLMSettings {
-  provider: "anthropic";
-  apiKey: string;
-  model: string;
-  baseUrl?: string;
-  temperature: number;
-  maxTokens: number;
-}
-
-/**
- * Model options for UI
- */
-export interface ModelOption {
-  value: string;
-  label: string;
-  description?: string;
-}
+  AISDKConfig,
+  AISDKConfigSchema,
+  ChatContext,
+  ChatResponse,
+  StreamingChatResponse,
+  ToolExecutionResult,
+  LLMSettings,
+  ModelOption,
+  ExtendedLLMMessage,
+  ToolResultForLLM,
+  AIModel,
+} from "./types";
+import {
+  generateId,
+  convertMCPToolToTool,
+  convertToAIMessages,
+  convertToAITools,
+  needsReinit,
+  updateConfigWithSettings,
+  createThinkingMessage,
+  createAssistantMessage,
+  getErrorMessage,
+  validateChatContext,
+  formatToolResultForLLM,
+  conversationToLLMMessages,
+  toolsToLLMFormat,
+  createFallbackToolSummary,
+} from "./utils";
 
 /**
  * AI SDK implementation of LLMAdapter with integrated chat and model services
@@ -128,7 +53,7 @@ export interface ModelOption {
 export class AISDKAdapter extends LLMAdapter {
   protected config: AISDKConfig;
   private static storageAdapter: StorageAdapter | null = null;
-  private aiModel: LanguageModel | null = null;
+  private aiModel: AIModel | null = null;
 
   constructor(config: AISDKConfig) {
     const parsedConfig = AISDKConfigSchema.parse(config);
@@ -253,10 +178,8 @@ export class AISDKAdapter extends LLMAdapter {
     this.status = AdapterStatus.PROCESSING;
 
     try {
-      const aiMessages = this.convertToAIMessages(messages);
-      const aiTools = this.convertToAITools(
-        options?.tools || this.config.tools
-      );
+      const aiMessages = convertToAIMessages(messages);
+      const aiTools = convertToAITools(options?.tools || this.config.tools);
 
       const result = await generateText({
         model: this.aiModel,
@@ -300,70 +223,7 @@ export class AISDKAdapter extends LLMAdapter {
     }
   }
 
-  /**
-   * Convert MCP tool definition to internal Tool format
-   */
-  protected convertMCPToolToTool(mcpTool: MCPToolDefinition): Tool {
-    const parameters: Tool["parameters"] = [];
-
-    if (mcpTool.inputSchema?.properties) {
-      for (const [name, schema] of Object.entries(
-        mcpTool.inputSchema.properties
-      )) {
-        const isRequired =
-          mcpTool.inputSchema.required?.includes(name) || false;
-        const paramSchema = schema as any;
-
-        parameters.push({
-          name,
-          type: this.mapJsonSchemaTypeToParameterType(
-            paramSchema.type || "string"
-          ),
-          description: paramSchema.description || `Parameter ${name}`,
-          required: isRequired,
-          default: paramSchema.default,
-        });
-      }
-    }
-
-    const inputSchema = {
-      ...mcpTool.inputSchema,
-      type: "object" as const,
-      properties: mcpTool.inputSchema?.properties || {},
-      required: mcpTool.inputSchema?.required || [],
-    };
-
-    return {
-      id: this.generateId(),
-      name: mcpTool.name,
-      description: mcpTool.description,
-      inputSchema,
-      parameters,
-      category: "mcp",
-      tags: ["mcp", "introspected"],
-      deprecated: false,
-    };
-  }
-
-  protected mapJsonSchemaTypeToParameterType(
-    jsonType: string
-  ): NonNullable<Tool["parameters"]>[0]["type"] {
-    switch (jsonType) {
-      case "string":
-        return "string";
-      case "number":
-      case "integer":
-        return "number";
-      case "boolean":
-        return "boolean";
-      case "object":
-        return "object";
-      case "array":
-        return "array";
-      default:
-        return "string";
-    }
-  }
+  protected convertMCPToolToTool = convertMCPToolToTool;
 
   async *stream(
     messages: LLMMessage[],
@@ -379,10 +239,8 @@ export class AISDKAdapter extends LLMAdapter {
     this.status = AdapterStatus.PROCESSING;
 
     try {
-      const aiMessages = this.convertToAIMessages(messages);
-      const aiTools = this.convertToAITools(
-        options?.tools || this.config.tools
-      );
+      const aiMessages = convertToAIMessages(messages);
+      const aiTools = convertToAITools(options?.tools || this.config.tools);
 
       const result = streamText({
         model: this.aiModel,
@@ -521,282 +379,6 @@ export class AISDKAdapter extends LLMAdapter {
     }
   }
 
-  private convertToAIMessages(messages: (LLMMessage | ExtendedLLMMessage)[]) {
-    return messages.map(msg => {
-      const content = String(msg.content || "");
-
-      switch (msg.role) {
-        case "tool":
-          let resultData: any;
-
-          try {
-            const parsedContent = content ? JSON.parse(content) : null;
-
-            if (parsedContent && typeof parsedContent === "object") {
-              if (
-                parsedContent.content &&
-                Array.isArray(parsedContent.content)
-              ) {
-                const textContent = parsedContent.content
-                  .filter((item: any) => item.type === "text")
-                  .map((item: any) => item.text)
-                  .join("\n");
-
-                if (textContent) {
-                  try {
-                    resultData = JSON.parse(textContent);
-                  } catch {
-                    resultData = textContent;
-                  }
-                } else {
-                  resultData = "Tool executed with non-text content";
-                }
-              } else {
-                resultData = parsedContent;
-              }
-            } else {
-              resultData = content || "Tool executed";
-            }
-          } catch {
-            resultData = content || "Tool executed";
-          }
-
-          const toolCallId = (msg as any).toolCallId || "";
-
-          return {
-            role: "tool" as const,
-            content: [
-              {
-                type: "tool-result" as const,
-                toolCallId: toolCallId,
-                // @ts-ignore
-                result: resultData,
-              },
-            ] as ToolContent,
-          } as ToolModelMessage;
-
-        case "assistant":
-          if (msg.toolCalls && msg.toolCalls.length > 0) {
-            const toolCallParts: ToolCallPart[] = msg.toolCalls.map(tc => ({
-              type: "tool-call" as const,
-              toolCallId: tc.id,
-              toolName: tc.function.name,
-              input: JSON.parse(tc.function.arguments),
-            }));
-
-            const assistantContent: AssistantContent = content
-              ? [{ type: "text" as const, text: content }, ...toolCallParts]
-              : toolCallParts;
-
-            return {
-              role: "assistant" as const,
-              content: assistantContent,
-            } as AssistantModelMessage;
-          }
-
-          // Simple assistant message - ensure content is a string
-          return {
-            role: "assistant" as const,
-            content: content || "",
-          } as AssistantModelMessage;
-
-        case "user":
-          return {
-            role: "user" as const,
-            content: content || "",
-          } as UserModelMessage;
-
-        case "system":
-          return {
-            role: "system" as const,
-            content: content || "",
-          } as SystemModelMessage;
-
-        default:
-          console.warn(
-            `Unexpected message role: ${msg.role}, treating as user`
-          );
-          return {
-            role: "user" as const,
-            content: content || "",
-          } as UserModelMessage;
-      }
-    });
-  }
-
-  /**
-   * Convert LLM tools to AI SDK format using proper tool() instances
-   */
-  private convertToAITools(tools?: LLMTool[]) {
-    if (!tools || tools.length === 0) {
-      return {};
-    }
-
-    const convertedTools = tools.reduce(
-      (acc, llmTool) => {
-        if (llmTool.type === "function") {
-          let parametersSchema = llmTool.function.parameters;
-
-          if (!parametersSchema) {
-            parametersSchema = {
-              type: "object",
-              properties: {},
-              required: [],
-            };
-          }
-
-          if (!parametersSchema.type) {
-            parametersSchema = {
-              ...parametersSchema,
-              type: "object",
-            };
-          }
-
-          if (!parametersSchema.properties) {
-            parametersSchema = {
-              ...parametersSchema,
-              properties: {},
-            };
-          }
-
-          if (!Array.isArray(parametersSchema.required)) {
-            parametersSchema = {
-              ...parametersSchema,
-              required: [],
-            };
-          }
-
-          const zodSchema = this.jsonSchemaToZod(parametersSchema);
-
-          const aiTool = tool({
-            description:
-              llmTool.function.description ||
-              `Execute ${llmTool.function.name}`,
-            inputSchema: zodSchema,
-            execute: async (args: any) => {
-              return {
-                toolName: llmTool.function.name,
-                arguments: args,
-                timestamp: new Date().toISOString(),
-                status: "executed_via_ai_sdk",
-                note: "Actual MCP execution handled in streaming context",
-              };
-            },
-          });
-
-          acc[llmTool.function.name] = aiTool;
-        }
-        return acc;
-      },
-      {} as Record<string, any>
-    );
-
-    return convertedTools;
-  }
-
-  /**
-   * Convert JSON Schema to Zod schema for AI SDK tools
-   */
-  private jsonSchemaToZod(jsonSchema: any): z.ZodTypeAny {
-    if (!jsonSchema || typeof jsonSchema !== "object") {
-      return z.object({});
-    }
-
-    if (jsonSchema.type === "object") {
-      const shape: Record<string, z.ZodTypeAny> = {};
-      const properties = jsonSchema.properties || {};
-      const required = Array.isArray(jsonSchema.required)
-        ? jsonSchema.required
-        : [];
-
-      for (const [key, propSchema] of Object.entries(properties)) {
-        let zodType = this.jsonSchemaPropertyToZod(propSchema as any);
-
-        if (
-          propSchema &&
-          typeof propSchema === "object" &&
-          (propSchema as any).description
-        ) {
-          zodType = zodType.describe((propSchema as any).description);
-        }
-
-        if (!required.includes(key)) {
-          zodType = zodType.optional();
-        }
-
-        shape[key] = zodType;
-      }
-
-      return z.object(shape);
-    }
-
-    return z.object({});
-  }
-
-  /**
-   * Convert individual JSON Schema property to Zod type
-   */
-  private jsonSchemaPropertyToZod(propSchema: any): z.ZodTypeAny {
-    if (!propSchema || typeof propSchema !== "object") {
-      return z.string();
-    }
-
-    const type = propSchema.type;
-
-    switch (type) {
-      case "string":
-        let stringSchema = z.string();
-        if (propSchema.enum) {
-          return z.enum(propSchema.enum);
-        }
-        if (propSchema.minLength !== undefined) {
-          stringSchema = stringSchema.min(propSchema.minLength);
-        }
-        if (propSchema.maxLength !== undefined) {
-          stringSchema = stringSchema.max(propSchema.maxLength);
-        }
-        return stringSchema;
-
-      case "number":
-      case "integer":
-        let numberSchema = type === "integer" ? z.number().int() : z.number();
-        if (propSchema.minimum !== undefined) {
-          numberSchema = numberSchema.min(propSchema.minimum);
-        }
-        if (propSchema.maximum !== undefined) {
-          numberSchema = numberSchema.max(propSchema.maximum);
-        }
-        return numberSchema;
-
-      case "boolean":
-        return z.boolean();
-
-      case "array":
-        const itemsSchema = propSchema.items
-          ? this.jsonSchemaPropertyToZod(propSchema.items)
-          : z.unknown();
-        return z.array(itemsSchema);
-
-      case "object":
-        if (propSchema.properties) {
-          return this.jsonSchemaToZod(propSchema);
-        }
-        return z.record(z.string(), z.unknown());
-
-      default:
-        if (propSchema.anyOf || propSchema.oneOf) {
-          const unionSchemas = (propSchema.anyOf || propSchema.oneOf).map(
-            (schema: any) => this.jsonSchemaPropertyToZod(schema)
-          );
-          return z.union(
-            unionSchemas as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]
-          );
-        }
-
-        return z.string();
-    }
-  }
-
   async cleanup(): Promise<void> {
     this.status = AdapterStatus.DISCONNECTED;
     this.aiModel = null;
@@ -811,17 +393,8 @@ export class AISDKAdapter extends LLMAdapter {
     const { tools, llmSettings, connection } = context;
 
     // Update configuration and reinitialize if needed
-    const needsReinit =
-      this.config.apiKey !== llmSettings.apiKey ||
-      this.config.model !== llmSettings.model ||
-      this.config.baseUrl !== llmSettings.baseUrl;
-
-    if (needsReinit) {
-      this.config.apiKey = llmSettings.apiKey;
-      this.config.model = llmSettings.model;
-      this.config.baseUrl = llmSettings.baseUrl;
-      this.config.temperature = llmSettings.temperature;
-      this.config.maxTokens = llmSettings.maxTokens;
+    if (needsReinit(this.config, llmSettings)) {
+      this.config = updateConfigWithSettings(this.config, llmSettings);
       this.initializeAIModel();
     }
 
@@ -833,44 +406,14 @@ export class AISDKAdapter extends LLMAdapter {
     ];
 
     // Convert tools to LLM format
-    const llmTools: LLMTool[] = tools.map(tool => {
-      let inputSchema = tool.inputSchema;
-      if (!inputSchema) {
-        inputSchema = {
-          type: "object",
-          properties: {},
-          required: [],
-        };
-      }
-
-      const normalizedSchema = {
-        type: "object" as const,
-        properties: inputSchema.properties || {},
-        required: Array.isArray(inputSchema.required)
-          ? inputSchema.required
-          : [],
-      };
-
-      return {
-        type: "function" as const,
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: normalizedSchema,
-        },
-      };
-    });
+    const llmTools: LLMTool[] = toolsToLLMFormat(tools);
 
     this.config.tools = llmTools;
 
     let fullContent = "";
     const toolCalls: LLMToolCall[] = [];
     const toolExecutionMessages: ChatMessage[] = [];
-    const toolResults: Array<{
-      toolCallId: string;
-      result: any;
-      rawResult: any;
-    }> = [];
+    const toolResults: ToolResultForLLM[] = [];
 
     try {
       // Stream the initial response
@@ -893,7 +436,7 @@ export class AISDKAdapter extends LLMAdapter {
 
               if (existingCallIndex >= 0) {
                 toolCalls[existingCallIndex] = {
-                  id: tc.id || this.generateId(),
+                  id: tc.id || generateId(),
                   type: "function",
                   function: {
                     name: tc.function.name,
@@ -902,7 +445,7 @@ export class AISDKAdapter extends LLMAdapter {
                 };
               } else {
                 toolCalls.push({
-                  id: tc.id || this.generateId(),
+                  id: tc.id || generateId(),
                   type: "function",
                   function: {
                     name: tc.function.name,
@@ -969,7 +512,7 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // FIXED: Build complete conversation with tool results
+        // Build complete conversation with tool results
         const followUpMessages: LLMMessage[] = [
           {
             role: "user",
@@ -980,66 +523,14 @@ export class AISDKAdapter extends LLMAdapter {
             content: fullContent || "", // Keep the text content
             toolCalls: toolCalls, // Include the tool calls
           },
-          // CRITICAL FIX: Add tool result messages so LLM can see the actual results
+          // Add tool result messages so LLM can see the actual results
           ...toolCalls.map((tc, index) => {
             const result = toolResults[index];
-
-            // Format the tool result properly
-            let formattedResult: any = result?.result;
-
-            // Handle MCP-style content arrays
-            if (
-              formattedResult &&
-              formattedResult.content &&
-              Array.isArray(formattedResult.content)
-            ) {
-              // Extract text from content array and structure it nicely
-              const textParts = formattedResult.content
-                .filter((item: any) => item.type === "text")
-                .map((item: any) => item.text)
-                .join("\n\n");
-
-              if (textParts) {
-                // Try to parse JSON if it looks like JSON, otherwise use as-is
-                try {
-                  const parsed = JSON.parse(textParts);
-                  formattedResult = {
-                    tool_result: parsed,
-                    execution_status: "success",
-                    tool_name: tc.function.name,
-                  };
-                } catch {
-                  formattedResult = {
-                    tool_result: textParts,
-                    execution_status: "success",
-                    tool_name: tc.function.name,
-                  };
-                }
-              } else {
-                // Handle non-text content
-                formattedResult = {
-                  tool_result:
-                    "Tool executed successfully with non-text output",
-                  content_summary: `Received ${formattedResult.content.length} content items`,
-                  execution_status: "success",
-                  tool_name: tc.function.name,
-                };
-              }
-            } else if (!formattedResult) {
-              formattedResult = {
-                tool_result: "Tool executed successfully",
-                execution_status: "success",
-                tool_name: tc.function.name,
-              };
-            }
-
-            // Return as tool message that LLM can understand
-            return {
-              role: "tool" as const,
-              content: JSON.stringify(formattedResult),
-              toolCallId: tc.id,
-              name: tc.function.name,
-            } as ExtendedLLMMessage;
+            return formatToolResultForLLM(
+              tc.id,
+              result.result,
+              tc.function.name
+            );
           }),
         ];
 
@@ -1060,8 +551,6 @@ export class AISDKAdapter extends LLMAdapter {
               })),
           });
 
-          // The followUpMessages are already in LLMMessage format
-          // They will be converted to AI SDK format by convertToAIMessages in the stream method
           for await (const chunk of this.stream(
             followUpMessages,
             followUpConfig
@@ -1083,51 +572,10 @@ export class AISDKAdapter extends LLMAdapter {
           console.error("Error getting LLM summary of tool results:", error);
 
           // Provide a detailed fallback summary based on actual tool results
-          const toolSummaries = toolResults.map((result, idx) => {
-            const toolName = toolCalls[idx].function.name;
-            if (result.rawResult.success) {
-              // Try to extract meaningful information from the result
-              let summary = `${toolName}: completed successfully`;
-
-              if (result.result && typeof result.result === "object") {
-                // Check for common patterns in the result
-                if (
-                  result.result.content &&
-                  Array.isArray(result.result.content)
-                ) {
-                  // Handle MCP content arrays
-                  const textParts = result.result.content
-                    .filter((item: any) => item.type === "text")
-                    .map((item: any) => {
-                      // Try to parse and summarize the text
-                      try {
-                        const parsed = JSON.parse(item.text);
-                        if (parsed.items && Array.isArray(parsed.items)) {
-                          return `Found ${parsed.items.length} items`;
-                        }
-                        return item.text.substring(0, 100);
-                      } catch {
-                        return item.text.substring(0, 100);
-                      }
-                    });
-
-                  if (textParts.length > 0) {
-                    summary = `${toolName}: ${textParts.join(", ")}`;
-                  }
-                } else if (result.result.output) {
-                  summary = `${toolName}: ${String(result.result.output).substring(0, 200)}`;
-                } else if (result.result.text) {
-                  summary = `${toolName}: ${String(result.result.text).substring(0, 200)}`;
-                }
-              }
-
-              return summary;
-            } else {
-              return `${toolName}: encountered an error - ${result.rawResult.error || "unknown error"}`;
-            }
-          });
-
-          const fallbackSummary = `I executed the following tool${toolCalls.length > 1 ? "s" : ""}:\n\n${toolSummaries.join("\n")}\n\nThe operation${toolCalls.length > 1 ? "s have" : " has"} completed.`;
+          const fallbackSummary = createFallbackToolSummary(
+            toolCalls,
+            toolResults
+          );
 
           // Stream the fallback character by character
           for (const char of fallbackSummary) {
@@ -1142,13 +590,7 @@ export class AISDKAdapter extends LLMAdapter {
       }
 
       // Send the complete message
-      const assistantMessage: ChatMessage = {
-        id: this.generateId(),
-        message: fullContent || "Task completed.",
-        isUser: false,
-        timestamp: new Date(),
-        isExecuting: false,
-      };
+      const assistantMessage = createAssistantMessage(fullContent);
 
       yield {
         type: "message_complete",
@@ -1172,7 +614,7 @@ export class AISDKAdapter extends LLMAdapter {
     toolName: string,
     toolArgs: Record<string, any>
   ): Promise<ToolExecutionResult> {
-    const executionId = this.generateId();
+    const executionId = generateId();
     const startTime = Date.now();
 
     try {
@@ -1281,69 +723,20 @@ export class AISDKAdapter extends LLMAdapter {
   ): Promise<ChatResponse> {
     const { tools, llmSettings } = context;
 
-    const needsReinit =
-      this.config.apiKey !== llmSettings.apiKey ||
-      this.config.model !== llmSettings.model ||
-      this.config.baseUrl !== llmSettings.baseUrl;
-
-    if (needsReinit) {
-      this.config.apiKey = llmSettings.apiKey;
-      this.config.model = llmSettings.model;
-      this.config.baseUrl = llmSettings.baseUrl;
-      this.config.temperature = llmSettings.temperature;
-      this.config.maxTokens = llmSettings.maxTokens;
+    if (needsReinit(this.config, llmSettings)) {
+      this.config = updateConfigWithSettings(this.config, llmSettings);
       this.initializeAIModel();
     }
 
-    const llmMessages: LLMMessage[] = conversationHistory
-      .filter(msg => {
-        return (
-          msg.message &&
-          msg.message.trim() &&
-          typeof msg.message === "string" &&
-          !msg.isExecuting &&
-          !msg.executingTool &&
-          !msg.toolExecution &&
-          msg.message.length > 0
-        );
-      })
-      .map(msg => ({
-        role: msg.isUser ? ("user" as const) : ("assistant" as const),
-        content: String(msg.message || "").trim(),
-      }));
+    const llmMessages: LLMMessage[] =
+      conversationToLLMMessages(conversationHistory);
 
     llmMessages.push({
       role: "user",
       content: userMessage,
     });
 
-    const llmTools: LLMTool[] = tools.map(tool => {
-      let inputSchema = tool.inputSchema;
-      if (!inputSchema) {
-        inputSchema = {
-          type: "object",
-          properties: {},
-          required: [],
-        };
-      }
-
-      const normalizedSchema = {
-        type: "object" as const,
-        properties: inputSchema.properties || {},
-        required: Array.isArray(inputSchema.required)
-          ? inputSchema.required
-          : [],
-      };
-
-      return {
-        type: "function",
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: normalizedSchema,
-        },
-      };
-    });
+    const llmTools: LLMTool[] = toolsToLLMFormat(tools);
 
     this.config.tools = llmTools;
 
@@ -1377,7 +770,7 @@ export class AISDKAdapter extends LLMAdapter {
         }
       }
 
-      // FIXED: Add tool results to conversation for final summary
+      // Add tool results to conversation for final summary
       const followUpMessages: ExtendedLLMMessage[] = [
         {
           role: "user",
@@ -1388,37 +781,10 @@ export class AISDKAdapter extends LLMAdapter {
           content: response.content || "",
           toolCalls: response.toolCalls,
         },
-        // CRITICAL FIX: Include tool results so LLM can summarize
+        // Include tool results so LLM can summarize
         ...response.toolCalls.map((tc, index) => {
           const result = toolResults[index];
-
-          // Format result properly for LLM consumption
-          let formattedResult = result?.result || { status: "completed" };
-
-          if (
-            formattedResult.content &&
-            Array.isArray(formattedResult.content)
-          ) {
-            const textContent = formattedResult.content
-              .filter((item: any) => item.type === "text")
-              .map((item: any) => item.text)
-              .join("\n");
-
-            if (textContent) {
-              try {
-                formattedResult = JSON.parse(textContent);
-              } catch {
-                formattedResult = textContent;
-              }
-            }
-          }
-
-          return {
-            role: "tool" as const,
-            content: JSON.stringify(formattedResult),
-            toolCallId: tc.id,
-            name: tc.function.name,
-          } as ExtendedLLMMessage;
+          return formatToolResultForLLM(tc.id, result.result, tc.function.name);
         }),
       ];
 
@@ -1431,13 +797,9 @@ export class AISDKAdapter extends LLMAdapter {
       }
     }
 
-    const assistantMessage: ChatMessage = {
-      id: this.generateId(),
-      message: response.content || "Task completed.",
-      isUser: false,
-      timestamp: new Date(),
-      isExecuting: false,
-    };
+    const assistantMessage = createAssistantMessage(
+      response.content || "Task completed."
+    );
 
     return {
       assistantMessage,
@@ -1445,11 +807,7 @@ export class AISDKAdapter extends LLMAdapter {
     };
   }
 
-  private generateId(): string {
-    return `tool_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-  }
-
-  // Static helper methods remain unchanged...
+  // Static helper methods
   static getDefaultSettings(): Partial<LLMSettings> {
     return {
       provider: "anthropic",
@@ -1489,39 +847,9 @@ export class AISDKAdapter extends LLMAdapter {
     return "Anthropic";
   }
 
-  static createThinkingMessage(): ChatMessage {
-    return {
-      id: Math.random().toString(36).substring(2, 15),
-      message: "",
-      isUser: false,
-      timestamp: new Date(),
-      isExecuting: true,
-    };
-  }
-
-  static validateChatContext(context: ChatContext): boolean {
-    return Boolean(
-      context.connection &&
-        context.llmSettings?.apiKey &&
-        Array.isArray(context.tools)
-    );
-  }
-
-  static getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      if (error.message.includes("401")) {
-        return "Invalid API key. Please check your Claude API settings.";
-      }
-      if (error.message.includes("429")) {
-        return "Rate limit exceeded. Please wait a moment and try again.";
-      }
-      if (error.message.includes("500")) {
-        return "Claude API is experiencing issues. Please try again later.";
-      }
-      return error.message;
-    }
-    return "An unexpected error occurred. Please try again.";
-  }
+  static createThinkingMessage = createThinkingMessage;
+  static validateChatContext = validateChatContext;
+  static getErrorMessage = getErrorMessage;
 
   static async storeToolExecution(
     connectionId: string,

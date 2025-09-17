@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AISDKConfig } from "../ai-sdk-adapter";
+import { AISDKConfig } from "../types";
 import { createAnthropic } from "@ai-sdk/anthropic";
 
 /**

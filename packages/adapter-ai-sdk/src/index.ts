@@ -7,11 +7,34 @@ export type {
   ToolExecutionResult,
   LLMSettings,
   ModelOption,
-} from "./ai-sdk-adapter";
+  ExtendedLLMMessage,
+  ToolResultForLLM,
+  AIModel,
+  AIModelMessage,
+  AIAssistantContent,
+  AIToolContent,
+  AIToolCallPart,
+} from "./types";
 
 export { AnthropicProvider } from "./providers/anthropic";
 export { MCPService } from "./mcp-service";
 
+// Re-export utilities for external use if needed
+export {
+  generateId,
+  convertMCPToolToTool,
+  convertToAIMessages,
+  convertToAITools,
+  createThinkingMessage,
+  createAssistantMessage,
+  getErrorMessage,
+  validateChatContext,
+  formatToolResultForLLM,
+  conversationToLLMMessages,
+  toolsToLLMFormat,
+} from "./utils";
+
+// Re-export base adapter types for compatibility
 export type {
   LLMAdapter,
   LLMConfig,
