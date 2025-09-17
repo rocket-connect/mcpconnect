@@ -138,45 +138,116 @@ export function createServer(options: ServerOptions = {}): {
   // Get UI build path
   const uiBuildPath = findUiBuildPath();
 
-  // Serve static UI files with proper MIME types
+  // Serve static UI files with proper MIME types and better asset detection
   app.use(
     express.static(uiBuildPath, {
-      setHeaders: (res, path) => {
-        // Ensure proper MIME types
-        if (path.endsWith(".js")) {
-          res.setHeader("Content-Type", "application/javascript");
-        } else if (path.endsWith(".css")) {
-          res.setHeader("Content-Type", "text/css");
-        } else if (path.endsWith(".html")) {
-          res.setHeader("Content-Type", "text/html");
-        } else if (path.endsWith(".json")) {
-          res.setHeader("Content-Type", "application/json");
-        } else if (path.endsWith(".svg")) {
-          res.setHeader("Content-Type", "image/svg+xml");
+      setHeaders: (res, filePath) => {
+        // Ensure proper MIME types for common Vite assets
+        if (filePath.endsWith(".js") || filePath.endsWith(".mjs")) {
+          res.setHeader(
+            "Content-Type",
+            "application/javascript; charset=utf-8"
+          );
+        } else if (filePath.endsWith(".css")) {
+          res.setHeader("Content-Type", "text/css; charset=utf-8");
+        } else if (filePath.endsWith(".html")) {
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+        } else if (filePath.endsWith(".json")) {
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+        } else if (filePath.endsWith(".svg")) {
+          res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+        } else if (filePath.endsWith(".png")) {
+          res.setHeader("Content-Type", "image/png");
+        } else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) {
+          res.setHeader("Content-Type", "image/jpeg");
+        } else if (filePath.endsWith(".gif")) {
+          res.setHeader("Content-Type", "image/gif");
+        } else if (filePath.endsWith(".webp")) {
+          res.setHeader("Content-Type", "image/webp");
+        } else if (filePath.endsWith(".ico")) {
+          res.setHeader("Content-Type", "image/x-icon");
+        } else if (filePath.endsWith(".woff")) {
+          res.setHeader("Content-Type", "font/woff");
+        } else if (filePath.endsWith(".woff2")) {
+          res.setHeader("Content-Type", "font/woff2");
+        } else if (filePath.endsWith(".ttf")) {
+          res.setHeader("Content-Type", "font/ttf");
+        } else if (filePath.endsWith(".eot")) {
+          res.setHeader("Content-Type", "application/vnd.ms-fontobject");
         }
 
-        // Cache static assets for 1 hour, but not HTML
-        if (!path.endsWith(".html")) {
-          res.setHeader("Cache-Control", "public, max-age=3600");
+        // Cache static assets for 1 year, but not HTML
+        if (!filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        } else {
+          res.setHeader("Cache-Control", "no-cache");
         }
       },
     })
   );
 
+  // Function to check if a request is for a static asset
+  function isAssetRequest(reqPath: string): boolean {
+    // Common asset extensions that Vite generates
+    const assetExtensions = [
+      ".js",
+      ".mjs",
+      ".css",
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".gif",
+      ".svg",
+      ".ico",
+      ".webp",
+      ".woff",
+      ".woff2",
+      ".ttf",
+      ".eot",
+      ".json",
+      ".xml",
+      ".txt",
+      ".pdf",
+      ".zip",
+      ".map",
+    ];
+
+    return assetExtensions.some(ext => reqPath.toLowerCase().endsWith(ext));
+  }
+
+  // Middleware to handle asset requests from any nested route
+  app.get("*/assets/*", (req, res) => {
+    // Extract the asset filename from the path
+    const assetPath = req.path.substring(req.path.indexOf("/assets/") + 1);
+    const fullAssetPath = path.join(uiBuildPath, assetPath);
+
+    // Check if the asset exists
+    if (existsSync(fullAssetPath)) {
+      res.sendFile(fullAssetPath);
+    } else {
+      res.status(404).json({ error: "Asset not found" });
+    }
+  });
+
   // Catch-all handler for SPA routing - IMPORTANT: This must be last
   app.get("*", (req, res) => {
-    // Don't serve index.html for API routes or asset requests
-    if (
-      req.path.startsWith("/api/") ||
-      req.path.startsWith("/health") ||
-      req.path.includes(".")
-    ) {
-      // Likely an asset request
-      return res.status(404).json({ error: "Resource not found" });
+    // Don't serve index.html for API routes
+    if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
+      return res.status(404).json({ error: "API endpoint not found" });
+    }
+
+    // Don't serve index.html for direct asset requests (not handled by middleware above)
+    if (isAssetRequest(req.path) && !req.path.includes("/assets/")) {
+      return res.status(404).json({ error: "Asset not found" });
     }
 
     // Serve index.html for SPA routes
-    res.sendFile(path.join(uiBuildPath, "index.html"));
+    res.sendFile(path.join(uiBuildPath, "index.html"), err => {
+      if (err) {
+        console.error("Error serving index.html:", err);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    });
   });
 
   return { app: app, port, host };
