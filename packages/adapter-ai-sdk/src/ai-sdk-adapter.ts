@@ -969,6 +969,7 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
+        // FIXED: Build complete conversation with tool results
         const followUpMessages: LLMMessage[] = [
           {
             role: "user",
@@ -979,51 +980,63 @@ export class AISDKAdapter extends LLMAdapter {
             content: fullContent || "", // Keep the text content
             toolCalls: toolCalls, // Include the tool calls
           },
+          // CRITICAL FIX: Add tool result messages so LLM can see the actual results
           ...toolCalls.map((tc, index) => {
             const result = toolResults[index];
 
-            let resultContent: any = result?.result;
+            // Format the tool result properly
+            let formattedResult: any = result?.result;
 
+            // Handle MCP-style content arrays
             if (
-              resultContent &&
-              resultContent.content &&
-              Array.isArray(resultContent.content)
+              formattedResult &&
+              formattedResult.content &&
+              Array.isArray(formattedResult.content)
             ) {
-              // Extract text from content array
-              const textContent = resultContent.content
+              // Extract text from content array and structure it nicely
+              const textParts = formattedResult.content
                 .filter((item: any) => item.type === "text")
                 .map((item: any) => item.text)
-                .join("\n");
+                .join("\n\n");
 
-              if (textContent) {
-                // Parse the text if it's JSON
+              if (textParts) {
+                // Try to parse JSON if it looks like JSON, otherwise use as-is
                 try {
-                  resultContent = JSON.parse(textContent);
+                  const parsed = JSON.parse(textParts);
+                  formattedResult = {
+                    tool_result: parsed,
+                    execution_status: "success",
+                    tool_name: tc.function.name,
+                  };
                 } catch {
-                  resultContent = textContent;
+                  formattedResult = {
+                    tool_result: textParts,
+                    execution_status: "success",
+                    tool_name: tc.function.name,
+                  };
                 }
               } else {
-                // Handle non-text content (resources, images, etc.)
-                resultContent = {
-                  status: "completed",
-                  content: resultContent.content,
-                  type: "mcp_response",
+                // Handle non-text content
+                formattedResult = {
+                  tool_result:
+                    "Tool executed successfully with non-text output",
+                  content_summary: `Received ${formattedResult.content.length} content items`,
+                  execution_status: "success",
+                  tool_name: tc.function.name,
                 };
               }
-            }
-
-            // Ensure result is properly structured
-            if (resultContent === null || resultContent === undefined) {
-              resultContent = {
-                status: "completed",
-                message: "Tool executed successfully",
+            } else if (!formattedResult) {
+              formattedResult = {
+                tool_result: "Tool executed successfully",
+                execution_status: "success",
+                tool_name: tc.function.name,
               };
             }
 
-            // Return as a tool message with proper structure for AI SDK v5
+            // Return as tool message that LLM can understand
             return {
               role: "tool" as const,
-              content: JSON.stringify(resultContent), // Tool content is JSON string
+              content: JSON.stringify(formattedResult),
               toolCallId: tc.id,
               name: tc.function.name,
             } as ExtendedLLMMessage;
@@ -1035,6 +1048,17 @@ export class AISDKAdapter extends LLMAdapter {
         try {
           // Stream the response without tools to prevent loops
           const followUpConfig = { ...this.config, tools: [] };
+
+          console.log("Sending follow-up with tool results:", {
+            messageCount: followUpMessages.length,
+            hasToolResults: followUpMessages.some(m => m.role === "tool"),
+            toolResultsPreview: followUpMessages
+              .filter(m => m.role === "tool")
+              .map(m => ({
+                toolCallId: (m as any).toolCallId,
+                contentLength: m.content?.length,
+              })),
+          });
 
           // The followUpMessages are already in LLMMessage format
           // They will be converted to AI SDK format by convertToAIMessages in the stream method
@@ -1353,6 +1377,7 @@ export class AISDKAdapter extends LLMAdapter {
         }
       }
 
+      // FIXED: Add tool results to conversation for final summary
       const followUpMessages: ExtendedLLMMessage[] = [
         {
           role: "user",
@@ -1363,13 +1388,34 @@ export class AISDKAdapter extends LLMAdapter {
           content: response.content || "",
           toolCalls: response.toolCalls,
         },
+        // CRITICAL FIX: Include tool results so LLM can summarize
         ...response.toolCalls.map((tc, index) => {
           const result = toolResults[index];
-          const resultContent = result?.result || { status: "completed" };
+
+          // Format result properly for LLM consumption
+          let formattedResult = result?.result || { status: "completed" };
+
+          if (
+            formattedResult.content &&
+            Array.isArray(formattedResult.content)
+          ) {
+            const textContent = formattedResult.content
+              .filter((item: any) => item.type === "text")
+              .map((item: any) => item.text)
+              .join("\n");
+
+            if (textContent) {
+              try {
+                formattedResult = JSON.parse(textContent);
+              } catch {
+                formattedResult = textContent;
+              }
+            }
+          }
 
           return {
             role: "tool" as const,
-            content: JSON.stringify(resultContent),
+            content: JSON.stringify(formattedResult),
             toolCallId: tc.id,
             name: tc.function.name,
           } as ExtendedLLMMessage;
