@@ -843,12 +843,6 @@ export class AISDKAdapter extends LLMAdapter {
     return AnthropicProvider.validateApiKey(apiKey);
   }
 
-  static getModelPricing(
-    model: string
-  ): { input: number; output: number } | null {
-    return AnthropicProvider.getModelPricing(model);
-  }
-
   static getContextLimit(model: string): number {
     return AnthropicProvider.getContextLimit(model);
   }

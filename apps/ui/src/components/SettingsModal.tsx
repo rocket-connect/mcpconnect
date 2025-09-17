@@ -260,12 +260,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* Claude Configuration Section */}
           {!isLoadingSettings && (
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Brain className="w-4 h-4" />
-                Claude Configuration
+                LLM Configuration
               </h3>
 
               <div className="space-y-4">
@@ -275,7 +274,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* Model Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Claude Model
+                    Model
                     {isLoadingModels && (
                       <span className="ml-2 text-xs text-gray-500">
                         Loading...

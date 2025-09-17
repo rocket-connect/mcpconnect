@@ -77,16 +77,6 @@ export class ModelService {
   }
 
   /**
-   * Get pricing information for a model - delegates to AISDKAdapter
-   */
-  static getModelPricing(
-    _provider: ModelProvider,
-    model: string
-  ): { input: number; output: number } | null {
-    return AISDKAdapter.getModelPricing(model);
-  }
-
-  /**
    * Get context limit for a model - delegates to AISDKAdapter
    */
   static getContextLimit(_provider: ModelProvider, model: string): number {

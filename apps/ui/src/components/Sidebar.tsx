@@ -64,6 +64,7 @@ export const Sidebar = ({
   };
 
   // Only show tools when a connection is selected
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const toolsToShow = currentConnectionId
     ? tools[currentConnectionId] || []
     : [];

@@ -226,27 +226,6 @@ export class AnthropicProvider {
   }
 
   /**
-   * Get model pricing information (per 1M tokens)
-   */
-  static getModelPricing(
-    model: string
-  ): { input: number; output: number } | null {
-    const pricing: Record<string, { input: number; output: number }> = {
-      "claude-3-5-sonnet-20241022": { input: 3, output: 15 },
-      "claude-3-5-haiku-20241022": { input: 0.25, output: 1.25 },
-      "claude-3-opus-20240229": { input: 15, output: 75 },
-      "claude-3-sonnet-20240229": { input: 3, output: 15 },
-      "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
-      // Latest versions use same pricing as their dated counterparts
-      "claude-3-5-sonnet-latest": { input: 3, output: 15 },
-      "claude-3-5-haiku-latest": { input: 0.25, output: 1.25 },
-      "claude-3-opus-latest": { input: 15, output: 75 },
-    };
-
-    return pricing[model] || null;
-  }
-
-  /**
    * Get model context limits
    */
   static getContextLimit(model: string): number {

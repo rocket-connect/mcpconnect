@@ -253,10 +253,6 @@ export class ChatService {
     return AISDKAdapter.validateApiKey(apiKey);
   }
 
-  static getModelPricing(model: string) {
-    return AISDKAdapter.getModelPricing(model);
-  }
-
   static getContextLimit(model: string): number {
     return AISDKAdapter.getContextLimit(model);
   }
