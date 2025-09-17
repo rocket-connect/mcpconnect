@@ -487,9 +487,9 @@ export class AISDKAdapter extends LLMAdapter {
           // Store both the result and the raw result for proper formatting
           toolResults.push({
             toolCallId: toolCall.id,
-            result: toolResult.result ||
-              toolResult.error || { status: "executed" },
+            result: toolResult.result || { status: "executed" },
             rawResult: toolResult,
+            error: toolResult.error,
           });
 
           // Store execution for persistence
@@ -513,6 +513,7 @@ export class AISDKAdapter extends LLMAdapter {
         }
 
         // Build complete conversation with tool results
+        // CRITICAL FIX: Structure the conversation properly for AI SDK v5
         const followUpMessages: LLMMessage[] = [
           {
             role: "user",
@@ -520,19 +521,37 @@ export class AISDKAdapter extends LLMAdapter {
           },
           {
             role: "assistant",
-            content: fullContent || "", // Keep the text content
-            toolCalls: toolCalls, // Include the tool calls
+            content: fullContent || "",
+            toolCalls: toolCalls, // Include the tool calls in the assistant message
           },
-          // Add tool result messages so LLM can see the actual results
+          // Add tool result messages in the correct format
           ...toolCalls.map((tc, index) => {
             const result = toolResults[index];
-            return formatToolResultForLLM(
-              tc.id,
-              result.result,
-              tc.function.name
-            );
+            const content = result.error
+              ? JSON.stringify({ error: result.error })
+              : JSON.stringify(result.result || { status: "executed" });
+
+            return {
+              role: "tool" as const,
+              content,
+              toolCallId: tc.id,
+              name: tc.function.name,
+            };
           }),
         ];
+
+        console.log(
+          "Follow-up messages for AI SDK:",
+          JSON.stringify(followUpMessages, null, 2)
+        );
+
+        // Convert to AI SDK format
+        const aiMessages = convertToAIMessages(followUpMessages);
+
+        console.log(
+          "Converted AI messages:",
+          JSON.stringify(aiMessages, null, 2)
+        );
 
         // Get the LLM's final response after seeing the tool results
         let finalResponse = "";
@@ -627,6 +646,34 @@ export class AISDKAdapter extends LLMAdapter {
       const endTime = Date.now();
       const duration = endTime - startTime;
 
+      // Extract the actual data from MCP response structure
+      let cleanResult = mcpResult.result;
+
+      // Handle MCP content array structure
+      // @ts-ignore
+      if (
+        cleanResult &&
+        // @ts-ignore
+        cleanResult.content &&
+        // @ts-ignore
+        Array.isArray(cleanResult.content)
+      ) {
+        // @ts-ignore
+        const textContent = cleanResult.content
+          .filter((item: any) => item.type === "text")
+          .map((item: any) => item.text)
+          .join("\n");
+
+        if (textContent) {
+          try {
+            // Parse the JSON string to get the actual campaign data
+            cleanResult = JSON.parse(textContent);
+          } catch {
+            cleanResult = textContent;
+          }
+        }
+      }
+
       const chatMessage: ChatMessage = {
         id: executionId,
         isUser: false,
@@ -635,7 +682,7 @@ export class AISDKAdapter extends LLMAdapter {
         toolExecution: {
           toolName,
           status: mcpResult.success ? "success" : "error",
-          result: mcpResult.result,
+          result: cleanResult,
           error: mcpResult.error,
         },
         isExecuting: false,
@@ -655,7 +702,7 @@ export class AISDKAdapter extends LLMAdapter {
         response: mcpResult.success
           ? {
               success: true,
-              result: mcpResult.result,
+              result: cleanResult,
               timestamp: new Date().toISOString(),
             }
           : undefined,
@@ -664,7 +711,7 @@ export class AISDKAdapter extends LLMAdapter {
 
       return {
         success: mcpResult.success,
-        result: mcpResult.result,
+        result: cleanResult,
         error: mcpResult.error,
         toolExecution,
         chatMessage,

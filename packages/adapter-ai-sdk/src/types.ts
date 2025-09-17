@@ -1,4 +1,8 @@
-import { LLMConfigSchema, LLMMessage } from "@mcpconnect/base-adapters";
+import {
+  LLMConfigSchema,
+  LLMMessage,
+  LLMToolCall,
+} from "@mcpconnect/base-adapters";
 import {
   Connection,
   Tool,
@@ -22,6 +26,8 @@ import {
  */
 export interface ExtendedLLMMessage extends LLMMessage {
   name?: string; // Tool name for tool messages
+  toolCallId?: string; // Tool call ID for tool messages
+  toolCalls?: LLMToolCall[]; // Tool calls for assistant messages
 }
 
 /**
@@ -124,6 +130,7 @@ export interface ToolResultForLLM {
   toolCallId: string;
   result: any;
   rawResult: any;
+  error?: string;
 }
 
 /**

@@ -9,8 +9,6 @@ import { Tool, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import {
   ExtendedLLMMessage,
   AIModelMessage,
-  AIAssistantContent,
-  AIToolContent,
   ToolResultForLLM,
   LLMSettings,
   AISDKConfig,
@@ -89,7 +87,7 @@ export function convertMCPToolToTool(mcpTool: MCPToolDefinition): Tool {
 }
 
 /**
- * Convert LLM messages to AI SDK format
+ * Convert LLM messages to AI SDK format with proper tool message handling
  */
 export function convertToAIMessages(
   messages: (LLMMessage | ExtendedLLMMessage)[]
@@ -99,75 +97,73 @@ export function convertToAIMessages(
 
     switch (msg.role) {
       case "tool": {
+        const toolCallId = (msg as any).toolCallId || generateId();
+        const toolName = (msg as any).name || "unknown";
+
+        // Parse the content to extract the actual result
         let resultData: any;
-
         try {
-          const parsedContent = content ? JSON.parse(content) : null;
-
-          if (parsedContent && typeof parsedContent === "object") {
-            if (parsedContent.content && Array.isArray(parsedContent.content)) {
-              const textContent = parsedContent.content
-                .filter((item: any) => item.type === "text")
-                .map((item: any) => item.text)
-                .join("\n");
-
-              if (textContent) {
-                try {
-                  resultData = JSON.parse(textContent);
-                } catch {
-                  resultData = textContent;
-                }
-              } else {
-                resultData = "Tool executed with non-text content";
-              }
-            } else {
-              resultData = parsedContent;
-            }
+          // If content is a string, try to parse it as JSON
+          if (typeof content === "string") {
+            resultData = JSON.parse(content);
           } else {
-            resultData = content || "Tool executed";
+            resultData = content;
           }
         } catch {
-          resultData = content || "Tool executed";
+          // If parsing fails, use the string content directly
+          resultData = content;
         }
 
-        const toolCallId = (msg as any).toolCallId || "";
-
+        // AI SDK v5 expects tool messages with this exact structure
         return {
           role: "tool" as const,
           content: [
             {
               type: "tool-result" as const,
               toolCallId: toolCallId,
-              // @ts-ignore
-              result: resultData,
+              toolName: toolName,
+              output: {
+                type: "text" as const,
+                value:
+                  typeof resultData === "string"
+                    ? resultData
+                    : JSON.stringify(resultData),
+              },
             },
-          ] as AIToolContent,
+          ],
         };
       }
-      case "assistant":
-        if (msg.toolCalls && msg.toolCalls.length > 0) {
-          const toolCallParts = msg.toolCalls.map(tc => ({
-            type: "tool-call" as const,
-            toolCallId: tc.id,
-            toolName: tc.function.name,
-            input: JSON.parse(tc.function.arguments),
-          }));
 
-          const assistantContent: AIAssistantContent = content
-            ? [{ type: "text" as const, text: content }, ...toolCallParts]
-            : toolCallParts;
+      case "assistant": {
+        // For assistant messages with tool calls, we need to handle them properly
+        const assistantMsg = msg as any;
+        if (assistantMsg.toolCalls && Array.isArray(assistantMsg.toolCalls)) {
+          // Convert tool calls to AI SDK format
+          const toolCalls = assistantMsg.toolCalls.map((tc: any) => ({
+            type: "tool-call" as const,
+            toolCallId: tc.id || generateId(),
+            toolName: tc.function?.name || tc.toolName,
+            input:
+              typeof tc.function?.arguments === "string"
+                ? JSON.parse(tc.function.arguments)
+                : tc.function?.arguments || tc.args || {},
+          }));
 
           return {
             role: "assistant" as const,
-            content: assistantContent,
+            content: [
+              ...(content ? [{ type: "text" as const, text: content }] : []),
+              ...toolCalls,
+            ],
           };
         }
 
+        // Simple assistant message
         return {
           role: "assistant" as const,
           content: content || "",
         };
-
+      }
       case "user":
         return {
           role: "user" as const,
@@ -453,15 +449,16 @@ export function validateChatContext(context: any): boolean {
 }
 
 /**
- * Format tool result for LLM consumption
+ * Format tool result for LLM consumption with proper structure
  */
 export function formatToolResultForLLM(
   toolCallId: string,
   result: any,
   toolName: string
-): ExtendedLLMMessage {
+): LLMMessage {
   let formattedResult = result || { status: "completed" };
 
+  // Handle MCP content structures
   if (formattedResult.content && Array.isArray(formattedResult.content)) {
     const textContent = formattedResult.content
       .filter((item: any) => item.type === "text")
@@ -477,12 +474,13 @@ export function formatToolResultForLLM(
     }
   }
 
+  // Return tool message in the correct format for LLM processing
   return {
     role: "tool" as const,
     content: JSON.stringify(formattedResult),
     toolCallId,
     name: toolName,
-  } as ExtendedLLMMessage;
+  };
 }
 
 /**
@@ -571,7 +569,14 @@ export function createFallbackToolSummary(
 ): string {
   const toolSummaries = toolResults.map((result, idx) => {
     const toolName = toolCalls[idx].function.name;
-    if (result.rawResult.success) {
+
+    // Check for errors first
+    if (result.error) {
+      return `${toolName}: encountered an error - ${result.error}`;
+    }
+
+    // Check if the raw result indicates success
+    if (result.rawResult?.success) {
       let summary = `${toolName}: completed successfully`;
 
       if (result.result && typeof result.result === "object") {
@@ -602,7 +607,7 @@ export function createFallbackToolSummary(
 
       return summary;
     } else {
-      return `${toolName}: encountered an error - ${result.rawResult.error || "unknown error"}`;
+      return `${toolName}: encountered an error - ${result.rawResult?.error || "unknown error"}`;
     }
   });
 
