@@ -2,8 +2,8 @@ import { Connection, Tool, Resource } from "@mcpconnect/schemas";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { RconnectLogo } from "./RconnectLogo";
 import { useStorage } from "../contexts/StorageContext";
-import { Search, X } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Search, X, MoreHorizontal, CheckCircle, XCircle } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 
 interface SidebarProps {
   connections: Connection[];
@@ -23,8 +23,10 @@ export const Sidebar = ({
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
-  const { conversations } = useStorage();
+  const { conversations, adapter } = useStorage();
   const [toolSearchQuery, setToolSearchQuery] = useState("");
+
+  const [disabledTools, setDisabledTools] = useState<Set<string>>(new Set());
 
   // Manual URL parsing as backup since useParams seems to be failing
   const urlParts = location.pathname.split("/");
@@ -62,30 +64,129 @@ export const Sidebar = ({
   };
 
   // Only show tools when a connection is selected
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const toolsToShow = currentConnectionId
     ? tools[currentConnectionId] || []
     : [];
 
-  // Filter tools based on search query
+  // Filter tools based on search query and enabled status
   const filteredTools = useMemo(() => {
-    if (!toolSearchQuery.trim()) {
-      return toolsToShow;
+    let filtered = toolsToShow;
+
+    if (toolSearchQuery.trim()) {
+      const query = toolSearchQuery.toLowerCase();
+      filtered = filtered.filter(
+        tool =>
+          tool.name.toLowerCase().includes(query) ||
+          tool.description?.toLowerCase().includes(query) ||
+          tool.category?.toLowerCase().includes(query) ||
+          tool.tags?.some(tag => tag.toLowerCase().includes(query))
+      );
     }
 
-    const query = toolSearchQuery.toLowerCase();
-    return toolsToShow.filter(
-      tool =>
-        tool.name.toLowerCase().includes(query) ||
-        tool.description?.toLowerCase().includes(query) ||
-        tool.category?.toLowerCase().includes(query) ||
-        tool.tags?.some(tag => tag.toLowerCase().includes(query))
-    );
+    return filtered;
   }, [toolsToShow, toolSearchQuery]);
+
+  // Tool management functions
+  const toggleTool = async (toolId: string) => {
+    const newDisabledTools = new Set(disabledTools);
+    if (newDisabledTools.has(toolId)) {
+      newDisabledTools.delete(toolId);
+    } else {
+      newDisabledTools.add(toolId);
+    }
+    setDisabledTools(newDisabledTools);
+
+    // Persist to storage
+    try {
+      await adapter.set(
+        `disabled-tools-${currentConnectionId}`,
+        Array.from(newDisabledTools)
+      );
+    } catch (error) {
+      console.error("Failed to save disabled tools:", error);
+    }
+  };
+
+  const enableAllTools = async () => {
+    setDisabledTools(new Set());
+    try {
+      await adapter.set(`disabled-tools-${currentConnectionId}`, []);
+    } catch (error) {
+      console.error("Failed to save disabled tools:", error);
+    }
+  };
+
+  const disableAllTools = async () => {
+    const allToolIds = new Set(toolsToShow.map(tool => tool.id));
+    setDisabledTools(allToolIds);
+    try {
+      await adapter.set(
+        `disabled-tools-${currentConnectionId}`,
+        Array.from(allToolIds)
+      );
+    } catch (error) {
+      console.error("Failed to save disabled tools:", error);
+    }
+  };
+
+  const toggleSelectedTools = async () => {
+    // Toggle all currently filtered/visible tools
+    const visibleToolIds = filteredTools.map(tool => tool.id);
+    const newDisabledTools = new Set(disabledTools);
+
+    // If any visible tool is enabled, disable all visible tools
+    // Otherwise, enable all visible tools
+    const hasEnabledTool = visibleToolIds.some(id => !newDisabledTools.has(id));
+
+    if (hasEnabledTool) {
+      // Disable all visible tools
+      visibleToolIds.forEach(id => newDisabledTools.add(id));
+    } else {
+      // Enable all visible tools
+      visibleToolIds.forEach(id => newDisabledTools.delete(id));
+    }
+
+    setDisabledTools(newDisabledTools);
+    try {
+      await adapter.set(
+        `disabled-tools-${currentConnectionId}`,
+        Array.from(newDisabledTools)
+      );
+    } catch (error) {
+      console.error("Failed to save disabled tools:", error);
+    }
+  };
+
+  // Load disabled tools on connection change
+  useEffect(() => {
+    if (currentConnectionId) {
+      const loadDisabledTools = async () => {
+        try {
+          const stored = await adapter.get(
+            `disabled-tools-${currentConnectionId}`
+          );
+          if (stored?.value && Array.isArray(stored.value)) {
+            setDisabledTools(new Set(stored.value));
+          } else {
+            setDisabledTools(new Set());
+          }
+        } catch (error) {
+          console.error("Failed to load disabled tools:", error);
+          setDisabledTools(new Set());
+        }
+      };
+      loadDisabledTools();
+    }
+  }, [currentConnectionId, adapter]);
 
   // Helper function to check if a tool is selected
   const isToolSelected = (tool: Tool): boolean => {
     return currentToolId === tool.id || selectedTool?.id === tool.id;
+  };
+
+  // Helper function to check if a tool is enabled
+  const isToolEnabled = (toolId: string): boolean => {
+    return !disabledTools.has(toolId);
   };
 
   // Helper function to truncate text with tooltip
@@ -107,6 +208,11 @@ export const Sidebar = ({
       </span>
     );
   };
+
+  const enabledCount = filteredTools.filter(tool =>
+    isToolEnabled(tool.id)
+  ).length;
+  const totalCount = filteredTools.length;
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-800 transition-colors">
@@ -183,8 +289,43 @@ export const Sidebar = ({
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-900 dark:text-white">
-                Tools ({filteredTools.length})
+                Tools ({enabledCount}/{totalCount})
               </h2>
+            </div>
+
+            {/* Tool Actions - Always Visible */}
+            <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={enableAllTools}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors"
+                  title="Enable all tools"
+                >
+                  <CheckCircle className="w-3 h-3" />
+                  Enable All
+                </button>
+                <button
+                  onClick={disableAllTools}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors"
+                  title="Disable all tools"
+                >
+                  <XCircle className="w-3 h-3" />
+                  Disable All
+                </button>
+                {filteredTools.length < toolsToShow.length && (
+                  <button
+                    onClick={toggleSelectedTools}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+                    title="Toggle visible tools"
+                  >
+                    <MoreHorizontal className="w-3 h-3" />
+                    Toggle Visible
+                  </button>
+                )}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Disabled tools won't be available during chat conversations
+              </div>
             </div>
 
             {/* Search Box */}
@@ -218,65 +359,107 @@ export const Sidebar = ({
                     : "No tools available"}
                 </div>
               ) : (
-                filteredTools.map((tool, idx) => (
-                  <div
-                    key={`${tool.id}-${idx}`}
-                    onClick={() => handleToolClick(tool)}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      isToolSelected(tool)
-                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${
-                          isToolSelected(tool)
-                            ? "bg-blue-100 dark:bg-blue-900/40"
-                            : "bg-orange-100 dark:bg-orange-900/30"
-                        }`}
-                      >
-                        <svg
-                          className={`w-4 h-4 ${
-                            isToolSelected(tool)
-                              ? "text-blue-600 dark:text-blue-400"
-                              : "text-orange-600 dark:text-orange-400"
-                          }`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"
-                          />
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
+                filteredTools.map((tool, idx) => {
+                  const enabled = isToolEnabled(tool.id);
+                  const selected = isToolSelected(tool);
+
+                  return (
+                    <div
+                      key={`${tool.id}-${idx}`}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors relative ${
+                        selected
+                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                          : enabled
+                            ? "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            : "bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
                         <div
-                          className={`font-medium text-sm leading-tight break-words ${
-                            isToolSelected(tool)
-                              ? "text-blue-900 dark:text-blue-100"
-                              : "text-gray-900 dark:text-white"
+                          className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${
+                            selected
+                              ? "bg-blue-100 dark:bg-blue-900/40"
+                              : enabled
+                                ? "bg-orange-100 dark:bg-orange-900/30"
+                                : "bg-gray-100 dark:bg-gray-700"
                           }`}
                         >
-                          {tool.name}
+                          <svg
+                            className={`w-4 h-4 ${
+                              selected
+                                ? "text-blue-600 dark:text-blue-400"
+                                : enabled
+                                  ? "text-orange-600 dark:text-orange-400"
+                                  : "text-gray-400 dark:text-gray-500"
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"
+                            />
+                          </svg>
                         </div>
                         <div
-                          className={`text-xs mt-1 leading-relaxed break-words ${
-                            isToolSelected(tool)
-                              ? "text-blue-600 dark:text-blue-300"
-                              : "text-gray-500 dark:text-gray-400"
-                          }`}
+                          className="flex-1 min-w-0"
+                          onClick={() => enabled && handleToolClick(tool)}
                         >
-                          {tool.description || "No description"}
+                          <div
+                            className={`font-medium text-sm leading-tight break-words ${
+                              selected
+                                ? "text-blue-900 dark:text-blue-100"
+                                : enabled
+                                  ? "text-gray-900 dark:text-white"
+                                  : "text-gray-500 dark:text-gray-400"
+                            }`}
+                          >
+                            {tool.name}
+                            {!enabled && (
+                              <span className="ml-2 text-xs font-normal opacity-60">
+                                (disabled)
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className={`text-xs mt-1 leading-relaxed break-words ${
+                              selected
+                                ? "text-blue-600 dark:text-blue-300"
+                                : enabled
+                                  ? "text-gray-500 dark:text-gray-400"
+                                  : "text-gray-400 dark:text-gray-500"
+                            }`}
+                          >
+                            {tool.description || "No description"}
+                          </div>
                         </div>
+
+                        {/* Toggle button */}
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            toggleTool(tool.id);
+                          }}
+                          className={`flex-shrink-0 p-1 rounded transition-colors ${
+                            enabled
+                              ? "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                              : "text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                          }`}
+                          title={enabled ? "Disable tool" : "Enable tool"}
+                        >
+                          {enabled ? (
+                            <CheckCircle className="w-4 h-4" />
+                          ) : (
+                            <XCircle className="w-4 h-4" />
+                          )}
+                        </button>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

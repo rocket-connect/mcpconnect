@@ -27,8 +27,15 @@ interface ChatInterfaceProps {
 export const ChatInterface = (_args: ChatInterfaceProps) => {
   const { connectionId, chatId } = useParams();
   const navigate = useNavigate();
-  const { connections, tools, conversations, updateConversations, refreshAll } =
-    useStorage();
+  const {
+    connections,
+    tools,
+    conversations,
+    updateConversations,
+    refreshAll,
+    getEnabledTools,
+    isToolEnabled,
+  } = useStorage();
   const { expandedToolCall: inspectorExpandedTool, syncToolCallState } =
     useInspector();
 
@@ -104,7 +111,14 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       : connectionConversations[0];
 
   const currentMessages = currentConversation?.messages || [];
-  const connectionTools = connectionId ? tools[connectionId] || [] : [];
+  const allConnectionTools = connectionId ? tools[connectionId] || [] : [];
+
+  // Get only enabled tools for this connection
+  const enabledConnectionTools = connectionId
+    ? getEnabledTools(connectionId)
+    : [];
+  const disabledToolsCount =
+    allConnectionTools.length - enabledConnectionTools.length;
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -342,7 +356,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     [currentMessages, messageInput, refreshAll]
   );
 
-  // Send message using ChatService with SSE streaming
+  // Send message using ChatService with SSE streaming - now uses only enabled tools
   const handleSendMessage = async () => {
     if (
       !messageInput.trim() ||
@@ -373,9 +387,10 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const originalMessage = messageInput.trim();
       setMessageInput("");
 
+      // Use only enabled tools for the chat context
       const chatContext = {
         connection: currentConnection,
-        tools: connectionTools,
+        tools: enabledConnectionTools, // This now filters out disabled tools
         llmSettings,
       };
 
@@ -534,6 +549,10 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       message.toolExecution || message.isExecuting || message.executingTool;
     const toolName = message.executingTool || message.toolExecution?.toolName;
 
+    // Show warning if tool was disabled after execution
+    const toolWasDisabled =
+      toolName && connectionId && !isToolEnabled(connectionId, toolName);
+
     if (message.isExecuting && !message.message && !hasToolExecution) {
       return null;
     }
@@ -590,6 +609,11 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                       </div>
                       <div className="text-xs mt-1 text-gray-500">
                         {toolName} completed
+                        {toolWasDisabled && (
+                          <span className="ml-2 text-amber-600 dark:text-amber-400">
+                            (now disabled)
+                          </span>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -634,6 +658,11 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                       </span>
                       <span className="ml-2 font-mono text-gray-900 dark:text-gray-100">
                         {toolName || "Unknown"}
+                        {toolWasDisabled && (
+                          <span className="ml-2 text-amber-600 dark:text-amber-400">
+                            (disabled)
+                          </span>
+                        )}
                       </span>
                     </div>
                     <div>
@@ -778,7 +807,15 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               </h2>
               <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
                 <span>{currentMessages.length} messages</span>
-                <span>{connectionTools.length} tools available</span>
+                <span>
+                  {enabledConnectionTools.length} tools enabled
+                  {disabledToolsCount > 0 && (
+                    <span className="text-amber-600 dark:text-amber-400">
+                      {" "}
+                      ({disabledToolsCount} disabled)
+                    </span>
+                  )}
+                </span>
                 {currentConnection && (
                   <>
                     <span>•</span>
@@ -922,6 +959,22 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           </div>
         )}
 
+        {/* Tool Status Warning */}
+        {disabledToolsCount > 0 && !showApiWarning && (
+          <div className="flex-shrink-0 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-6 py-2">
+            <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200">
+              <div className="w-4 h-4 bg-blue-400 rounded-full flex items-center justify-center">
+                <span className="text-xs text-blue-900">i</span>
+              </div>
+              <span>
+                {disabledToolsCount} tool
+                {disabledToolsCount === 1 ? " is" : "s are"} disabled and won't
+                be used in conversations
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Scrollable Messages Container */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="h-full">
@@ -940,7 +993,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                     <p className="text-sm">
                       {showApiWarning
                         ? "Add your Anthropic API key to begin chatting with Claude"
-                        : `Start chatting with Claude about ${currentConnection?.name}. ${connectionTools.length} tools are available.`}
+                        : `Start chatting with Claude about ${currentConnection?.name}. ${enabledConnectionTools.length} tools are available${disabledToolsCount > 0 ? ` (${disabledToolsCount} disabled)` : ""}.`}
                     </p>
                     {showApiWarning && (
                       <button
@@ -1009,7 +1062,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                   showApiWarning
                     ? "Configure API key to start chatting..."
                     : currentConnection
-                      ? `Message Claude about ${currentConnection.name}... (${connectionTools.length} tools available, ${streamingEnabled ? "streaming" : "standard"} mode)`
+                      ? `Message Claude about ${currentConnection.name}... (${enabledConnectionTools.length} tools enabled${disabledToolsCount > 0 ? `, ${disabledToolsCount} disabled` : ""}, ${streamingEnabled ? "streaming" : "standard"} mode)`
                       : "Type a message..."
                 }
                 value={messageInput}

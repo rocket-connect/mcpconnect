@@ -23,6 +23,7 @@ interface StorageContextType {
   resources: Record<string, Resource[]>;
   conversations: Record<string, ChatConversation[]>;
   toolExecutions: Record<string, ToolExecution[]>;
+  disabledTools: Record<string, Set<string>>; // connectionId -> Set of disabled tool IDs
   isLoading: boolean;
   error: string | null;
   // Optimized update methods using adapter
@@ -37,6 +38,13 @@ interface StorageContextType {
   addConnection: (connection: Connection) => Promise<void>;
   updateConnection: (connection: Connection) => Promise<void>;
   deleteConnection: (connectionId: string) => Promise<void>;
+  // Tool management methods
+  getEnabledTools: (connectionId: string) => Tool[];
+  updateDisabledTools: (
+    connectionId: string,
+    disabledToolIds: Set<string>
+  ) => Promise<void>;
+  isToolEnabled: (connectionId: string, toolId: string) => boolean;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -71,8 +79,41 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const [toolExecutions, setToolExecutions] = useState<
     Record<string, ToolExecution[]>
   >({});
+  const [disabledTools, setDisabledTools] = useState<
+    Record<string, Set<string>>
+  >({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Load disabled tools for a specific connection
+  const loadDisabledTools = useCallback(
+    async (connectionId: string): Promise<Set<string>> => {
+      try {
+        const stored = await adapter.get(`disabled-tools-${connectionId}`);
+        if (stored?.value && Array.isArray(stored.value)) {
+          return new Set(stored.value);
+        }
+      } catch (error) {
+        console.error(
+          `Failed to load disabled tools for ${connectionId}:`,
+          error
+        );
+      }
+      return new Set();
+    },
+    [adapter]
+  );
+
+  // Load disabled tools for all connections
+  const loadAllDisabledTools = useCallback(async () => {
+    const newDisabledTools: Record<string, Set<string>> = {};
+
+    for (const connection of connections) {
+      newDisabledTools[connection.id] = await loadDisabledTools(connection.id);
+    }
+
+    setDisabledTools(newDisabledTools);
+  }, [connections, loadDisabledTools]);
 
   const refreshAll = useCallback(async () => {
     try {
@@ -124,11 +165,14 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         >;
         setToolExecutions(executionsData);
       }
+
+      // Load disabled tools after connections are loaded
+      await loadAllDisabledTools();
     } catch (err) {
       console.error("Failed to refresh data:", err);
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [adapter]);
+  }, [adapter, loadAllDisabledTools]);
 
   const forceRefresh = useCallback(async () => {
     setConnections([]);
@@ -136,6 +180,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     setResources({});
     setConversations({});
     setToolExecutions({});
+    setDisabledTools({});
 
     await refreshAll();
   }, [refreshAll]);
@@ -145,11 +190,14 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       try {
         await adapter.setConnections(newConnections); // Use enhanced method
         setConnections(newConnections);
+
+        // Reload disabled tools for the updated connections
+        await loadAllDisabledTools();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [adapter]
+    [adapter, loadAllDisabledTools]
   );
 
   const updateConversations = useCallback(
@@ -214,6 +262,9 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         // Remove associated data using adapter's optimized method
         await adapter.removeConnectionData(connectionId);
 
+        // Remove disabled tools data
+        await adapter.delete(`disabled-tools-${connectionId}`);
+
         // Update local state
         const newConversations = { ...conversations };
         delete newConversations[connectionId];
@@ -230,6 +281,10 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         const newToolExecutions = { ...toolExecutions };
         delete newToolExecutions[connectionId];
         setToolExecutions(newToolExecutions);
+
+        const newDisabledTools = { ...disabledTools };
+        delete newDisabledTools[connectionId];
+        setDisabledTools(newDisabledTools);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -240,9 +295,47 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       tools,
       resources,
       toolExecutions,
+      disabledTools,
       adapter,
       updateConnections,
     ]
+  );
+
+  // Tool management methods
+  const updateDisabledTools = useCallback(
+    async (connectionId: string, disabledToolIds: Set<string>) => {
+      try {
+        await adapter.set(
+          `disabled-tools-${connectionId}`,
+          Array.from(disabledToolIds)
+        );
+        setDisabledTools(prev => ({
+          ...prev,
+          [connectionId]: disabledToolIds,
+        }));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [adapter]
+  );
+
+  const getEnabledTools = useCallback(
+    (connectionId: string): Tool[] => {
+      const allTools = tools[connectionId] || [];
+      const disabled = disabledTools[connectionId] || new Set();
+
+      return allTools.filter(tool => !disabled.has(tool.id));
+    },
+    [tools, disabledTools]
+  );
+
+  const isToolEnabled = useCallback(
+    (connectionId: string, toolId: string): boolean => {
+      const disabled = disabledTools[connectionId] || new Set();
+      return !disabled.has(toolId);
+    },
+    [disabledTools]
   );
 
   useEffect(() => {
@@ -320,6 +413,15 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           >;
           setToolExecutions(executionsData);
         }
+
+        // Load disabled tools for all connections
+        const newDisabledTools: Record<string, Set<string>> = {};
+        for (const connection of storedConnections) {
+          newDisabledTools[connection.id] = await loadDisabledTools(
+            connection.id
+          );
+        }
+        setDisabledTools(newDisabledTools);
       } catch (err) {
         console.error("Failed to load existing data:", err);
         setError(err instanceof Error ? err.message : String(err));
@@ -331,7 +433,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [adapter]);
+  }, [adapter, loadDisabledTools]);
 
   const contextValue: StorageContextType = {
     adapter,
@@ -340,6 +442,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     resources,
     conversations,
     toolExecutions,
+    disabledTools,
     isLoading,
     error,
     updateConnections,
@@ -350,6 +453,9 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     addConnection,
     updateConnection,
     deleteConnection,
+    getEnabledTools,
+    updateDisabledTools,
+    isToolEnabled,
   };
 
   return (

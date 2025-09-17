@@ -416,23 +416,15 @@ export class LocalStorageAdapter extends StorageAdapter {
     totalToolExecutions: number;
     totalTools: number;
     totalResources: number;
-    storageUsed: string;
   }> {
-    const [
-      connections,
-      conversations,
-      toolExecutions,
-      tools,
-      resources,
-      stats,
-    ] = await Promise.all([
-      this.getConnections(),
-      this.get("conversations"),
-      this.get("toolExecutions"),
-      this.get("tools"),
-      this.get("resources"),
-      this.stats(),
-    ]);
+    const [connections, conversations, toolExecutions, tools, resources] =
+      await Promise.all([
+        this.getConnections(),
+        this.get("conversations"),
+        this.get("toolExecutions"),
+        this.get("tools"),
+        this.get("resources"),
+      ]);
 
     const conversationsData =
       (conversations?.value as Record<string, ChatConversation[]>) || {};
@@ -476,7 +468,6 @@ export class LocalStorageAdapter extends StorageAdapter {
       totalToolExecutions,
       totalTools,
       totalResources,
-      storageUsed: formatBytes(stats.totalSize),
     };
   }
 

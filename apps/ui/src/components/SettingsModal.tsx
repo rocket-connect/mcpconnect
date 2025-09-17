@@ -49,7 +49,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     totalToolExecutions: 0,
     totalTools: 0,
     totalResources: 0,
-    storageUsed: "0 Bytes",
   });
 
   // Load settings from adapter on mount
@@ -435,26 +434,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-
-                {/* Pricing Information */}
-                {(() => {
-                  const pricing = ModelService.getModelPricing(
-                    settings.provider,
-                    settings.model
-                  );
-                  if (pricing) {
-                    return (
-                      <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          <span className="font-medium">Pricing:</span> $
-                          {pricing.input}/1M input tokens, ${pricing.output}/1M
-                          output tokens
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
               </div>
             </div>
           )}
@@ -506,14 +485,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {storageStats.totalToolExecutions}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    Storage Used:
-                  </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {storageStats.storageUsed}
                   </span>
                 </div>
               </div>
