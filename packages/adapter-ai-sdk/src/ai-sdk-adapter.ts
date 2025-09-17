@@ -27,7 +27,6 @@ import {
   LLMSettings,
   ModelOption,
   ExtendedLLMMessage,
-  ToolResultForLLM,
   AIModel,
 } from "./types";
 import {
@@ -254,6 +253,7 @@ export class AISDKAdapter extends LLMAdapter {
       const accumulatedToolCalls: any[] = [];
 
       try {
+        // Listen for text stream
         for await (const delta of result.textStream) {
           hasGeneratedContent = true;
           yield {
@@ -265,6 +265,7 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
+        // Listen for tool calls
         for await (const chunk of result.fullStream) {
           if (chunk.type === "tool-call") {
             hasGeneratedContent = true;
@@ -316,20 +317,56 @@ export class AISDKAdapter extends LLMAdapter {
               (usage.inputTokens || 0) + (usage.outputTokens || 0),
           },
         };
-      } catch (streamError) {
-        console.error("Error during streaming:", streamError);
 
+        this.status = AdapterStatus.CONNECTED;
+      } catch (streamError) {
+        console.error("Stream error details:", streamError);
+
+        // Parse API errors from the stream
+        let errorMessage = "Stream error occurred";
+        let errorType = "STREAM_ERROR";
+
+        if (streamError instanceof Error) {
+          errorMessage = streamError.message;
+
+          // Check for specific Anthropic API errors
+          if (errorMessage.includes("overloaded")) {
+            errorMessage =
+              "Claude is experiencing high demand. Please try again in a moment.";
+            errorType = "OVERLOADED_ERROR";
+          } else if (errorMessage.includes("rate_limit")) {
+            errorMessage =
+              "Rate limit exceeded. Please wait before sending another message.";
+            errorType = "RATE_LIMIT_ERROR";
+          } else if (errorMessage.includes("invalid_request")) {
+            errorMessage =
+              "Invalid request. Please check your message and try again.";
+            errorType = "INVALID_REQUEST_ERROR";
+          } else if (errorMessage.includes("authentication")) {
+            errorMessage =
+              "Authentication failed. Please check your API key in settings.";
+            errorType = "AUTH_ERROR";
+          } else if (errorMessage.includes("permission")) {
+            errorMessage =
+              "Permission denied. Please check your API key permissions.";
+            errorType = "PERMISSION_ERROR";
+          } else if (errorMessage.includes("not_found")) {
+            errorMessage =
+              "Model not found. Please check your model configuration.";
+            errorType = "MODEL_NOT_FOUND_ERROR";
+          }
+        }
+
+        // Yield error response if no content was generated
         if (!hasGeneratedContent) {
-          console.warn(
-            "No content generated before error, yielding minimal response"
-          );
           yield {
             id: currentId,
             delta: {
-              content: "",
+              content: "", // Empty content for error case
             },
-            finishReason: "stop",
+            finishReason: "error",
             model: this.config.model,
+            error: errorMessage,
             usage: {
               promptTokens: 0,
               completionTokens: 0,
@@ -338,43 +375,37 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        throw streamError;
+        // Always throw the error to be handled upstream
+        throw new AdapterError(errorMessage, errorType, {
+          originalError: streamError,
+        });
       }
-
-      if (!hasGeneratedContent) {
-        console.warn(
-          "No content generated during stream, yielding minimal response"
-        );
-        const usage = await result.usage.catch(() => ({
-          inputTokens: 0,
-          outputTokens: 0,
-          totalTokens: 0,
-        }));
-
-        yield {
-          id: currentId,
-          delta: {
-            content: "",
-          },
-          finishReason: "stop",
-          model: this.config.model,
-          usage: {
-            promptTokens: usage.inputTokens || 0,
-            completionTokens: usage.outputTokens || 0,
-            totalTokens: usage.totalTokens || usage.inputTokens || 0,
-          },
-        };
-      }
-
-      this.status = AdapterStatus.CONNECTED;
     } catch (error) {
       this.status = AdapterStatus.ERROR;
-      console.error("Stream error details:", {
-        error: error,
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      this.handleError(error, "stream");
+      console.error("Stream setup error:", error);
+
+      // Handle setup/initialization errors
+      let errorMessage = "Failed to start conversation";
+      let errorType = "STREAM_SETUP_ERROR";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        if (errorMessage.includes("API key")) {
+          errorMessage =
+            "Invalid API key. Please check your Claude API settings.";
+          errorType = "AUTH_ERROR";
+        } else if (
+          errorMessage.includes("network") ||
+          errorMessage.includes("fetch")
+        ) {
+          errorMessage =
+            "Network error. Please check your connection and try again.";
+          errorType = "NETWORK_ERROR";
+        }
+      }
+
+      throw new AdapterError(errorMessage, errorType, { originalError: error });
     }
   }
 
@@ -423,70 +454,100 @@ export class AISDKAdapter extends LLMAdapter {
         console.log(`[Tool Chain] Iteration ${iteration}`);
 
         const toolCalls: LLMToolCall[] = [];
-        const toolResults: ToolResultForLLM[] = [];
         let iterationContent = "";
+        let streamError: Error | null = null;
 
-        // Stream the LLM response
-        for await (const chunk of this.stream(currentMessages)) {
-          if (chunk.delta?.content) {
-            iterationContent += chunk.delta.content;
-            yield {
-              type: "token",
-              delta: chunk.delta.content,
-            };
-          }
+        // Stream the LLM response with proper error handling
+        try {
+          for await (const chunk of this.stream(currentMessages)) {
+            // Handle error in stream chunk
+            if (chunk.error) {
+              streamError = new Error(chunk.error);
+              break;
+            }
 
-          // Accumulate tool calls
-          if (chunk.delta?.toolCalls) {
-            for (const tc of chunk.delta.toolCalls) {
-              if (tc.function?.name && tc.function?.arguments) {
-                const existingCallIndex = toolCalls.findIndex(
-                  call => call.id === tc.id
-                );
+            if (chunk.delta?.content) {
+              iterationContent += chunk.delta.content;
+              yield {
+                type: "token",
+                delta: chunk.delta.content,
+              };
+            }
 
-                if (existingCallIndex >= 0) {
-                  toolCalls[existingCallIndex] = {
-                    id: tc.id || generateId(),
-                    type: "function",
-                    function: {
-                      name: tc.function.name,
-                      arguments: tc.function.arguments,
-                    },
-                  };
-                } else {
-                  toolCalls.push({
-                    id: tc.id || generateId(),
-                    type: "function",
-                    function: {
-                      name: tc.function.name,
-                      arguments: tc.function.arguments,
-                    },
-                  });
+            // Accumulate tool calls
+            if (chunk.delta?.toolCalls) {
+              for (const tc of chunk.delta.toolCalls) {
+                if (tc.function?.name && tc.function?.arguments) {
+                  const existingCallIndex = toolCalls.findIndex(
+                    call => call.id === tc.id
+                  );
+
+                  if (existingCallIndex >= 0) {
+                    toolCalls[existingCallIndex] = {
+                      id: tc.id || generateId(),
+                      type: "function",
+                      function: {
+                        name: tc.function.name,
+                        arguments: tc.function.arguments,
+                      },
+                    };
+                  } else {
+                    toolCalls.push({
+                      id: tc.id || generateId(),
+                      type: "function",
+                      function: {
+                        name: tc.function.name,
+                        arguments: tc.function.arguments,
+                      },
+                    });
+                  }
                 }
               }
             }
-          }
 
-          // Check if we've finished with tool calls
-          if (
-            chunk.finishReason === "tool_calls" ||
-            (chunk.finishReason && toolCalls.length > 0)
-          ) {
-            break;
-          }
+            // Check if we've finished with tool calls
+            if (
+              chunk.finishReason === "tool_calls" ||
+              (chunk.finishReason && toolCalls.length > 0)
+            ) {
+              break;
+            }
 
-          // If we get a stop reason without tool calls, we're done
-          if (chunk.finishReason === "stop" && toolCalls.length === 0) {
-            fullContent += iterationContent;
-            // Send the complete message
-            const assistantMessage = createAssistantMessage(fullContent);
-            yield {
-              type: "message_complete",
-              assistantMessage,
-              toolExecutionMessages: allToolExecutionMessages,
-            };
-            return;
+            // If we get a stop reason without tool calls, we're done
+            if (chunk.finishReason === "stop" && toolCalls.length === 0) {
+              fullContent += iterationContent;
+              // Send the complete message
+              const assistantMessage = createAssistantMessage(fullContent);
+              yield {
+                type: "message_complete",
+                assistantMessage,
+                toolExecutionMessages: allToolExecutionMessages,
+              };
+              return;
+            }
+
+            // Handle error finish reason
+            if (chunk.finishReason === "error") {
+              streamError = new Error(chunk.error || "Stream ended with error");
+              break;
+            }
           }
+        } catch (error) {
+          streamError =
+            error instanceof Error ? error : new Error(String(error));
+        }
+
+        // If we encountered a stream error, handle it
+        if (streamError) {
+          console.error(
+            `[Tool Chain] Stream error in iteration ${iteration}:`,
+            streamError
+          );
+          yield {
+            type: "error",
+            error: streamError.message,
+          };
+          return;
         }
 
         fullContent += iterationContent;
@@ -526,14 +587,6 @@ export class AISDKAdapter extends LLMAdapter {
 
           allToolExecutionMessages.push(toolResult.chatMessage);
 
-          // Store both the result and the raw result for proper formatting
-          toolResults.push({
-            toolCallId: toolCall.id,
-            result: toolResult.result || { status: "executed" },
-            rawResult: toolResult,
-            error: toolResult.error,
-          });
-
           // Store execution for persistence
           if (AISDKAdapter.storageAdapter) {
             try {
@@ -569,9 +622,6 @@ export class AISDKAdapter extends LLMAdapter {
         console.log(
           `[Tool Chain] Added ${toolCalls.length} tool results to conversation`
         );
-
-        // Continue the loop to see if the LLM wants to make more tool calls
-        // The conversation now includes all previous messages + tool results
       }
 
       // Final response after all tool iterations
@@ -585,9 +635,11 @@ export class AISDKAdapter extends LLMAdapter {
       };
     } catch (error) {
       console.error("Stream error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       yield {
         type: "error",
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       };
     }
   }

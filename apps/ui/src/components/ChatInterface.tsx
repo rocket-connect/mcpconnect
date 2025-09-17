@@ -309,6 +309,28 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     setStreamingEnabled(!streamingEnabled);
   };
 
+  // Update conversation messages in both storage and state
+  const updateConversationMessages = async (messages: ChatMessageType[]) => {
+    if (!connectionId || !currentConversation) return;
+
+    const updatedConversation = {
+      ...currentConversation,
+      messages,
+      updatedAt: new Date(),
+    };
+
+    const updatedConnectionConversations = connectionConversations.map(conv =>
+      conv.id === currentConversation.id ? updatedConversation : conv
+    );
+
+    const allConversations = {
+      ...conversations,
+      [connectionId]: updatedConnectionConversations,
+    };
+
+    await updateConversations(allConversations);
+  };
+
   const handleStreamingEvent = useCallback(
     async (event: SSEEvent) => {
       switch (event.type) {
@@ -373,10 +395,13 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             setStreamingStatus("");
             streamingMessageRef.current = "";
 
+            // Create a proper error message for display
+            const errorText =
+              event.data?.error || "An error occurred during streaming";
+
             const errorMessage: ChatMessageType = {
               id: nanoid(),
-              message:
-                event.data?.error || "An error occurred during streaming",
+              message: `Error: ${errorText}`,
               isUser: false,
               timestamp: new Date(),
               isExecuting: false,
@@ -400,7 +425,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           break;
       }
     },
-    [currentMessages, messageInput, refreshAll]
+    [currentMessages, messageInput, refreshAll, updateConversationMessages]
   );
 
   // NEW: Updated send message to use fresh enabled tools
@@ -562,28 +587,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  };
-
-  // Update conversation messages in both storage and state
-  const updateConversationMessages = async (messages: ChatMessageType[]) => {
-    if (!connectionId || !currentConversation) return;
-
-    const updatedConversation = {
-      ...currentConversation,
-      messages,
-      updatedAt: new Date(),
-    };
-
-    const updatedConnectionConversations = connectionConversations.map(conv =>
-      conv.id === currentConversation.id ? updatedConversation : conv
-    );
-
-    const allConversations = {
-      ...conversations,
-      [connectionId]: updatedConnectionConversations,
-    };
-
-    await updateConversations(allConversations);
   };
 
   const handleTabClick = (selectedChatId: string) => {

@@ -107,10 +107,11 @@ export const LLMStreamResponseSchema = z.object({
       .optional(),
   }),
   finishReason: z
-    .enum(["stop", "length", "tool_calls", "content_filter"])
+    .enum(["stop", "length", "tool_calls", "content_filter", "error"])
     .optional(),
   usage: LLMUsageSchema.optional(),
   model: z.string(),
+  error: z.string().optional(),
 });
 
 export type LLMStreamResponse = z.infer<typeof LLMStreamResponseSchema>;
