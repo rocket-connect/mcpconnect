@@ -3,7 +3,7 @@ import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { RconnectLogo } from "./RconnectLogo";
 import { useStorage } from "../contexts/StorageContext";
 import { Search, X, MoreHorizontal, CheckCircle, XCircle } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 
 interface SidebarProps {
   connections: Connection[];
