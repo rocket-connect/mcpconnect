@@ -24,7 +24,6 @@ export {
   type StorageItem,
   type StorageOptions,
   type StorageCapabilities,
-  type StorageTransaction,
   StorageConfigSchema,
   StorageItemSchema,
   StorageQuerySchema,

@@ -334,18 +334,17 @@ export abstract class MCPAdapter {
 
   // Abstract methods that implementations must provide
   abstract testConnection(connection: Connection): Promise<boolean>;
+
   abstract connectAndIntrospect(
     connection: Connection
   ): Promise<MCPConnectionResult>;
+
   abstract executeTool(
     connection: Connection,
     toolName: string,
     arguments_: Record<string, any>
   ): Promise<MCPToolExecutionResult>;
-  abstract readResource(
-    connection: Connection,
-    resourceUri: string
-  ): Promise<any>;
+
   abstract initialize(): Promise<void>;
   abstract cleanup(): Promise<void>;
 }

@@ -151,28 +151,9 @@ export abstract class StorageAdapter {
   abstract keys(pattern?: string): Promise<string[]>;
 
   /**
-   * Get storage statistics
-   */
-  abstract stats(): Promise<{
-    itemCount: number;
-    totalSize: number;
-    usedSpace: number;
-    availableSpace?: number;
-  }>;
-
-  /**
    * Clear all items (with optional pattern)
    */
   abstract clear(pattern?: string): Promise<number>;
-
-  /**
-   * Clean up expired items
-   */
-  abstract cleanup(): Promise<number>;
-
-  abstract transaction<T>(
-    callback: (tx: StorageTransaction) => Promise<T>
-  ): Promise<T>;
 
   async setTheme(theme: "light" | "dark" | "system"): Promise<void> {
     await this.set("theme", theme);
@@ -403,15 +384,4 @@ export abstract class StorageAdapter {
       { context, originalError: error }
     );
   }
-}
-
-/**
- * Storage transaction interface
- */
-export interface StorageTransaction {
-  set(key: string, value: unknown, options?: StorageOptions): Promise<void>;
-  get(key: string): Promise<StorageItem | null>;
-  delete(key: string): Promise<boolean>;
-  commit(): Promise<void>;
-  rollback(): Promise<void>;
 }

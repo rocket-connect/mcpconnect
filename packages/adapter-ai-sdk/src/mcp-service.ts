@@ -937,31 +937,6 @@ export class MCPService extends MCPAdapter {
     };
   }
 
-  async readResource(
-    connection: Connection,
-    resourceUri: string
-  ): Promise<any> {
-    const abortController = new AbortController();
-    const timeout = setTimeout(() => {
-      abortController.abort();
-    }, connection.timeout || 30000);
-
-    try {
-      const result = await this.sendMCPRequest(
-        connection,
-        "resources/read",
-        { uri: resourceUri },
-        abortController.signal
-      );
-
-      clearTimeout(timeout);
-      return result;
-    } catch (error) {
-      clearTimeout(timeout);
-      throw error;
-    }
-  }
-
   // Static convenience methods remain the same...
   static async testConnection(
     connection: Connection,
@@ -987,15 +962,6 @@ export class MCPService extends MCPAdapter {
   ) {
     const service = MCPService.getInstance(undefined, fetch);
     return service.executeTool(connection, toolName, arguments_);
-  }
-
-  static async readResource(
-    connection: Connection,
-    resourceUri: string,
-    fetch?: FetchFunction
-  ) {
-    const service = MCPService.getInstance(undefined, fetch);
-    return service.readResource(connection, resourceUri);
   }
 
   static validateConnectionUrl(url: string): boolean {

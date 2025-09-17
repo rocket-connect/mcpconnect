@@ -7,5 +7,4 @@ export type {
   StorageItem,
   StorageOptions,
   StorageCapabilities,
-  StorageTransaction,
 } from "@mcpconnect/base-adapters";

@@ -4,7 +4,6 @@ import {
   StorageItem,
   StorageOptions,
   StorageCapabilities,
-  StorageTransaction,
   AdapterError,
   AdapterStatus,
 } from "@mcpconnect/base-adapters";
@@ -31,82 +30,6 @@ export const LocalStorageConfigSchema = StorageConfigSchema.extend({
 });
 
 export type LocalStorageConfig = z.infer<typeof LocalStorageConfigSchema>;
-
-/**
- * Simple transaction implementation for LocalStorage
- */
-class LocalStorageTransaction implements StorageTransaction {
-  private operations: Array<() => void> = [];
-  private rollbackOperations: Array<() => void> = [];
-  private adapter: LocalStorageAdapter;
-
-  constructor(adapter: LocalStorageAdapter) {
-    this.adapter = adapter;
-  }
-
-  async set(
-    key: string,
-    value: unknown,
-    options?: StorageOptions
-  ): Promise<void> {
-    console.log("Transaction.set:", { key, hasValue: !!value, options });
-
-    // Store the current value for rollback
-    const currentItem = await this.adapter.get(key);
-
-    this.operations.push(() => {
-      console.log("Executing transaction set:", key);
-    });
-
-    this.rollbackOperations.push(() => {
-      if (currentItem) {
-        console.log("Rolling back set operation for:", key);
-      } else {
-        console.log("Rolling back set operation (delete) for:", key);
-      }
-    });
-  }
-
-  async get(key: string): Promise<StorageItem | null> {
-    return this.adapter.get(key);
-  }
-
-  async delete(key: string): Promise<boolean> {
-    const currentItem = await this.adapter.get(key);
-
-    this.operations.push(() => {});
-
-    this.rollbackOperations.push(() => {});
-
-    return !!currentItem;
-  }
-
-  async commit(): Promise<void> {
-    try {
-      for (const operation of this.operations) {
-        operation();
-      }
-      this.operations = [];
-      this.rollbackOperations = [];
-    } catch (error) {
-      await this.rollback();
-      throw error;
-    }
-  }
-
-  async rollback(): Promise<void> {
-    for (const rollbackOperation of this.rollbackOperations.reverse()) {
-      try {
-        rollbackOperation();
-      } catch (error) {
-        console.error("Error during rollback:", error);
-      }
-    }
-
-    this.operations = [];
-    this.rollbackOperations = [];
-  }
-}
 
 /**
  * LocalStorage implementation of StorageAdapter with MCP-specific methods
@@ -264,30 +187,6 @@ export class LocalStorageAdapter extends StorageAdapter {
     return keys;
   }
 
-  async stats(): Promise<{
-    itemCount: number;
-    totalSize: number;
-    usedSpace: number;
-    availableSpace?: number;
-  }> {
-    const keys = await this.keys();
-    let totalSize = 0;
-
-    for (const key of keys) {
-      const value = localStorage.getItem(key);
-      if (value) {
-        totalSize += value.length;
-      }
-    }
-
-    return {
-      itemCount: keys.length,
-      totalSize,
-      usedSpace: totalSize,
-      availableSpace: Math.max(0, 10 * 1024 * 1024 - totalSize),
-    };
-  }
-
   async clear(pattern?: string): Promise<number> {
     const keys = await this.keys(pattern);
     let deletedCount = 0;
@@ -298,38 +197,6 @@ export class LocalStorageAdapter extends StorageAdapter {
     }
 
     return deletedCount;
-  }
-
-  async cleanup(): Promise<number> {
-    const keys = await this.keys();
-    let cleanedCount = 0;
-
-    for (const key of keys) {
-      const plainKey = key.replace(this.config.prefix, "");
-      const item = await this.get(plainKey);
-
-      if (item?.metadata.expiresAt && item.metadata.expiresAt < new Date()) {
-        await this.delete(plainKey);
-        cleanedCount++;
-      }
-    }
-
-    return cleanedCount;
-  }
-
-  async transaction<T>(
-    callback: (tx: StorageTransaction) => Promise<T>
-  ): Promise<T> {
-    const tx = new LocalStorageTransaction(this);
-
-    try {
-      const result = await callback(tx);
-      await tx.commit();
-      return result;
-    } catch (error) {
-      await tx.rollback();
-      throw error;
-    }
   }
 
   async getConnections(): Promise<Connection[]> {
