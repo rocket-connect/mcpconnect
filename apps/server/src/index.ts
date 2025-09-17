@@ -19,19 +19,13 @@ export interface ServerOptions {
 }
 
 function findUiBuildPath(): string {
-  // Possible UI build paths in order of preference
+  // Same logic as before...
   const possiblePaths = [
-    // When running from built CLI (most common case)
     path.join(__dirname, "..", "node_modules", "@mcpconnect", "ui", "dist"),
-    // When running locally in monorepo
     path.join(__dirname, "..", "..", "..", "apps", "ui", "dist"),
-    // When UI is a peer dependency
     path.join(__dirname, "..", "..", "@mcpconnect", "ui", "dist"),
-    // Alternative monorepo structure
     path.join(__dirname, "..", "..", "ui", "dist"),
-    // Try relative to current working directory
     path.join(process.cwd(), "node_modules", "@mcpconnect", "ui", "dist"),
-    // Fallback: try to find UI package anywhere up the tree
     path.join(
       __dirname,
       "..",
@@ -78,14 +72,20 @@ export function createServer(options: ServerOptions = {}): {
             defaultSrc: ["'self'"],
             styleSrc: [
               "'self'",
-              "'unsafe-inline'",
+              "'unsafe-inline'", // Required for dynamic styles
               "https://fonts.googleapis.com",
             ],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            scriptSrc: ["'self'"],
+            scriptSrc: [
+              "'self'",
+              "'unsafe-inline'", // Required for inline scripts like Google Analytics
+              "https://www.googletagmanager.com",
+              "'unsafe-eval'", // May be needed for some bundled JS
+            ],
             imgSrc: ["'self'", "data:", "https:"],
             connectSrc: [
               "'self'",
+              // Local development
               "http://localhost:*",
               "https://localhost:*",
               "ws://localhost:*",
@@ -94,17 +94,22 @@ export function createServer(options: ServerOptions = {}): {
               "https://127.0.0.1:*",
               "ws://127.0.0.1:*",
               "wss://127.0.0.1:*",
-              // Allow Anthropic API
+              // APIs
               "https://api.anthropic.com",
-              // Allow other common MCP endpoints
+              "https://www.google-analytics.com",
+              "https://analytics.google.com",
+              // MCP endpoints
               "http://*:*",
               "https://*:*",
               "ws://*:*",
               "wss://*:*",
             ],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"],
           },
         },
-        crossOriginEmbedderPolicy: false, // Disable for better compatibility
+        crossOriginEmbedderPolicy: false,
       })
     );
   }
@@ -112,7 +117,7 @@ export function createServer(options: ServerOptions = {}): {
   if (enableCors) {
     app.use(
       cors({
-        origin: true, // Allow all origins in development
+        origin: true,
         credentials: true,
       })
     );
@@ -130,24 +135,54 @@ export function createServer(options: ServerOptions = {}): {
     res.json({ status: "ok", message: "MCPConnect API running" });
   });
 
-  // Serve static UI files or throw error if not found
+  // Get UI build path
   const uiBuildPath = findUiBuildPath();
 
-  app.use(express.static(uiBuildPath));
+  // Serve static UI files with proper MIME types
+  app.use(
+    express.static(uiBuildPath, {
+      setHeaders: (res, path) => {
+        // Ensure proper MIME types
+        if (path.endsWith(".js")) {
+          res.setHeader("Content-Type", "application/javascript");
+        } else if (path.endsWith(".css")) {
+          res.setHeader("Content-Type", "text/css");
+        } else if (path.endsWith(".html")) {
+          res.setHeader("Content-Type", "text/html");
+        } else if (path.endsWith(".json")) {
+          res.setHeader("Content-Type", "application/json");
+        } else if (path.endsWith(".svg")) {
+          res.setHeader("Content-Type", "image/svg+xml");
+        }
 
-  // Catch-all handler for SPA routing
+        // Cache static assets for 1 hour, but not HTML
+        if (!path.endsWith(".html")) {
+          res.setHeader("Cache-Control", "public, max-age=3600");
+        }
+      },
+    })
+  );
+
+  // Catch-all handler for SPA routing - IMPORTANT: This must be last
   app.get("*", (req, res) => {
-    // Don't serve index.html for API routes
-    if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
-      return res.status(404).json({ error: "API endpoint not found" });
+    // Don't serve index.html for API routes or asset requests
+    if (
+      req.path.startsWith("/api/") ||
+      req.path.startsWith("/health") ||
+      req.path.includes(".")
+    ) {
+      // Likely an asset request
+      return res.status(404).json({ error: "Resource not found" });
     }
 
+    // Serve index.html for SPA routes
     res.sendFile(path.join(uiBuildPath, "index.html"));
   });
 
   return { app: app, port, host };
 }
 
+// Rest of the file remains the same...
 export function startServer(
   options: ServerOptions = {}
 ): Promise<{ port: number; host: string; url: string }> {
@@ -167,7 +202,6 @@ export function startServer(
   });
 }
 
-// Direct execution (when running the server directly)
 if (import.meta.url === `file://${process.argv[1]}`) {
   startServer().catch(err => {
     console.error("Failed to start server:", err);
