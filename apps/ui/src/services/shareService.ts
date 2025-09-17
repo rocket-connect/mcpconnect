@@ -30,6 +30,7 @@ export class ShareService {
 
   /**
    * Create a shareable bundle from current chat state
+   * NOTE: Now includes ALL content including sensitive keys for complete sharing
    */
   static async createShareableBundle(
     connection: Connection,
@@ -38,29 +39,55 @@ export class ShareService {
     toolExecutions: ToolExecution[],
     disabledTools: Set<string>
   ): Promise<ShareableData> {
-    // Create a clean connection without sensitive data
-    const cleanConnection: Connection = {
+    // Create a complete copy of connection INCLUDING credentials and headers
+    // This ensures the recipient gets the full working connection
+    const completeConnection: Connection = {
       ...connection,
       id: nanoid(), // Generate new ID to avoid conflicts
-      credentials: {}, // Remove sensitive credentials
-      headers: {}, // Remove potentially sensitive headers
+      // Keep ALL original data including sensitive information
+      credentials: { ...connection.credentials }, // Full copy of credentials
+      headers: { ...connection.headers }, // Full copy of headers
       isActive: false,
-      isConnected: false, // Will need to be reconnected
+      isConnected: false, // Will need to be reconnected by recipient
     };
 
-    // Create clean conversation with new ID
-    const cleanConversation: ChatConversation = {
+    // Create complete conversation copy with new ID
+    const completeConversation: ChatConversation = {
       ...conversation,
       id: nanoid(), // Generate new ID
+      // Deep copy all messages to preserve everything
+      messages: conversation.messages.map(msg => ({
+        ...msg,
+        id: msg.id || nanoid(), // Ensure all messages have IDs
+        timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+      })),
+      createdAt: new Date(conversation.createdAt),
+      updatedAt: new Date(conversation.updatedAt),
     };
+
+    // Deep copy tools to preserve all properties
+    const completeTools: Tool[] = tools.map(tool => ({
+      ...tool,
+      parameters: tool.parameters ? [...tool.parameters] : undefined,
+      tags: tool.tags ? [...tool.tags] : undefined,
+    }));
+
+    // Deep copy tool executions to preserve all data
+    const completeToolExecutions: ToolExecution[] = toolExecutions.map(
+      execution => ({
+        ...execution,
+        request: { ...execution.request },
+        response: execution.response ? { ...execution.response } : undefined,
+      })
+    );
 
     const shareableData: ShareableData = {
       version: this.SHARE_VERSION,
       timestamp: new Date().toISOString(),
-      connection: cleanConnection,
-      conversation: cleanConversation,
-      tools,
-      toolExecutions,
+      connection: completeConnection,
+      conversation: completeConversation,
+      tools: completeTools,
+      toolExecutions: completeToolExecutions,
       disabledTools: Array.from(disabledTools),
       metadata: {
         sharedBy: "MCPConnect User",
@@ -172,7 +199,7 @@ export class ShareService {
   }
 
   /**
-   * Parse share data from URL and import into storage
+   * Parse share data from URL and import into storage with complete reload
    */
   static async importFromShareUrl(
     encodedData: string,
@@ -188,17 +215,25 @@ export class ShareService {
     const existingConnections = await adapter.getConnections();
     const existingShare = existingConnections.find(
       (conn: Connection) =>
-        conn.name === `${shareData.connection.name} (Shared)`
+        conn.name === `${shareData.connection.name} (Shared)` ||
+        conn.url === shareData.connection.url
     );
 
     let connectionId: string;
 
     if (existingShare) {
       connectionId = existingShare.id;
-      // Update the existing connection
-      await adapter.updateConnection(shareData.connection);
+      // Update the existing connection with complete data
+      const updatedConnection = {
+        ...shareData.connection,
+        id: existingShare.id,
+        name: `${shareData.connection.name} (Shared)`,
+        isActive: false,
+        isConnected: false,
+      };
+      await adapter.updateConnection(updatedConnection);
     } else {
-      // Import as new connection
+      // Import as new connection with complete data
       const importedConnection = {
         ...shareData.connection,
         name: `${shareData.connection.name} (Shared)`,
@@ -213,10 +248,10 @@ export class ShareService {
       await adapter.setConnections(updatedConnections);
     }
 
-    // Import tools
+    // Import tools with complete data
     await adapter.setConnectionTools(connectionId, shareData.tools);
 
-    // Import conversation
+    // Import conversation with complete data
     const existingConversations = await adapter.get("conversations");
     const conversationsData = existingConversations?.value || {};
 
@@ -227,28 +262,41 @@ export class ShareService {
     // Check if conversation already exists
     const existingChat = conversationsData[connectionId].find(
       (conv: ChatConversation) =>
-        conv.title === `${shareData.conversation.title} (Shared)`
+        conv.title === `${shareData.conversation.title} (Shared)` ||
+        conv.id === shareData.conversation.id
     );
 
     let chatId: string;
 
     if (existingChat) {
       chatId = existingChat.id;
-      // Update existing conversation
+      // Update existing conversation with complete data
       const updatedConv = {
         ...shareData.conversation,
         id: existingChat.id,
         title: `${shareData.conversation.title} (Shared)`,
+        messages: shareData.conversation.messages.map(msg => ({
+          ...msg,
+          timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+        })),
+        createdAt: new Date(shareData.conversation.createdAt),
+        updatedAt: new Date(shareData.conversation.updatedAt),
       };
       conversationsData[connectionId] = conversationsData[connectionId].map(
         (conv: ChatConversation) =>
           conv.id === existingChat.id ? updatedConv : conv
       );
     } else {
-      // Add new conversation
+      // Add new conversation with complete data
       const importedConversation = {
         ...shareData.conversation,
         title: `${shareData.conversation.title} (Shared)`,
+        messages: shareData.conversation.messages.map(msg => ({
+          ...msg,
+          timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+        })),
+        createdAt: new Date(shareData.conversation.createdAt),
+        updatedAt: new Date(shareData.conversation.updatedAt),
       };
       chatId = importedConversation.id;
       conversationsData[connectionId].push(importedConversation);
@@ -256,7 +304,7 @@ export class ShareService {
 
     await adapter.set("conversations", conversationsData);
 
-    // Import tool executions
+    // Import tool executions with complete data
     const existingExecutions = await adapter.get("toolExecutions");
     const executionsData = existingExecutions?.value || {};
 
@@ -276,13 +324,19 @@ export class ShareService {
     executionsData[connectionId].push(...newExecutions);
     await adapter.set("toolExecutions", executionsData);
 
-    // Import disabled tools settings
+    // Import disabled tools settings with complete data
     if (shareData.disabledTools.length > 0) {
       await adapter.set(
         `disabled-tools-${connectionId}`,
         shareData.disabledTools
       );
     }
+
+    // Force a complete reload of the application to ensure all data is fresh
+    // This ensures that all imported content is properly loaded and displayed
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000); // Small delay to ensure storage operations complete
 
     return {
       connectionId,
