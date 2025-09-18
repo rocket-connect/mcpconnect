@@ -1,26 +1,14 @@
-// apps/ui/src/components/ChatInterface.tsx - Updated with Share Feature
 /* eslint-disable react-hooks/exhaustive-deps */
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  Send,
-  ExternalLink,
-  Plus,
-  Loader,
-  X,
-  Settings,
-  Zap,
-  ZapOff,
-  Share2,
-} from "lucide-react";
+import { Send, ExternalLink, Plus, Loader, X, Zap, ZapOff } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
 import { ChatService, SSEEvent } from "../services/chatService";
 import { SettingsModal } from "./SettingsModal";
-import { ShareModal } from "./ShareModal";
 import { nanoid } from "nanoid";
 
 interface ChatInterfaceProps {
@@ -28,13 +16,12 @@ interface ChatInterfaceProps {
 }
 
 export const ChatInterface = (_args: ChatInterfaceProps) => {
-  const { connectionId, chatId, toolId } = useParams();
+  const { connectionId, chatId } = useParams();
   const navigate = useNavigate();
   const {
     connections,
     tools,
     conversations,
-    toolExecutions,
     updateConversations,
     refreshAll,
     getEnabledTools,
@@ -53,7 +40,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const [streamingStatus, setStreamingStatus] = useState<string>("");
   const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isShareOpen, setIsShareOpen] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
@@ -145,11 +131,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const disabledToolsCount =
     allConnectionTools.length - enabledConnectionTools.length;
 
-  // Get current tool executions for sharing
-  const currentToolExecutions = connectionId
-    ? toolExecutions[connectionId] || []
-    : [];
-
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
     return inspectorExpandedTool === messageId;
@@ -158,15 +139,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const handleToolCallExpand = (messageId: string, _toolName?: string) => {
     const isCurrentlyExpanded = isToolCallExpanded(messageId);
     syncToolCallState(messageId, !isCurrentlyExpanded);
-  };
-
-  // Handle share button click
-  const handleShareChat = () => {
-    if (!currentConnection || !currentConversation) {
-      console.warn("Cannot share - missing connection or conversation");
-      return;
-    }
-    setIsShareOpen(true);
   };
 
   // Create a new chat conversation
@@ -908,32 +880,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 )}
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              {/* Share Button */}
-              {!showApiWarning &&
-                currentConversation &&
-                currentMessages.length > 0 && (
-                  <button
-                    onClick={handleShareChat}
-                    className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
-                    title="Share this chat session"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share Chat
-                  </button>
-                )}
-
-              {showApiWarning && (
-                <button
-                  onClick={() => setIsSettingsOpen(true)}
-                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  <Settings className="w-4 h-4" />
-                  Configure Claude
-                </button>
-              )}
-            </div>
           </div>
         </div>
 
@@ -1023,19 +969,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 {disabledToolsCount} tool
                 {disabledToolsCount === 1 ? " is" : "s are"} disabled and won't
                 be used in conversations
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Share URL Notice */}
-        {currentMessages.length > 0 && !showApiWarning && (
-          <div className="flex-shrink-0 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 px-6 py-2">
-            <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200">
-              <Share2 className="w-4 h-4" />
-              <span>
-                You can share this complete chat session with your friends using
-                the Share button
               </span>
             </div>
           </div>
@@ -1179,20 +1112,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
       {/* Settings Modal */}
       <SettingsModal isOpen={isSettingsOpen} onClose={handleSettingsClose} />
-
-      {/* Share Modal */}
-      {currentConnection && currentConversation && (
-        <ShareModal
-          isOpen={isShareOpen}
-          onClose={() => setIsShareOpen(false)}
-          connection={currentConnection}
-          conversation={currentConversation}
-          allTools={allConnectionTools}
-          enabledTools={enabledConnectionTools} // Pass enabled tools instead of disabled set
-          toolExecutions={currentToolExecutions}
-          selectedToolId={toolId}
-        />
-      )}
     </>
   );
 };

@@ -1,13 +1,10 @@
-// apps/ui/src/App.tsx - FIXED ROUTING
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   BrowserRouter,
   Routes,
   Route,
   Navigate,
   useParams,
-  useLocation,
-  useNavigate,
 } from "react-router-dom";
 import { MCPLayout } from "@mcpconnect/components";
 import { Resource } from "@mcpconnect/schemas";
@@ -17,66 +14,9 @@ import {
   ChatInterface,
   ConnectionView,
   ResourceView,
-  ShareView,
 } from "./components";
 import { useStorage } from "./contexts/StorageContext";
 import { InspectorProvider, InspectorUI } from "./contexts/InspectorProvider";
-
-// Component to handle share URL detection at the app level
-function ShareUrlDetector() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const currentUrl = window.location.href;
-    const pathname = location.pathname;
-
-    console.log("[ShareUrlDetector] Current URL:", currentUrl);
-    console.log("[ShareUrlDetector] Pathname:", pathname);
-
-    // If we're at root but the actual URL contains /share/, redirect properly
-    if (pathname === "/" && currentUrl.includes("/share/")) {
-      const shareMatch = currentUrl.match(/\/share\/([^?#]+)(\?[^#]*)?/);
-      if (shareMatch) {
-        const shareData = shareMatch[1];
-        const queryString = shareMatch[2] || "";
-        const targetPath = `/share/${shareData}${queryString}`;
-
-        console.log("[ShareUrlDetector] Redirecting to share:", targetPath);
-        navigate(targetPath, { replace: true });
-        return;
-      }
-    }
-
-    // Handle hash-based share URLs (from some redirects)
-    if (location.hash && location.hash.includes("/share/")) {
-      const hashMatch = location.hash.match(/#\/?\/share\/([^?#]+)(\?.*)?$/);
-      if (hashMatch) {
-        const shareData = hashMatch[1];
-        const queryString = hashMatch[2] || "";
-        const targetPath = `/share/${shareData}${queryString}`;
-
-        console.log("[ShareUrlDetector] Redirecting from hash:", targetPath);
-        navigate(targetPath, { replace: true });
-        return;
-      }
-    }
-
-    // Check URL parameters for share data
-    const urlParams = new URLSearchParams(location.search);
-    const shareParam = urlParams.get("share");
-    if (shareParam && pathname === "/") {
-      console.log(
-        "[ShareUrlDetector] Redirecting from search param:",
-        `/share/${shareParam}`
-      );
-      navigate(`/share/${shareParam}`, { replace: true });
-      return;
-    }
-  }, [location, navigate]);
-
-  return null;
-}
 
 function AppContent() {
   const [selectedResource] = useState<Resource | null>(null);
@@ -156,20 +96,6 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* Share routes - HIGHEST PRIORITY - Must be first */}
-      <Route path="/share/:shareData" element={<ShareView />} />
-
-      {/* Root route with share detection */}
-      <Route
-        path="/"
-        element={
-          <>
-            <ShareUrlDetector />
-            <Navigate to="/connections" replace />
-          </>
-        }
-      />
-
       {/* Main app routes with layout - Lower priority */}
       <Route
         path="/*"
