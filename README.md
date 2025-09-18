@@ -129,19 +129,6 @@ MCP Connect stores configuration in browser localStorage:
 - **🔐 API keys** - Stored locally, never sent to our servers
 - **🌐 CORS-friendly** - Works with any MCP server configuration
 
-## 🚀 Development
-
-Built with modern web technologies:
-
-| Technology        | Purpose                   |
-| ----------------- | ------------------------- |
-| **React 18**      | Frontend framework        |
-| **TypeScript**    | Type-safe development     |
-| **Tailwind CSS**  | Utility-first styling     |
-| **Vite**          | Lightning-fast build tool |
-| **Vercel AI SDK** | LLM integrations          |
-| **Zod**           | Runtime type validation   |
-
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
@@ -153,7 +140,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 **Built with ❤️ by [rconnect.tech](https://rconnect.tech)**
 
 _Connecting developers through open source tools_
-
-[⭐ Star us on GitHub](https://github.com/rocket-connect/mcpconnect) • [🐦 Follow on Twitter](https://twitter.com/rconnect_tech) • [🌐 Visit our website](https://rconnect.tech)
 
 </div>
