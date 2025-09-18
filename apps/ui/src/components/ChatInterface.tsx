@@ -545,7 +545,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     navigate(`/connections/${connectionId}/chat/${selectedChatId}`);
   };
 
-  // Clean chat message component
+  // Clean chat message component with improved tool execution UI
   const CleanChatMessage = ({
     message,
     index,
@@ -628,6 +628,64 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                   ) : (
                     <div>{message.message}</div>
                   )}
+
+                  {/* Always visible expand button with better styling */}
+                  <div className="flex items-center gap-2 mt-3">
+                    <button
+                      onClick={() => handleToolCallExpand(messageId, toolName)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-all duration-200 ${
+                        isExpanded
+                          ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 shadow-sm"
+                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                      }`}
+                    >
+                      <svg
+                        className={`w-3 h-3 transition-transform duration-200 ${
+                          isExpanded ? "rotate-90" : ""
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                      {isExpanded ? "Hide Details" : "Show Details"}
+                    </button>
+
+                    {/* Tool name badge */}
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs rounded-md border border-orange-200 dark:border-orange-800">
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                      {toolName}
+                      {toolWasDisabled && (
+                        <span className="text-amber-600 dark:text-amber-400">
+                          (disabled)
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="leading-relaxed whitespace-pre-wrap">
@@ -636,98 +694,169 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               )}
             </div>
 
-            {hasToolExecution && (
-              <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleToolCallExpand(messageId, toolName)}
-                  className={`text-xs px-2 py-1 rounded border transition-colors ${
-                    isExpanded
-                      ? "border-gray-400 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-                      : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-500"
-                  }`}
-                >
-                  {isExpanded ? "Collapse" : "Expand"} Details
-                </button>
-              </div>
-            )}
-
+            {/* Improved expanded details section */}
             {isExpanded && hasToolExecution && (
-              <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
-                <div className="text-xs space-y-3">
+              <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                {/* Header */}
+                <div className="bg-gray-50 dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                    <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
                       Tool Execution Details
                     </h4>
+                    <div
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                        message.toolExecution?.status === "success"
+                          ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                          : message.toolExecution?.status === "error"
+                            ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                            : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                      }`}
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full ${
+                          message.toolExecution?.status === "success"
+                            ? "bg-green-500"
+                            : message.toolExecution?.status === "error"
+                              ? "bg-red-500"
+                              : "bg-blue-500"
+                        }`}
+                      />
+                      {message.toolExecution?.status || "pending"}
+                    </div>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400">
+                {/* Content */}
+                <div className="p-4 bg-white dark:bg-gray-900 space-y-4">
+                  {/* Metadata grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">
                         Tool:
                       </span>
-                      <span className="ml-2 font-mono text-gray-900 dark:text-gray-100">
+                      <span className="font-mono text-gray-900 dark:text-gray-100 text-xs">
                         {toolName || "Unknown"}
-                        {toolWasDisabled && (
-                          <span className="ml-2 text-amber-600 dark:text-amber-400">
-                            (disabled)
-                          </span>
-                        )}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400">
-                        Status:
-                      </span>
-                      <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
-                        {message.toolExecution?.status || "pending"}
-                      </span>
-                    </div>
+
                     {message.timestamp && (
-                      <div className="col-span-2">
-                        <span className="text-gray-500 dark:text-gray-400">
-                          Executed at:
+                      <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">
+                          Executed:
                         </span>
-                        <span className="ml-2 text-gray-900 dark:text-gray-100 font-mono text-xs">
-                          {message.timestamp.toLocaleString()}
+                        <span className="text-gray-900 dark:text-gray-100 text-xs">
+                          {typeof message.timestamp === "string"
+                            ? message.timestamp
+                            : message.timestamp instanceof Date
+                              ? message.timestamp.toLocaleTimeString()
+                              : new Date(
+                                  message.timestamp
+                                ).toLocaleTimeString()}
                         </span>
                       </div>
                     )}
                   </div>
 
-                  {message.toolExecution?.result ? (
+                  {/* Result section */}
+                  {message.toolExecution?.result !== undefined && (
                     <div>
-                      <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-                        Result:
+                      <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm flex items-center gap-2">
+                        <svg
+                          className="w-4 h-4 text-green-500"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        Result
                       </h5>
-                      <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-32 text-gray-800 dark:text-gray-200">
-                        {typeof message.toolExecution.result === "string"
-                          ? message.toolExecution.result
-                          : JSON.stringify(
-                              message.toolExecution.result,
-                              null,
-                              2
-                            )}
-                      </pre>
-                    </div>
-                  ) : (
-                    <></>
-                  )}
-
-                  {message.toolExecution?.error && (
-                    <div>
-                      <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-                        Error:
-                      </h5>
-                      <div className="text-gray-800 dark:text-gray-200 text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded border">
-                        {message.toolExecution.error}
+                      <div className="relative">
+                        <pre className="text-xs bg-gray-50 dark:bg-gray-950 p-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-48 text-gray-800 dark:text-gray-100 font-mono leading-relaxed">
+                          {(() => {
+                            const result = message.toolExecution?.result;
+                            if (typeof result === "string") {
+                              return result;
+                            }
+                            try {
+                              return JSON.stringify(result, null, 2);
+                            } catch {
+                              return String(result);
+                            }
+                          })()}
+                        </pre>
+                        <button
+                          onClick={() => {
+                            const result = message.toolExecution?.result;
+                            let text: string;
+                            if (typeof result === "string") {
+                              text = result;
+                            } else {
+                              try {
+                                text = JSON.stringify(result, null, 2);
+                              } catch {
+                                text = String(result);
+                              }
+                            }
+                            navigator.clipboard?.writeText(text);
+                          }}
+                          className="absolute top-2 right-2 p-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          title="Copy result"
+                        >
+                          <svg
+                            className="w-3 h-3 text-gray-500 dark:text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                            />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   )}
 
-                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <div className="text-xs text-gray-400 dark:text-gray-600">
-                      ID: {messageId}
+                  {/* Error section */}
+                  {message.toolExecution?.error && (
+                    <div>
+                      <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm flex items-center gap-2">
+                        <svg
+                          className="w-4 h-4 text-red-500"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                          />
+                        </svg>
+                        Error
+                      </h5>
+                      <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                        <div className="text-red-800 dark:text-red-200 text-sm font-mono">
+                          {message.toolExecution.error}
+                        </div>
+                      </div>
                     </div>
+                  )}
+
+                  {/* Footer */}
+                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>Execution ID: {messageId}</span>
+                    <span>Tool executed via MCP</span>
                   </div>
                 </div>
               </div>
