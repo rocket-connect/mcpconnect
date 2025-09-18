@@ -16,6 +16,25 @@ export {
 } from "./NetworkInspector";
 export { MCPLayout, type MCPLayoutProps } from "./MCPLayout";
 
+// Chat Interface Components
+export { ChatHeader, type ChatHeaderProps } from "./ChatHeader";
+export { ChatTabs, type ChatTabsProps } from "./ChatTabs";
+export {
+  ChatMessageComponent,
+  type ChatMessageComponentProps,
+} from "./ChatMessageComponent";
+export {
+  StreamingMessage,
+  type StreamingMessageProps,
+} from "./StreamingMessage";
+export { ApiWarning, type ApiWarningProps } from "./ApiWarning";
+export {
+  ToolStatusWarning,
+  type ToolStatusWarningProps,
+} from "./ToolStatusWarning";
+export { ChatInput, type ChatInputProps } from "./ChatInput";
+export { EmptyState, type EmptyStateProps } from "./EmptyState";
+
 export { ThemeToggle, type ThemeToggleProps } from "./ThemeToggle";
 
 export { cn } from "./lib/utils";
