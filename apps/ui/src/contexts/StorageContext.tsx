@@ -45,10 +45,16 @@ interface StorageContextType {
     disabledToolIds: Set<string>
   ) => Promise<void>;
   isToolEnabled: (connectionId: string, toolId: string) => boolean;
-  // NEW: Tool state change listener
+  // Tool state change listener
   onToolStateChange: (callback: (connectionId: string) => void) => () => void;
-  // NEW: Force tool state refresh for specific connection
+  // Force tool state refresh for specific connection
   refreshToolState: (connectionId: string) => Promise<void>;
+  // ENHANCED: Chat-specific cleanup methods with proper tool execution cleanup
+  deleteChatWithCleanup: (
+    connectionId: string,
+    chatId: string
+  ) => Promise<void>;
+  clearAllChatsWithCleanup: (connectionId: string) => Promise<void>;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -89,12 +95,12 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // NEW: Tool state change listeners
+  // Tool state change listeners
   const [toolStateListeners, setToolStateListeners] = useState<
     Set<(connectionId: string) => void>
   >(new Set());
 
-  // NEW: Notify listeners when tool state changes
+  // Notify listeners when tool state changes
   const notifyToolStateChange = useCallback(
     (connectionId: string) => {
       toolStateListeners.forEach(listener => {
@@ -108,7 +114,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [toolStateListeners]
   );
 
-  // NEW: Add tool state change listener
+  // Add tool state change listener
   const onToolStateChange = useCallback(
     (callback: (connectionId: string) => void) => {
       setToolStateListeners(prev => new Set(prev).add(callback));
@@ -144,7 +150,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [adapter]
   );
 
-  // NEW: Refresh tool state for specific connection
+  // Refresh tool state for specific connection
   const refreshToolState = useCallback(
     async (connectionId: string) => {
       try {
@@ -177,6 +183,197 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
     setDisabledTools(newDisabledTools);
   }, [connections, loadDisabledTools]);
+
+  // ENHANCED: Helper to get tool execution IDs from chat messages with better matching
+  const getToolExecutionIdsFromChat = useCallback(
+    (chat: ChatConversation): string[] => {
+      const toolExecutionIds: string[] = [];
+
+      chat.messages.forEach(msg => {
+        // Include message ID if it has tool execution data
+        if (msg.executingTool || msg.toolExecution || msg.isExecuting) {
+          if (msg.id) {
+            toolExecutionIds.push(msg.id);
+          }
+        }
+
+        // Also include any explicitly referenced tool execution IDs
+        if (msg.toolExecution?.toolName && msg.id) {
+          toolExecutionIds.push(msg.id);
+        }
+      });
+
+      // Remove duplicates
+      return [...new Set(toolExecutionIds)];
+    },
+    []
+  );
+
+  // ENHANCED: Remove specific tool executions by IDs with better error handling
+  const removeToolExecutionsByIds = useCallback(
+    async (connectionId: string, executionIds: string[]): Promise<void> => {
+      if (executionIds.length === 0) return;
+
+      try {
+        const currentExecutions = toolExecutions[connectionId] || [];
+
+        // Filter out tool executions that match any of the execution IDs
+        const filteredExecutions = currentExecutions.filter(
+          execution => !executionIds.includes(execution.id)
+        );
+
+        // Update adapter storage
+        await adapter.set(
+          `toolExecutions-${connectionId}`,
+          filteredExecutions,
+          {
+            type: "array",
+            tags: ["mcp", "toolExecutions", connectionId],
+            compress: true,
+            encrypt: false,
+          }
+        );
+
+        // Update local state
+        setToolExecutions(prev => ({
+          ...prev,
+          [connectionId]: filteredExecutions,
+        }));
+
+        const removedCount =
+          currentExecutions.length - filteredExecutions.length;
+        console.log(
+          `[StorageContext] Removed ${removedCount} tool executions for connection ${connectionId}`
+        );
+      } catch (error) {
+        console.error("Failed to remove tool executions:", error);
+        throw error;
+      }
+    },
+    [adapter, toolExecutions]
+  );
+
+  // ENHANCED: Delete chat with comprehensive tool execution cleanup
+  const deleteChatWithCleanup = useCallback(
+    async (connectionId: string, chatId: string): Promise<void> => {
+      try {
+        const connectionConversations = conversations[connectionId] || [];
+        const chatToDelete = connectionConversations.find(
+          conv => conv.id === chatId
+        );
+
+        if (!chatToDelete) {
+          console.warn(
+            `[StorageContext] Chat ${chatId} not found for deletion`
+          );
+          return;
+        }
+
+        // Get all tool execution IDs from the chat being deleted
+        const toolExecutionIds = getToolExecutionIdsFromChat(chatToDelete);
+
+        console.log(
+          `[StorageContext] Deleting chat ${chatId} with ${toolExecutionIds.length} tool executions`
+        );
+
+        // Remove the chat from conversations
+        const updatedConnectionConversations = connectionConversations.filter(
+          conv => conv.id !== chatId
+        );
+        const updatedConversations = {
+          ...conversations,
+          [connectionId]: updatedConnectionConversations,
+        };
+
+        // Update conversations in storage and state
+        await adapter.set("conversations", updatedConversations, {
+          type: "object",
+          tags: ["mcp", "conversations"],
+          compress: true,
+          encrypt: false,
+        });
+        setConversations(updatedConversations);
+
+        // Remove associated tool executions
+        if (toolExecutionIds.length > 0) {
+          await removeToolExecutionsByIds(connectionId, toolExecutionIds);
+        }
+
+        console.log(
+          `[StorageContext] Successfully deleted chat ${chatId} and cleaned up tool executions`
+        );
+      } catch (error) {
+        console.error("Failed to delete chat with cleanup:", error);
+        setError(error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+    },
+    [
+      adapter,
+      conversations,
+      getToolExecutionIdsFromChat,
+      removeToolExecutionsByIds,
+    ]
+  );
+
+  // ENHANCED: Clear all chats with comprehensive tool execution cleanup
+  const clearAllChatsWithCleanup = useCallback(
+    async (connectionId: string): Promise<void> => {
+      try {
+        const connectionConversations = conversations[connectionId] || [];
+
+        // Get all tool execution IDs from all chats being deleted
+        const allToolExecutionIds = connectionConversations.flatMap(chat =>
+          getToolExecutionIdsFromChat(chat)
+        );
+
+        console.log(
+          `[StorageContext] Clearing all chats for connection ${connectionId} with ${allToolExecutionIds.length} total tool executions`
+        );
+
+        // Clear all conversations for this connection
+        const updatedConversations = {
+          ...conversations,
+          [connectionId]: [],
+        };
+
+        // Update conversations in storage and state
+        await adapter.set("conversations", updatedConversations, {
+          type: "object",
+          tags: ["mcp", "conversations"],
+          compress: true,
+          encrypt: false,
+        });
+        setConversations(updatedConversations);
+
+        // Remove all associated tool executions for this connection
+        if (allToolExecutionIds.length > 0) {
+          await removeToolExecutionsByIds(connectionId, allToolExecutionIds);
+        }
+
+        // Also clear the entire tool executions storage for this connection as a safeguard
+        await adapter.delete(`toolExecutions-${connectionId}`);
+        setToolExecutions(prev => ({
+          ...prev,
+          [connectionId]: [],
+        }));
+
+        console.log(
+          `[StorageContext] Successfully cleared all chats and tool executions for connection ${connectionId}`
+        );
+      } catch (error) {
+        console.error("Failed to clear all chats with cleanup:", error);
+        setError(error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+    },
+    [
+      adapter,
+      conversations,
+      getToolExecutionIdsFromChat,
+      removeToolExecutionsByIds,
+    ]
+  );
 
   const refreshAll = useCallback(async () => {
     try {
@@ -364,7 +561,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     ]
   );
 
-  // UPDATED: Tool management methods with reactivity
+  // Tool management methods with reactivity
   const updateDisabledTools = useCallback(
     async (connectionId: string, disabledToolIds: Set<string>) => {
       try {
@@ -388,7 +585,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [adapter, notifyToolStateChange]
   );
 
-  // UPDATED: Always get fresh tool state
+  // Always get fresh tool state
   const getEnabledTools = useCallback(
     (connectionId: string): Tool[] => {
       const allTools = tools[connectionId] || [];
@@ -525,9 +722,11 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     getEnabledTools,
     updateDisabledTools,
     isToolEnabled,
-    // NEW exports
     onToolStateChange,
     refreshToolState,
+    // ENHANCED methods with comprehensive cleanup
+    deleteChatWithCleanup,
+    clearAllChatsWithCleanup,
   };
 
   return (

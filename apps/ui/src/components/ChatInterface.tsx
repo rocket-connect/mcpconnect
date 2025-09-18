@@ -36,6 +36,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     getEnabledTools,
     isToolEnabled,
     onToolStateChange,
+    deleteChatWithCleanup,
+    clearAllChatsWithCleanup,
   } = useStorage();
   const { expandedToolCall: inspectorExpandedTool, syncToolCallState } =
     useInspector();
@@ -221,7 +223,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     createInitialChatIfNeeded();
   }, [connectionId, chatId, connectionConversations.length, isCreatingChat]);
 
-  // Delete a chat conversation
+  // ENHANCED: Delete a chat conversation with proper tool execution cleanup
   const handleDeleteChat = async (
     chatToDeleteId: string,
     event?: React.MouseEvent
@@ -243,31 +245,32 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     if (!confirmed) return;
 
     try {
-      const updatedConnectionConversations = connectionConversations.filter(
-        conv => conv.id !== chatToDeleteId
-      );
-      const updatedConversations = {
-        ...conversations,
-        [connectionId]: updatedConnectionConversations,
-      };
+      // Use the enhanced cleanup method that properly handles tool executions
+      await deleteChatWithCleanup(connectionId, chatToDeleteId);
 
-      await updateConversations(updatedConversations);
-
+      // Navigate to another chat if we deleted the current one
       if (chatId === chatToDeleteId) {
-        if (updatedConnectionConversations.length > 0) {
-          navigate(
-            `/connections/${connectionId}/chat/${updatedConnectionConversations[0].id}`
-          );
+        const remainingChats = connectionConversations.filter(
+          conv => conv.id !== chatToDeleteId
+        );
+
+        if (remainingChats.length > 0) {
+          navigate(`/connections/${connectionId}/chat/${remainingChats[0].id}`);
         } else {
           await handleNewChat();
         }
       }
+
+      console.log(
+        `[ChatInterface] Successfully deleted chat ${chatToDeleteId}`
+      );
     } catch (error) {
       console.error("Failed to delete chat:", error);
+      alert("Failed to delete chat. Please try again.");
     }
   };
 
-  // Clear all chats for the current connection
+  // ENHANCED: Clear all chats for the current connection with proper tool execution cleanup
   const handleClearAllChats = async () => {
     if (!connectionId) return;
 
@@ -277,18 +280,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     if (!confirmed) return;
 
     try {
-      // Clear all conversations for this connection from storage
-      const updatedConversations = {
-        ...conversations,
-        [connectionId]: [],
-      };
-
-      // Update storage
-      await updateConversations(updatedConversations);
-
-      // Also clear any associated tool executions for this connection's chats
-      // This ensures inspector data is also cleared
-      await refreshAll();
+      // Use the enhanced cleanup method that properly handles tool executions
+      await clearAllChatsWithCleanup(connectionId);
 
       // Navigate to a new chat immediately to avoid being stuck on a deleted chat
       const newChatId = nanoid();
@@ -303,7 +296,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       };
 
       const finalConversations = {
-        ...updatedConversations,
+        ...conversations,
         [connectionId]: [newChat],
       };
 
@@ -316,6 +309,10 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
       // Force a refresh to ensure all components are in sync
       await refreshAll();
+
+      console.log(
+        `[ChatInterface] Successfully cleared all chats for connection ${connectionId}`
+      );
     } catch (error) {
       console.error("Failed to clear all chats:", error);
       alert("Failed to clear all chats. Please try again.");
