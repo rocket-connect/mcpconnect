@@ -1,4 +1,9 @@
-import { Connection, ChatConversation, Tool } from "@mcpconnect/schemas";
+import {
+  Connection,
+  ChatConversation,
+  Tool,
+  ToolExecution,
+} from "@mcpconnect/schemas";
 import { nanoid } from "nanoid";
 
 export interface MinimalShareData {
@@ -40,16 +45,36 @@ export interface MinimalShareData {
       required?: boolean;
     }>;
   }>;
+  // ADD: Tool executions for request inspector
+  toolExecutions: Array<{
+    id: string;
+    tool: string;
+    status: string;
+    duration?: number;
+    timestamp: string;
+    request: {
+      tool: string;
+      arguments?: Record<string, any>;
+      timestamp?: string;
+    };
+    response?: {
+      success: boolean;
+      result?: any;
+      timestamp?: string;
+    };
+    error?: string;
+  }>;
   metadata: {
     shareId: string;
     toolCount: number;
     messageCount: number;
+    executionCount: number;
   };
 }
 
 export class ShareService {
   private static readonly SHARE_VERSION = "2.0.0"; // New minimal version
-  private static readonly MAX_SHARE_SIZE = 8000; // Much smaller limit for URL safety
+  private static readonly MAX_SHARE_SIZE = 200000; // Much smaller limit for URL safety
 
   /**
    * Safely convert timestamp to ISO string
@@ -78,7 +103,8 @@ export class ShareService {
   static async createMinimalShare(
     connection: Connection,
     conversation: ChatConversation,
-    enabledTools: Tool[]
+    enabledTools: Tool[],
+    toolExecutions: ToolExecution[] = []
   ): Promise<MinimalShareData> {
     // Create minimal connection data
     const minimalConnection = {
@@ -131,16 +157,40 @@ export class ShareService {
       }),
     }));
 
+    // Create minimal tool executions data for request inspector
+    const minimalToolExecutions = toolExecutions.map(execution => ({
+      id: execution.id,
+      tool: execution.tool,
+      status: execution.status,
+      duration: execution.duration,
+      timestamp: execution.timestamp,
+      request: {
+        tool: execution.request.tool,
+        arguments: execution.request.arguments,
+        timestamp: execution.request.timestamp,
+      },
+      ...(execution.response && {
+        response: {
+          success: execution.response.success,
+          result: execution.response.result,
+          timestamp: execution.response.timestamp,
+        },
+      }),
+      ...(execution.error && { error: execution.error }),
+    }));
+
     const shareData: MinimalShareData = {
       version: this.SHARE_VERSION,
       timestamp: new Date().toISOString(),
       connection: minimalConnection,
       conversation: minimalConversation,
       tools: minimalTools,
+      toolExecutions: minimalToolExecutions,
       metadata: {
         shareId: nanoid(8), // Shorter ID
         toolCount: enabledTools.length,
         messageCount: conversation.messages.length,
+        executionCount: toolExecutions.length,
       },
     };
 
@@ -154,12 +204,14 @@ export class ShareService {
     connection: Connection,
     conversation: ChatConversation,
     enabledTools: Tool[],
+    toolExecutions: ToolExecution[] = [],
     selectedToolId?: string
   ): Promise<{ url: string; shareId: string }> {
     const shareData = await this.createMinimalShare(
       connection,
       conversation,
-      enabledTools
+      enabledTools,
+      toolExecutions
     );
 
     // Compress for URL
@@ -225,6 +277,11 @@ export class ShareService {
         !data.tools
       ) {
         throw new Error("Invalid share data format");
+      }
+
+      // Ensure toolExecutions exists (backward compatibility)
+      if (!data.toolExecutions) {
+        data.toolExecutions = [];
       }
 
       return data;
@@ -316,6 +373,37 @@ export class ShareService {
     conversationsData[importedConnection.id].push(importedConversation);
     await adapter.set("conversations", conversationsData);
 
+    // Import tool executions for request inspector
+    if (shareData.toolExecutions && shareData.toolExecutions.length > 0) {
+      const fullToolExecutions: ToolExecution[] = shareData.toolExecutions.map(
+        exec => ({
+          id: exec.id,
+          tool: exec.tool,
+          status: exec.status as "success" | "error" | "pending",
+          duration: exec.duration,
+          timestamp: exec.timestamp,
+          request: {
+            tool: exec.request.tool,
+            arguments: exec.request.arguments || {},
+            timestamp: exec.request.timestamp,
+          },
+          ...(exec.response && {
+            response: {
+              success: exec.response.success,
+              result: exec.response.result,
+              timestamp: exec.response.timestamp,
+            },
+          }),
+          ...(exec.error && { error: exec.error }),
+        })
+      );
+
+      // Store tool executions using adapter
+      for (const execution of fullToolExecutions) {
+        await adapter.addToolExecution(importedConnection.id, execution);
+      }
+    }
+
     return {
       connectionId: importedConnection.id,
       chatId: importedConversation.id,
@@ -330,6 +418,7 @@ export class ShareService {
     conversationTitle: string;
     messageCount: number;
     toolCount: number;
+    executionCount: number;
     sharedBy: string;
     timestamp: string;
   }> {
@@ -340,6 +429,10 @@ export class ShareService {
       conversationTitle: shareData.conversation.title,
       messageCount: shareData.metadata.messageCount,
       toolCount: shareData.metadata.toolCount,
+      executionCount:
+        shareData.metadata.executionCount ||
+        shareData.toolExecutions?.length ||
+        0,
       sharedBy: "MCPConnect User",
       timestamp: shareData.timestamp,
     };

@@ -10,6 +10,7 @@ import {
   Users,
   MessageSquare,
   Settings,
+  Database,
 } from "lucide-react";
 import {
   Connection,
@@ -37,6 +38,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   conversation,
   allTools,
   enabledTools,
+  toolExecutions,
   selectedToolId,
 }) => {
   const [shareUrl, setShareUrl] = useState<string>("");
@@ -50,11 +52,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     setError(null);
 
     try {
-      // Use the new minimal share service
+      // Use the new minimal share service with tool executions
       const { url, shareId: id } = await ShareService.generateCompactShareUrl(
         connection,
         conversation,
         enabledTools, // Only enabled tools
+        toolExecutions, // Pass tool executions for request inspector
         selectedToolId
       );
 
@@ -91,6 +94,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   const messageCount = conversation.messages.length;
   const disabledToolsCount = allTools.length - enabledTools.length;
+  const executionCount = toolExecutions.length;
 
   // Reset state when modal opens
   React.useEffect(() => {
@@ -150,6 +154,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                       <MessageSquare className="w-3 h-3" />
                       {messageCount} messages
                     </span>
+                    <span className="flex items-center gap-1">
+                      <Database className="w-3 h-3" />
+                      {executionCount} executions
+                    </span>
                   </div>
                 </div>
               </div>
@@ -165,6 +173,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   </h4>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Ready-to-use chat with {enabledTools.length} enabled tools
+                    and {executionCount} tool executions
                   </p>
                   {selectedToolId && (
                     <div className="mt-2 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded text-xs">
@@ -186,6 +195,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               <li>• Minimal data - only essential information included</li>
               <li>• {enabledTools.length} enabled tools (ready to use)</li>
               <li>• Complete conversation history ({messageCount} messages)</li>
+              <li>
+                • {executionCount} tool executions (for request inspector)
+              </li>
               <li>• All authentication credentials included</li>
               {selectedToolId && <li>• Selected tool for direct inspection</li>}
             </ul>
@@ -267,7 +279,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
               {/* Share Stats */}
               <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-3 gap-4 text-center text-sm">
+                <div className="grid grid-cols-4 gap-4 text-center text-sm">
                   <div>
                     <div className="font-semibold text-gray-900 dark:text-white">
                       {(shareUrl.length / 1024).toFixed(1)}KB
@@ -292,6 +304,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                       Tools
                     </div>
                   </div>
+                  <div>
+                    <div className="font-semibold text-gray-900 dark:text-white">
+                      {executionCount}
+                    </div>
+                    <div className="text-gray-600 dark:text-gray-400">
+                      Executions
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -305,7 +325,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 </p>
                 <ul className="text-sm text-green-800 dark:text-green-200 space-y-1">
                   <li>• Working connection with {enabledTools.length} tools</li>
-                  <li>• Complete chat history</li>
+                  <li>• Complete chat history ({messageCount} messages)</li>
+                  <li>
+                    • {executionCount} tool executions for request inspection
+                  </li>
                   <li>• All necessary credentials</li>
                   <li>• Instant setup - no configuration needed</li>
                 </ul>

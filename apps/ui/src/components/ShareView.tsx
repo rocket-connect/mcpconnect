@@ -12,6 +12,7 @@ import {
   Users,
   CheckCircle,
   X,
+  Database,
 } from "lucide-react";
 import { useStorage } from "../contexts/StorageContext";
 import { ShareService } from "../services/shareService";
@@ -230,8 +231,9 @@ export const ShareView: React.FC = () => {
               Chat Imported Successfully!
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              The shared chat with {metadata?.toolCount || 0} working tools has
-              been imported. Reloading to display your new chat...
+              The shared chat with {metadata?.toolCount || 0} working tools and{" "}
+              {metadata?.executionCount || 0} tool executions has been imported.
+              Reloading to display your new chat...
             </p>
             <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
           </div>
@@ -254,7 +256,8 @@ export const ShareView: React.FC = () => {
                 Shared Chat Session
               </h1>
               <p className="text-blue-100 text-sm">
-                Compact share with {metadata?.toolCount || 0} working tools
+                Compact share with {metadata?.toolCount || 0} working tools and{" "}
+                {metadata?.executionCount || 0} executions
               </p>
             </div>
           </div>
@@ -289,6 +292,10 @@ export const ShareView: React.FC = () => {
                     <span className="flex items-center gap-1">
                       <MessageSquare className="w-3 h-3" />
                       {metadata?.messageCount || 0} messages
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Database className="w-3 h-3" />
+                      {metadata?.executionCount || 0} executions
                     </span>
                   </div>
                 </div>
@@ -330,6 +337,10 @@ export const ShareView: React.FC = () => {
                 • Full conversation history ({metadata?.messageCount || 0}{" "}
                 messages)
               </li>
+              <li>
+                • {metadata?.executionCount || 0} tool executions for request
+                inspection
+              </li>
               <li>• All necessary authentication credentials</li>
               {selectedTool && <li>• Selected tool will open in inspector</li>}
             </ul>
@@ -345,7 +356,8 @@ export const ShareView: React.FC = () => {
                 </h4>
                 <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
                   This compact share contains only essential data and working
-                  tools. Everything will be ready immediately after import.
+                  tools. Everything will be ready immediately after import,
+                  including tool execution history for the request inspector.
                 </p>
               </div>
             </div>
@@ -387,7 +399,8 @@ export const ShareView: React.FC = () => {
             <Users className="w-4 h-4" />
             <span>
               This chat session will be added to your MCPConnect with
-              {metadata?.toolCount || 0} working tools enabled
+              {metadata?.toolCount || 0} working tools enabled and{" "}
+              {metadata?.executionCount || 0} tool executions
             </span>
           </div>
         </div>
