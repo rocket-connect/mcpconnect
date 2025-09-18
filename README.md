@@ -16,10 +16,10 @@
 ## Overview
 
 <div align="center">
-  <img src="./docs/mcpconnect-github-ui.png" width="90%" alt="MCPConnect Interface Overview" />
+  <img src="./docs/mcpconnect-github-ui.png" width="90%" alt="MCP Connect Interface Overview" />
 </div>
 
-MCPConnect is a developer-focused tool for testing and debugging Model Context Protocol (MCP) servers. It provides a visual interface to connect to MCP servers, explore their tools and resources, and interact with them through conversational AI.
+MCP Connect is a developer-focused tool for testing and debugging Model Context Protocol (MCP) servers. It provides a visual interface to connect to MCP servers, explore their tools and resources, and interact with them through conversational AI.
 
 **🎯 Perfect for:** MCP server developers, AI application builders, and teams integrating Claude or other LLMs with custom tools.
 
@@ -41,7 +41,7 @@ Get up and running in under 30 seconds:
 npx @mcpconnect/cli
 ```
 
-This opens MCPConnect at `http://localhost:3001` with a complete debugging environment.
+This opens MCP Connect at `http://localhost:3001` with a complete debugging environment.
 
 ## 💻 Developer Workflow
 
@@ -62,10 +62,10 @@ This opens MCPConnect at `http://localhost:3001` with a complete debugging envir
   </table>
 </div>
 
-MCPConnect streamlines MCP server development:
+MCP Connect streamlines MCP server development:
 
 1. **🏗️ Start your MCP server** on any port with any transport
-2. **🚀 Run MCPConnect** to launch the debugging interface
+2. **🚀 Run MCP Connect** to launch the debugging interface
 3. **🔍 Connect and introspect** - automatically discover tools and resources
 4. **🧪 Test tools visually** with form-based parameter input
 5. **🐛 Debug with inspector** - view raw protocol messages and performance metrics
@@ -74,7 +74,7 @@ MCPConnect streamlines MCP server development:
 
 ### 🌐 Online (No Installation)
 
-Visit **[mcp.rconnect.tech](https://mcp.rconnect.tech)** to use MCPConnect directly in your browser.
+Visit **[mcp.rconnect.tech](https://mcp.rconnect.tech)** to use MCP Connect directly in your browser.
 
 ### ⚡ CLI (Recommended for Local Development)
 
@@ -103,7 +103,7 @@ pnpm start
 
 ## 🤖 LLM Integration
 
-MCPConnect supports multiple LLM providers with your own API keys:
+MCP Connect supports multiple LLM providers with your own API keys:
 
 | Provider             | Models                      | Status          |
 | -------------------- | --------------------------- | --------------- |
@@ -113,26 +113,9 @@ MCPConnect supports multiple LLM providers with your own API keys:
 
 Configure your API key in the settings panel to enable conversational interactions with discovered MCP tools.
 
-## 🗂️ Project Structure
-
-```
-mcpconnect/
-├── 📦 packages/
-│   ├── 📋 schemas/          # Zod schemas & TypeScript types
-│   ├── 🔧 base-adapters/    # Base adapter interfaces
-│   ├── 💾 adapter-localstorage/ # Browser storage adapter
-│   ├── 🤖 adapter-ai-sdk/   # AI SDK integration
-│   ├── 🧩 components/       # Reusable React components
-│   └── ⚡ cli/              # Command-line interface
-├── 🎯 apps/
-│   ├── 🖥️ server/          # Express server with UI
-│   └── 🌐 ui/              # React frontend application
-└── 📚 docs/                # Documentation & assets
-```
-
 ## 🔧 Configuration
 
-MCPConnect stores configuration in browser localStorage:
+MCP Connect stores configuration in browser localStorage:
 
 - **🔗 Connections** - MCP server endpoints and authentication
 - **🤖 LLM Settings** - API keys and model preferences
@@ -158,60 +141,6 @@ Built with modern web technologies:
 | **Vite**          | Lightning-fast build tool |
 | **Vercel AI SDK** | LLM integrations          |
 | **Zod**           | Runtime type validation   |
-
-### Local Development
-
-```bash
-# Clone and setup
-git clone https://github.com/rocket-connect/mcpconnect
-cd mcpconnect
-pnpm install
-
-# Start development server
-pnpm dev
-
-# Build for production
-pnpm build
-
-# Run tests
-pnpm test
-```
-
-The development server runs the UI on `localhost:3000` with hot reload.
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how to get started:
-
-1. **🍴 Fork** the repository
-2. **🌿 Create** a feature branch: `git checkout -b feature/amazing-feature`
-3. **💫 Commit** your changes: `git commit -m 'Add amazing feature'`
-4. **🚀 Push** to the branch: `git push origin feature/amazing-feature`
-5. **📩 Open** a Pull Request
-
-### Development Guidelines
-
-- **📝 Code Style** - We use Prettier and ESLint
-- **🧪 Testing** - Write tests for new features
-- **📚 Documentation** - Update docs for any API changes
-- **🔄 Changesets** - Use conventional commits for changelog generation
-
-## 📋 Roadmap
-
-- [ ] 🔌 WebSocket transport improvements
-- [ ] 🤖 OpenAI GPT-4 integration
-- [ ] 🧠 Local model support (Ollama, LM Studio)
-- [ ] 📊 Advanced analytics and debugging
-- [ ] 🔗 MCP server discovery and management
-- [ ] 📱 Mobile-responsive improvements
-- [ ] 🎨 Custom themes and UI customization
-
-## 🆘 Support
-
-- **📖 Documentation** - [docs.claude.com](https://docs.claude.com)
-- **💬 Discussions** - [GitHub Discussions](https://github.com/rocket-connect/mcpconnect/discussions)
-- **🐛 Bug Reports** - [GitHub Issues](https://github.com/rocket-connect/mcpconnect/issues)
-- **💡 Feature Requests** - [GitHub Issues](https://github.com/rocket-connect/mcpconnect/issues/new?template=feature_request.md)
 
 ## 📄 License
 
