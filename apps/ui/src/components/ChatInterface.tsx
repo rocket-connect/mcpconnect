@@ -54,6 +54,29 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
+  // Track streaming state for proper message flow
+  const [streamingToolMessages, setStreamingToolMessages] = useState<
+    ChatMessageType[]
+  >([]);
+
+  // Refs to access latest state in callbacks
+  const conversationsRef = useRef(conversations);
+  const connectionIdRef = useRef(connectionId);
+  const chatIdRef = useRef(chatId);
+
+  // Update refs when state changes
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    connectionIdRef.current = connectionId;
+  }, [connectionId]);
+
+  useEffect(() => {
+    chatIdRef.current = chatId;
+  }, [chatId]);
+
   // Reactive tool state - forces re-render when tool enablement changes
   const [, setToolStateVersion] = useState(0);
 
@@ -107,7 +130,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversations, currentStreamingContent]);
+  }, [conversations, currentStreamingContent, streamingToolMessages]);
 
   // Cleanup abort controller on unmount
   useEffect(() => {
@@ -221,7 +244,13 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     };
 
     createInitialChatIfNeeded();
-  }, [connectionId, chatId, connectionConversations.length, isCreatingChat]);
+  }, [
+    connectionId,
+    chatId,
+    connectionConversations.length,
+    isCreatingChat,
+    handleNewChat,
+  ]);
 
   // ENHANCED: Delete a chat conversation with proper tool execution cleanup
   const handleDeleteChat = async (
@@ -328,6 +357,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       setIsStreaming(false);
       setCurrentStreamingContent("");
       setStreamingStatus("");
+      setStreamingToolMessages([]);
       streamingMessageRef.current = "";
     }
     setStreamingEnabled(!streamingEnabled);
@@ -372,37 +402,95 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           break;
 
         case "tool_start":
-          setStreamingStatus(`Executing ${event.data?.toolName || "tool"}...`);
+          if (event.data?.toolName) {
+            const toolMessage: ChatMessageType = {
+              id: nanoid(),
+              message: "",
+              isUser: false,
+              isExecuting: true,
+              executingTool: event.data.toolName,
+              timestamp: new Date(),
+            };
+
+            setStreamingToolMessages(prev => [...prev, toolMessage]);
+            setStreamingStatus(`Executing ${event.data.toolName}...`);
+          }
           break;
 
         case "tool_end":
-          setStreamingStatus(`Completed ${event.data?.toolName || "tool"}`);
+          if (event.data?.toolName) {
+            setStreamingToolMessages(prev =>
+              prev.map(msg => {
+                if (
+                  msg.executingTool === event.data?.toolName &&
+                  msg.isExecuting
+                ) {
+                  const toolName = event.data!.toolName!;
+                  const toolExecution = event.data!.toolExecution;
+
+                  return {
+                    ...msg,
+                    isExecuting: false,
+                    toolExecution: toolExecution
+                      ? {
+                          toolName,
+                          status: toolExecution.status || "success",
+                          result: toolExecution.response?.result,
+                          error: toolExecution.error,
+                        }
+                      : {
+                          toolName,
+                          status: "success" as const,
+                        },
+                  } as ChatMessageType;
+                }
+                return msg;
+              })
+            );
+            setStreamingStatus(`Completed ${event.data.toolName}`);
+          }
           await refreshAll();
           break;
 
         case "message_complete":
+          // Clear streaming state first
           setCurrentStreamingContent("");
           setStreamingStatus("");
           streamingMessageRef.current = "";
+          setStreamingToolMessages([]);
 
-          if (
-            event.data?.assistantMessage &&
-            event.data?.toolExecutionMessages
-          ) {
-            const userMessage: ChatMessageType = {
-              id: nanoid(),
-              message: messageInput.trim(),
-              isUser: true,
-              timestamp: new Date(),
-              isExecuting: false,
-            };
+          if (event.data?.assistantMessage) {
+            // Use refs to get latest state
+            const currentConversationId = connectionIdRef.current;
+            const currentChatId = chatIdRef.current;
+            const currentConversations = conversationsRef.current;
 
-            const finalMessages = [
-              ...currentMessages,
-              userMessage,
-              ...event.data.toolExecutionMessages,
-              event.data.assistantMessage,
-            ];
+            if (!currentConversationId || !currentChatId) return;
+
+            // Get the latest conversation data
+            const latestConversations =
+              currentConversations[currentConversationId] || [];
+            const latestConversation = latestConversations.find(
+              conv => conv.id === currentChatId
+            );
+            const latestMessages = latestConversation?.messages || [];
+
+            // Build final messages array
+            let finalMessages = [...latestMessages];
+
+            // Add tool execution messages if they exist
+            if (
+              event.data.toolExecutionMessages &&
+              event.data.toolExecutionMessages.length > 0
+            ) {
+              finalMessages = [
+                ...finalMessages,
+                ...event.data.toolExecutionMessages,
+              ];
+            }
+
+            // Add the final assistant message
+            finalMessages.push(event.data.assistantMessage);
 
             await updateConversationMessages(finalMessages);
             await refreshAll();
@@ -430,25 +518,30 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               isExecuting: false,
             };
 
-            const userMessage: ChatMessageType = {
-              id: nanoid(),
-              message: messageInput.trim(),
-              isUser: true,
-              timestamp: new Date(),
-              isExecuting: false,
-            };
+            // Use refs to get latest state
+            const currentConversationId = connectionIdRef.current;
+            const currentChatId = chatIdRef.current;
+            const currentConversations = conversationsRef.current;
 
-            const errorMessages = [
-              ...currentMessages,
-              userMessage,
-              errorMessage,
-            ];
-            await updateConversationMessages(errorMessages);
+            if (currentConversationId && currentChatId) {
+              const latestConversations =
+                currentConversations[currentConversationId] || [];
+              const latestConversation = latestConversations.find(
+                conv => conv.id === currentChatId
+              );
+              const latestMessages = latestConversation?.messages || [];
+
+              const finalMessages = [...latestMessages, errorMessage];
+              await updateConversationMessages(finalMessages);
+            }
+
+            // Clear streaming state
+            setStreamingToolMessages([]);
           }
           break;
       }
     },
-    [currentMessages, messageInput, refreshAll, updateConversationMessages]
+    [refreshAll, updateConversationMessages] // Simplified dependencies
   );
 
   // Send message with fresh enabled tools
@@ -477,9 +570,24 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       setIsStreaming(streamingEnabled);
       setCurrentStreamingContent("");
       setStreamingStatus("");
+      setStreamingToolMessages([]);
       streamingMessageRef.current = "";
+
       const originalMessage = messageInput.trim();
       setMessageInput("");
+
+      // Create user message immediately and add it to the conversation
+      const userMessage: ChatMessageType = {
+        id: nanoid(),
+        message: originalMessage,
+        isUser: true,
+        timestamp: new Date(),
+        isExecuting: false,
+      };
+
+      // Add user message to conversation immediately for both streaming and non-streaming
+      const messagesWithUser = [...currentMessages, userMessage];
+      await updateConversationMessages(messagesWithUser);
 
       const currentEnabledTools = getEnabledTools(connectionId);
 
@@ -493,6 +601,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         throw new Error("Invalid chat context");
       }
 
+      // Use the conversation history without the new user message for the AI context
       const conversationMessages = currentMessages.filter(
         m => m.message && !m.isExecuting
       );
@@ -505,19 +614,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           handleStreamingEvent
         );
       } else {
-        const userMessage: ChatMessageType = {
-          id: nanoid(),
-          message: originalMessage,
-          isUser: true,
-          timestamp: new Date(),
-          isExecuting: false,
-        };
-
-        const updatedMessages = [...currentMessages, userMessage];
-        await updateConversationMessages(updatedMessages);
-
+        // For non-streaming, handle as before but don't add user message again
         const thinkingMessage = ChatService.createThinkingMessage();
-        const messagesWithThinking = [...updatedMessages, thinkingMessage];
+        const messagesWithThinking = [...messagesWithUser, thinkingMessage];
         await updateConversationMessages(messagesWithThinking);
 
         const response = await ChatService.sendMessage(
@@ -526,7 +625,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           conversationMessages
         );
 
-        let finalMessages = [...updatedMessages];
+        let finalMessages = [...messagesWithUser]; // Start with messages that include user message
 
         if (response.toolExecutionMessages.length > 0) {
           finalMessages = [...finalMessages, ...response.toolExecutionMessages];
@@ -539,18 +638,18 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
                 status: toolMsg.toolExecution.status,
                 duration: 0,
-                timestamp: now.toISOString(), // Use ISO string format
+                timestamp: now.toISOString(),
                 request: {
                   tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
                   arguments: {},
-                  timestamp: now.toISOString(), // Use ISO string format
+                  timestamp: now.toISOString(),
                 },
                 ...(toolMsg.toolExecution.result
                   ? {
                       response: {
                         success: true,
                         result: toolMsg.toolExecution.result,
-                        timestamp: now.toISOString(), // Use ISO string format
+                        timestamp: now.toISOString(),
                       },
                     }
                   : {}),
@@ -583,19 +682,16 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         isExecuting: false,
       };
 
-      const userMessage: ChatMessageType = {
-        id: nanoid(),
-        message: messageInput.trim(),
-        isUser: true,
-        timestamp: new Date(),
-        isExecuting: false,
-      };
-
       setCurrentStreamingContent("");
       setStreamingStatus("");
       streamingMessageRef.current = "";
-      const errorMessages = [...currentMessages, userMessage, errorMessage];
+
+      // Add error message to current messages (user message should already be there)
+      const errorMessages = [...currentMessages, errorMessage];
       await updateConversationMessages(errorMessages);
+
+      // Clear streaming state
+      setStreamingToolMessages([]);
     } finally {
       setIsLoading(false);
       setIsStreaming(false);
@@ -642,6 +738,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
   const showApiWarning = !llmSettings?.apiKey;
 
+  // Create display messages array that includes streaming messages
+  const displayMessages = [...currentMessages, ...streamingToolMessages];
+
   return (
     <>
       <div className="flex flex-col h-full bg-white dark:bg-gray-950 transition-colors">
@@ -687,7 +786,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="h-full">
             <div className="max-w-4xl mx-auto px-6 py-8 min-h-full">
-              {currentMessages.length === 0 && !currentStreamingContent ? (
+              {displayMessages.length === 0 && !currentStreamingContent ? (
                 <EmptyState
                   showApiWarning={showApiWarning}
                   connectionName={currentConnection?.name}
@@ -698,8 +797,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 />
               ) : (
                 <div className="space-y-6">
-                  {Array.isArray(currentMessages) &&
-                    currentMessages
+                  {Array.isArray(displayMessages) &&
+                    displayMessages
                       .filter(
                         msg =>
                           !(
