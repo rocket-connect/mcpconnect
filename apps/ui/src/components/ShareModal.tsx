@@ -1,4 +1,3 @@
-// apps/ui/src/components/ShareModal.tsx
 import React, { useState } from "react";
 import {
   X,
@@ -25,9 +24,9 @@ interface ShareModalProps {
   onClose: () => void;
   connection: Connection;
   conversation: ChatConversation;
-  tools: Tool[];
+  allTools: Tool[];
+  enabledTools: Tool[];
   toolExecutions: ToolExecution[];
-  disabledTools: Set<string>;
   selectedToolId?: string;
 }
 
@@ -36,9 +35,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   onClose,
   connection,
   conversation,
-  tools,
-  toolExecutions,
-  disabledTools,
+  allTools,
+  enabledTools,
   selectedToolId,
 }) => {
   const [shareUrl, setShareUrl] = useState<string>("");
@@ -52,17 +50,20 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     setError(null);
 
     try {
-      const { url, shareId: id } = await ShareService.generateShareUrl(
+      // Use the new minimal share service
+      const { url, shareId: id } = await ShareService.generateCompactShareUrl(
         connection,
         conversation,
-        tools,
-        toolExecutions,
-        disabledTools,
+        enabledTools, // Only enabled tools
         selectedToolId
       );
 
       setShareUrl(url);
       setShareId(id);
+
+      console.log(
+        `[ShareModal] Generated compact share URL: ${url.length} characters`
+      );
     } catch (err) {
       console.error("Failed to generate share URL:", err);
       setError(
@@ -88,10 +89,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     window.open(shareUrl, "_blank", "noopener,noreferrer");
   };
 
-  // Calculate stats
-  const enabledToolsCount = tools.length - disabledTools.size;
   const messageCount = conversation.messages.length;
-  const toolExecutionCount = toolExecutions.length;
+  const disabledToolsCount = allTools.length - enabledTools.length;
 
   // Reset state when modal opens
   React.useEffect(() => {
@@ -123,10 +122,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Chat Preview */}
+          {/* Chat Preview - Minimal */}
           <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Share Preview
+              Compact Share Preview
             </h3>
 
             <div className="space-y-4">
@@ -145,20 +144,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                     <span className="flex items-center gap-1">
                       <Settings className="w-3 h-3" />
-                      {enabledToolsCount} tools enabled
-                      {disabledTools.size > 0 &&
-                        ` (${disabledTools.size} disabled)`}
+                      {enabledTools.length} working tools
                     </span>
                     <span className="flex items-center gap-1">
                       <MessageSquare className="w-3 h-3" />
                       {messageCount} messages
                     </span>
-                    {toolExecutionCount > 0 && (
-                      <span className="flex items-center gap-1">
-                        <Share2 className="w-3 h-3" />
-                        {toolExecutionCount} tool executions
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
@@ -172,15 +163,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   <h4 className="font-medium text-gray-900 dark:text-white">
                     {conversation.title}
                   </h4>
-                  {conversation?.createdAt?.toLocaleDateString && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Created {conversation.createdAt.toLocaleDateString()} at{" "}
-                      {conversation.createdAt.toLocaleTimeString()}
-                    </p>
-                  )}
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Ready-to-use chat with {enabledTools.length} enabled tools
+                  </p>
                   {selectedToolId && (
                     <div className="mt-2 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded text-xs">
-                      Tool selected: {selectedToolId}
+                      Tool highlighted: {selectedToolId}
                     </div>
                   )}
                 </div>
@@ -188,26 +176,30 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             </div>
           </div>
 
-          {/* Share Information */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+          {/* Optimized Share Info */}
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+            <h3 className="text-sm font-medium text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
               <Users className="w-4 h-4" />
-              What gets shared:
+              Optimized for sharing:
             </h3>
-            <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+            <ul className="text-sm text-green-800 dark:text-green-200 space-y-1">
+              <li>• Minimal data - only essential information included</li>
+              <li>• {enabledTools.length} enabled tools (ready to use)</li>
               <li>• Complete conversation history ({messageCount} messages)</li>
-              <li>• Connection details (without sensitive credentials)</li>
-              <li>• Available tools ({tools.length} tools)</li>
-              <li>
-                • Tool execution history ({toolExecutionCount} executions)
-              </li>
-              <li>• Tool enablement settings</li>
+              <li>• All authentication credentials included</li>
               {selectedToolId && <li>• Selected tool for direct inspection</li>}
             </ul>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-3">
-              <strong>Note:</strong> Sensitive data like API keys and
-              authentication tokens are automatically removed for security.
-            </p>
+
+            {disabledToolsCount > 0 && (
+              <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded">
+                <p className="text-xs text-amber-800 dark:text-amber-200">
+                  <strong>Streamlined:</strong> {disabledToolsCount} disabled
+                  tool
+                  {disabledToolsCount === 1 ? "" : "s"} excluded for a cleaner
+                  share.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Generate Share URL */}
@@ -221,12 +213,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 {isGenerating ? (
                   <>
                     <Loader className="w-4 h-4 animate-spin" />
-                    Generating Share Link...
+                    Generating Compact Link...
                   </>
                 ) : (
                   <>
                     <Share2 className="w-4 h-4" />
-                    Generate Share Link
+                    Generate Compact Share Link
                   </>
                 )}
               </button>
@@ -238,7 +230,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Share URL
+                  Compact Share URL
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -268,7 +260,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     className="flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    Open
+                    Test
                   </button>
                 </div>
               </div>
@@ -278,15 +270,15 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 <div className="grid grid-cols-3 gap-4 text-center text-sm">
                   <div>
                     <div className="font-semibold text-gray-900 dark:text-white">
-                      {shareUrl.length.toLocaleString()}
+                      {(shareUrl.length / 1024).toFixed(1)}KB
                     </div>
                     <div className="text-gray-600 dark:text-gray-400">
-                      URL Length
+                      URL Size
                     </div>
                   </div>
                   <div>
                     <div className="font-semibold text-gray-900 dark:text-white">
-                      {shareId.slice(0, 8)}...
+                      {shareId.slice(0, 6)}...
                     </div>
                     <div className="text-gray-600 dark:text-gray-400">
                       Share ID
@@ -294,34 +286,28 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   </div>
                   <div>
                     <div className="font-semibold text-gray-900 dark:text-white">
-                      {new Date().toLocaleDateString()}
+                      {enabledTools.length}
                     </div>
                     <div className="text-gray-600 dark:text-gray-400">
-                      Generated
+                      Tools
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Instructions */}
+              {/* Success Instructions */}
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
                 <h4 className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
-                  Ready to Share!
+                  Share is ready!
                 </h4>
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  Share this complete URL with your friend. When they visit the
-                  link, it will:
+                <p className="text-sm text-green-800 dark:text-green-200 mb-2">
+                  This compact link includes everything needed:
                 </p>
-                <ul className="text-sm text-green-800 dark:text-green-200 mt-2 space-y-1">
-                  <li>
-                    • Import the connection and conversation into their
-                    MCPConnect
-                  </li>
-                  <li>• Restore all tool settings and execution history</li>
-                  <li>• Navigate directly to the shared chat</li>
-                  {selectedToolId && (
-                    <li>• Open the selected tool in the inspector</li>
-                  )}
+                <ul className="text-sm text-green-800 dark:text-green-200 space-y-1">
+                  <li>• Working connection with {enabledTools.length} tools</li>
+                  <li>• Complete chat history</li>
+                  <li>• All necessary credentials</li>
+                  <li>• Instant setup - no configuration needed</li>
                 </ul>
               </div>
             </div>

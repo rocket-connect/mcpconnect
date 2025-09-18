@@ -35,7 +35,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     tools,
     conversations,
     toolExecutions,
-    disabledTools,
     updateConversations,
     refreshAll,
     getEnabledTools,
@@ -150,11 +149,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const currentToolExecutions = connectionId
     ? toolExecutions[connectionId] || []
     : [];
-
-  // Get current disabled tools for sharing
-  const currentDisabledTools = connectionId
-    ? disabledTools[connectionId] || new Set()
-    : new Set();
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -1193,9 +1187,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           onClose={() => setIsShareOpen(false)}
           connection={currentConnection}
           conversation={currentConversation}
-          tools={allConnectionTools}
+          allTools={allConnectionTools}
+          enabledTools={enabledConnectionTools} // Pass enabled tools instead of disabled set
           toolExecutions={currentToolExecutions}
-          disabledTools={currentDisabledTools as Set<string>}
           selectedToolId={toolId}
         />
       )}

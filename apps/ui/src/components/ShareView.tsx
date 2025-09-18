@@ -1,5 +1,5 @@
-// apps/ui/src/components/ShareView.tsx
-import React, { useState, useEffect } from "react";
+// apps/ui/src/components/ShareView.tsx - FIXED VERSION
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Share2,
@@ -12,8 +12,6 @@ import {
   Users,
   CheckCircle,
   X,
-  Key,
-  Database,
 } from "lucide-react";
 import { useStorage } from "../contexts/StorageContext";
 import { ShareService } from "../services/shareService";
@@ -30,6 +28,11 @@ export const ShareView: React.FC = () => {
   const [metadata, setMetadata] = useState<any>(null);
   const [isImported, setIsImported] = useState(false);
 
+  // Use refs to prevent race conditions
+  const isImportingRef = useRef(false);
+  const hasImportedRef = useRef(false);
+  const importPromiseRef = useRef<Promise<any> | null>(null);
+
   const selectedTool = searchParams.get("tool");
 
   // Load share metadata on mount
@@ -42,7 +45,24 @@ export const ShareView: React.FC = () => {
       }
 
       try {
-        const meta = await ShareService.getShareMetadata(shareData);
+        console.log(
+          `[ShareView] Loading share data: ${shareData.substring(0, 50)}...`
+        );
+
+        // Try new minimal format first, fallback to old format
+        let meta;
+        try {
+          meta = await ShareService.getMinimalShareMetadata(shareData);
+          console.log(`[ShareView] Loaded minimal share metadata:`, meta);
+        } catch (minimalError) {
+          console.warn(
+            `[ShareView] Failed to load as minimal share, trying legacy format:`,
+            minimalError
+          );
+          // Try legacy format here if needed
+          throw minimalError;
+        }
+
         setMetadata(meta);
       } catch (err) {
         console.error("Failed to load share metadata:", err);
@@ -60,43 +80,106 @@ export const ShareView: React.FC = () => {
   const handleImport = async () => {
     if (!shareData) return;
 
+    // Prevent multiple simultaneous imports
+    if (isImportingRef.current || hasImportedRef.current) {
+      console.log("Import already in progress or completed");
+      return;
+    }
+
+    // If there's already an import promise, wait for it
+    if (importPromiseRef.current) {
+      try {
+        await importPromiseRef.current;
+        return;
+      } catch (error) {
+        // Continue with new import if previous failed
+        importPromiseRef.current = null;
+      }
+    }
+
     setIsImporting(true);
     setError(null);
+    isImportingRef.current = true;
 
-    try {
-      const { connectionId, chatId } = await ShareService.importFromShareUrl(
-        shareData,
-        adapter
-      );
+    // Create and store the import promise
+    const importPromise = (async () => {
+      try {
+        console.log(
+          `[ShareView] Starting import for share data: ${shareData.substring(0, 50)}...`
+        );
 
-      setIsImported(true);
+        const { connectionId, chatId } = await ShareService.importMinimalShare(
+          shareData,
+          adapter
+        );
 
-      // Show success message and then reload
-      // The ShareService will handle the reload automatically
-      setTimeout(() => {
+        console.log(
+          `[ShareView] Import successful: connection=${connectionId}, chat=${chatId}`
+        );
+
+        // Mark as successfully imported
+        hasImportedRef.current = true;
+        setIsImported(true);
+
+        // Build target URL
         let targetUrl = `/connections/${connectionId}/chat/${chatId}`;
         if (selectedTool) {
           targetUrl += `/tools/${selectedTool}`;
         }
-        // Try to navigate first, but the reload will happen anyway
-        try {
-          navigate(targetUrl);
-        } catch (navError) {
-          console.log("Navigation attempted, reload will complete the process");
-        }
-      }, 1500);
-    } catch (err) {
-      console.error("Failed to import share:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to import shared chat"
-      );
-      setIsImporting(false);
+
+        console.log(`[ShareView] Will navigate to: ${targetUrl}`);
+
+        // Show success for a moment, then reload
+        setTimeout(() => {
+          // Store the target URL before reload so we can navigate after
+          sessionStorage.setItem("mcpconnect-import-target", targetUrl);
+          console.log(`[ShareView] Stored target URL and reloading...`);
+          window.location.reload();
+        }, 1500);
+
+        return { connectionId, chatId };
+      } catch (err) {
+        console.error("Failed to import share:", err);
+        hasImportedRef.current = false;
+        isImportingRef.current = false;
+
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to import shared chat";
+        setError(errorMessage);
+        setIsImporting(false);
+
+        throw err;
+      }
+    })();
+
+    importPromiseRef.current = importPromise;
+
+    try {
+      await importPromise;
+    } catch (error) {
+      // Error already handled above
+    } finally {
+      importPromiseRef.current = null;
     }
   };
 
   const handleDecline = () => {
+    // Prevent navigation if import is in progress
+    if (isImportingRef.current) {
+      return;
+    }
     navigate("/connections");
   };
+
+  // Handle post-reload navigation
+  useEffect(() => {
+    const targetUrl = sessionStorage.getItem("mcpconnect-import-target");
+    if (targetUrl) {
+      console.log(`[ShareView] Found stored target URL: ${targetUrl}`);
+      sessionStorage.removeItem("mcpconnect-import-target");
+      navigate(targetUrl, { replace: true });
+    }
+  }, [navigate]);
 
   if (isLoading) {
     return (
@@ -147,8 +230,8 @@ export const ShareView: React.FC = () => {
               Chat Imported Successfully!
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              The complete shared chat with all content has been added to your
-              MCPConnect. Reloading to ensure everything is properly loaded...
+              The shared chat with {metadata?.toolCount || 0} working tools has
+              been imported. Reloading to display your new chat...
             </p>
             <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
           </div>
@@ -171,7 +254,7 @@ export const ShareView: React.FC = () => {
                 Shared Chat Session
               </h1>
               <p className="text-blue-100 text-sm">
-                Complete chat session with all content and credentials
+                Compact share with {metadata?.toolCount || 0} working tools
               </p>
             </div>
           </div>
@@ -182,7 +265,7 @@ export const ShareView: React.FC = () => {
           {/* Shared Content Preview */}
           <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Complete Chat Preview
+              Ready-to-Use Chat Preview
             </h3>
 
             <div className="space-y-4">
@@ -196,16 +279,16 @@ export const ShareView: React.FC = () => {
                     {metadata?.connectionName}
                   </h4>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    MCP Connection with Complete Configuration
+                    MCP Connection with {metadata?.toolCount || 0} Working Tools
                   </p>
                   <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                     <span className="flex items-center gap-1">
                       <Settings className="w-3 h-3" />
-                      {metadata?.toolCount} tools available
+                      {metadata?.toolCount || 0} tools (all enabled)
                     </span>
                     <span className="flex items-center gap-1">
                       <MessageSquare className="w-3 h-3" />
-                      {metadata?.messageCount} messages
+                      {metadata?.messageCount || 0} messages
                     </span>
                   </div>
                 </div>
@@ -221,12 +304,12 @@ export const ShareView: React.FC = () => {
                     {metadata?.conversationTitle}
                   </h4>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Shared by {metadata?.sharedBy} on{" "}
+                    Shared on{" "}
                     {new Date(metadata?.timestamp).toLocaleDateString()}
                   </p>
                   {selectedTool && (
                     <div className="mt-2 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded text-xs">
-                      Tool selected: {selectedTool}
+                      Tool highlighted: {selectedTool}
                     </div>
                   )}
                 </div>
@@ -234,62 +317,35 @@ export const ShareView: React.FC = () => {
             </div>
           </div>
 
-          {/* What will be imported */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+          {/* Compact Share Benefits */}
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+            <h3 className="text-sm font-medium text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
               <Download className="w-4 h-4" />
-              Complete content that will be imported:
+              Optimized sharing includes:
             </h3>
-            <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+            <ul className="text-sm text-green-800 dark:text-green-200 space-y-1">
+              <li>• Complete working setup - no configuration needed</li>
+              <li>• {metadata?.toolCount || 0} ready-to-use tools</li>
               <li>
-                • Complete conversation with {metadata?.messageCount} messages
-                and all metadata
+                • Full conversation history ({metadata?.messageCount || 0}{" "}
+                messages)
               </li>
-              <li>
-                • Full connection "{metadata?.connectionName}" with ALL
-                credentials and headers
-              </li>
-              <li>
-                • All {metadata?.toolCount} tools with complete configuration
-                and settings
-              </li>
-              <li>
-                • Complete tool execution history with all results and data
-              </li>
-              <li>• Tool enablement settings and preferences</li>
+              <li>• All necessary authentication credentials</li>
               {selectedTool && <li>• Selected tool will open in inspector</li>}
             </ul>
           </div>
 
-          {/* Complete Data Notice */}
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+          {/* Instant Setup Notice */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
             <div className="flex items-start gap-2">
-              <Key className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />
+              <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
               <div className="flex-1">
-                <h4 className="text-sm font-medium text-green-900 dark:text-green-100">
-                  Complete Data Transfer
+                <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  Instant Setup
                 </h4>
-                <p className="text-sm text-green-800 dark:text-green-200 mt-1">
-                  This share includes ALL connection data including API keys,
-                  authentication headers, and credentials. The imported
-                  connection will be fully functional with all original settings
-                  preserved.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Auto-reload Notice */}
-          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 border border-amber-200 dark:border-amber-800">
-            <div className="flex items-start gap-2">
-              <Database className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                  Automatic Reload
-                </h4>
-                <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
-                  After importing, MCPConnect will automatically reload to
-                  ensure all shared content is properly loaded and displayed.
+                <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
+                  This compact share contains only essential data and working
+                  tools. Everything will be ready immediately after import.
                 </p>
               </div>
             </div>
@@ -299,25 +355,25 @@ export const ShareView: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={handleImport}
-              disabled={isImporting}
+              disabled={isImporting || isImported}
               className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isImporting ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
-                  Importing Complete Chat...
+                  Importing Chat...
                 </>
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  Import Complete Chat Session
+                  Import Working Chat
                 </>
               )}
             </button>
             <button
               onClick={handleDecline}
-              disabled={isImporting}
-              className="flex items-center gap-2 px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              disabled={isImporting || isImported}
+              className="flex items-center gap-2 px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
             >
               <X className="w-4 h-4" />
               Decline
@@ -330,8 +386,8 @@ export const ShareView: React.FC = () => {
           <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <Users className="w-4 h-4" />
             <span>
-              This complete shared session will be added to your local
-              MCPConnect storage with all credentials and settings intact
+              This chat session will be added to your MCPConnect with
+              {metadata?.toolCount || 0} working tools enabled
             </span>
           </div>
         </div>
