@@ -472,23 +472,24 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
           for (const toolMsg of response.toolExecutionMessages) {
             if (toolMsg.toolExecution) {
+              const now = new Date();
               const execution = {
                 id: toolMsg.id || nanoid(),
                 tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
                 status: toolMsg.toolExecution.status,
                 duration: 0,
-                timestamp: new Date().toLocaleTimeString(),
+                timestamp: now.toISOString(), // Use ISO string format
                 request: {
                   tool: toolMsg.executingTool || toolMsg.toolExecution.toolName,
                   arguments: {},
-                  timestamp: new Date().toISOString(),
+                  timestamp: now.toISOString(), // Use ISO string format
                 },
                 ...(toolMsg.toolExecution.result
                   ? {
                       response: {
                         success: true,
                         result: toolMsg.toolExecution.result,
-                        timestamp: new Date().toISOString(),
+                        timestamp: now.toISOString(), // Use ISO string format
                       },
                     }
                   : {}),
