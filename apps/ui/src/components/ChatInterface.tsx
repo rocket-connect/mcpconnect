@@ -2,7 +2,16 @@
 import { Button } from "@mcpconnect/components";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
-import { Send, ExternalLink, Plus, Loader, X, Zap, ZapOff } from "lucide-react";
+import {
+  Send,
+  ExternalLink,
+  Plus,
+  Loader,
+  X,
+  Zap,
+  ZapOff,
+  Trash2,
+} from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
@@ -255,6 +264,61 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       }
     } catch (error) {
       console.error("Failed to delete chat:", error);
+    }
+  };
+
+  // Clear all chats for the current connection
+  const handleClearAllChats = async () => {
+    if (!connectionId) return;
+
+    const confirmed = confirm(
+      `Are you sure you want to delete all ${connectionConversations.length} chat conversations? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      // Clear all conversations for this connection from storage
+      const updatedConversations = {
+        ...conversations,
+        [connectionId]: [],
+      };
+
+      // Update storage
+      await updateConversations(updatedConversations);
+
+      // Also clear any associated tool executions for this connection's chats
+      // This ensures inspector data is also cleared
+      await refreshAll();
+
+      // Navigate to a new chat immediately to avoid being stuck on a deleted chat
+      const newChatId = nanoid();
+      const chatTitle = `${currentConnection?.name || "Chat"} - Session 1`;
+
+      const newChat = {
+        id: newChatId,
+        title: chatTitle,
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const finalConversations = {
+        ...updatedConversations,
+        [connectionId]: [newChat],
+      };
+
+      await updateConversations(finalConversations);
+
+      // Navigate to the new chat and replace the current URL
+      navigate(`/connections/${connectionId}/chat/${newChatId}`, {
+        replace: true,
+      });
+
+      // Force a refresh to ensure all components are in sync
+      await refreshAll();
+    } catch (error) {
+      console.error("Failed to clear all chats:", error);
+      alert("Failed to clear all chats. Please try again.");
     }
   };
 
@@ -1013,10 +1077,10 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           </div>
         </div>
 
-        {/* Fixed Chat Tabs with Delete Buttons */}
+        {/* Fixed Chat Tabs with Delete Buttons and Clear All Button */}
         {connectionConversations.length > 0 && (
           <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
-            <div className="flex items-center px-6">
+            <div className="flex items-center justify-between px-6">
               <div className="flex overflow-x-auto scrollbar-hide">
                 {connectionConversations.map(conv => {
                   const isActive = chatId === conv.id;
@@ -1054,14 +1118,29 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 })}
               </div>
 
-              <button
-                onClick={() => handleNewChat()}
-                className="flex-shrink-0 ml-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-                title="Create new chat"
-                disabled={isLoading || isStreaming}
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                {connectionConversations.length > 1 && (
+                  <button
+                    onClick={handleClearAllChats}
+                    className="flex items-center gap-1 p-2 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                    title={`Clear all ${connectionConversations.length} chats`}
+                    disabled={isLoading || isStreaming}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="text-xs font-medium">Clear All</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleNewChat()}
+                  className="flex items-center gap-1 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                  title="Create new chat"
+                  disabled={isLoading || isStreaming}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="text-xs font-medium">New</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
