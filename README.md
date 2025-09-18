@@ -4,12 +4,7 @@
 
 **Build and debug Model Context Protocol integrations with a browser-based interface that connects directly to your MCP servers.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-18+-61DAFB.svg)](https://reactjs.org/)
-
-[🚀 Live Demo](https://mcp.rconnect.tech) • [📖 Documentation](https://docs.claude.com) • [💬 Community](https://github.com/rocket-connect/mcpconnect/discussions)
+[🚀 Live Demo](https://mcp.rconnect.tech)
 
 </div>
 
@@ -132,8 +127,6 @@ MCP Connect stores configuration in browser localStorage:
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
----
 
 <div align="center">
 
