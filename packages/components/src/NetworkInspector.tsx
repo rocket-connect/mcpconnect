@@ -12,6 +12,7 @@ import {
   Copy,
   Search,
   X,
+  Sparkles,
 } from "lucide-react";
 import { ToolExecution } from "@mcpconnect/schemas";
 
@@ -28,8 +29,6 @@ export interface NetworkInspectorProps {
 
 export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   executions = [],
-  connectionName,
-  chatTitle,
   onToolCallClick,
   selectedExecution: externalSelectedExecution,
   className = "",
@@ -48,10 +47,14 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const prevExecutionsRef = useRef<ToolExecution[]>([]);
 
+  // Only show demo data if there are no executions AND no connections exist
+  // This prevents demo from showing in new chats where connections exist but no tools have been called yet
+  const showDemoData = false; // Disable demo data entirely for now
+  const displayExecutions = executions;
+
   // Auto-select most recent execution when new ones arrive
   useEffect(() => {
     if (executions.length > prevExecutionsRef.current.length) {
-      // New execution(s) added
       const newExecutions = executions.slice(prevExecutionsRef.current.length);
       const mostRecentExecution = newExecutions[newExecutions.length - 1];
 
@@ -143,7 +146,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
       } else {
-        // Fallback for non-secure contexts
         const textArea = document.createElement("textarea");
         textArea.value = text;
         textArea.style.position = "fixed";
@@ -168,16 +170,16 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     }
   };
 
-  const selected = executions.find(e => e.id === selectedExecution);
+  const selected = displayExecutions.find(e => e.id === selectedExecution);
 
   // Filter executions based on search query
   const filteredExecutions = useMemo(() => {
     if (!searchQuery.trim()) {
-      return executions;
+      return displayExecutions;
     }
 
     const query = searchQuery.toLowerCase();
-    return executions.filter(execution => {
+    return displayExecutions.filter(execution => {
       const toolName = (execution.tool || "").toLowerCase();
       const status = execution.status.toLowerCase();
       const timestamp = (execution.timestamp || "").toLowerCase();
@@ -193,7 +195,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
         (execution.error && execution.error.toLowerCase().includes(query))
       );
     });
-  }, [executions, searchQuery]);
+  }, [displayExecutions, searchQuery]);
 
   // Helper function to safely parse timestamps to numbers
   const parseTimestampToNumber = (timestamp: any): number => {
@@ -206,27 +208,23 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     }
 
     if (typeof timestamp === "string") {
-      // Try to parse as ISO string first
       const parsed = new Date(timestamp);
       if (!isNaN(parsed.getTime())) {
         return parsed.getTime();
       }
 
-      // If that fails, try to parse as a number string
       const numericTimestamp = parseInt(timestamp, 10);
       if (!isNaN(numericTimestamp)) {
         return numericTimestamp;
       }
     }
 
-    // Fallback to current time
     return Date.now();
   };
 
   // Sort filtered executions by timestamp (newest first) for display
   const sortedExecutions = useMemo(() => {
     return [...filteredExecutions].sort((a, b) => {
-      // Try to parse timestamp for sorting, fallback to creation order
       const aTime = parseTimestampToNumber(
         a.request?.timestamp || a.timestamp || Date.now()
       );
@@ -250,10 +248,8 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       if (timestamp instanceof Date) {
         date = timestamp;
       } else if (typeof timestamp === "string") {
-        // Try parsing as ISO string first
         date = new Date(timestamp);
 
-        // If invalid, try parsing as number string
         if (isNaN(date.getTime())) {
           const numericTimestamp = parseInt(timestamp, 10);
           if (!isNaN(numericTimestamp)) {
@@ -268,7 +264,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
         return "—";
       }
 
-      // Validate the date is actually valid
       if (isNaN(date.getTime())) {
         return "Invalid Date";
       }
@@ -285,50 +280,12 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     }
   };
 
-  if (executions.length === 0) {
-    return (
-      <div
-        className={`bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex flex-col h-full ${className}`}
-        data-inspector="true"
-      >
-        {/* Header with proper border */}
-        <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between bg-white dark:bg-gray-900">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-            <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-              Request Inspector
-            </h3>
-          </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            0 requests
-          </div>
-        </div>
-
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            <Database className="w-12 h-12 mx-auto mb-4 opacity-30" />
-            <p className="font-medium mb-2 text-sm text-gray-900 dark:text-gray-100">
-              No tool executions yet
-            </p>
-            <p className="text-xs max-w-sm">
-              {chatTitle
-                ? `Execute tools in "${chatTitle}" to see request details`
-                : connectionName
-                  ? `Execute tools on ${connectionName} to see request details`
-                  : "Execute tools to see request details"}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
-      className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex flex-col h-full ${className}`}
+      className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex flex-col h-full ${className} ${showDemoData ? "opacity-75" : ""}`}
       data-inspector="true"
     >
-      {/* Header with consistent borders */}
+      {/* Header */}
       <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between bg-white dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-gray-600 dark:text-gray-400" />
@@ -336,18 +293,29 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
             Request Inspector
           </h3>
         </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          {filteredExecutions.length} of {executions.length} requests
-          {searchQuery && filteredExecutions.length !== executions.length && (
-            <span className="ml-1 text-blue-600 dark:text-blue-400">
-              (filtered)
-            </span>
+        <div className="flex items-center gap-2">
+          {showDemoData && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+              <Sparkles className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                Demo
+              </span>
+            </div>
           )}
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            {filteredExecutions.length} of {displayExecutions.length} requests
+            {searchQuery &&
+              filteredExecutions.length !== displayExecutions.length && (
+                <span className="ml-1 text-blue-600 dark:text-blue-400">
+                  (filtered)
+                </span>
+              )}
+          </div>
         </div>
       </div>
 
       <div className="flex flex-col flex-1 min-h-0">
-        {/* Tool Execution List - 35% of space with proper borders */}
+        {/* Tool Execution List */}
         <div className="h-1/3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 flex flex-col">
           {/* Search Bar */}
           <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
@@ -360,7 +328,8 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                 placeholder="Search tool executions..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="block w-full pl-9 pr-8 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-colors"
+                disabled={showDemoData}
+                className="block w-full pl-9 pr-8 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-colors disabled:cursor-not-allowed"
               />
               {searchQuery && (
                 <button
@@ -374,7 +343,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
             </div>
           </div>
 
-          {/* Fixed Table Header with border */}
+          {/* Table Header */}
           <div className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 py-2 flex-shrink-0">
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-600 dark:text-gray-400">
               <div className="col-span-6 flex items-center gap-1">
@@ -386,7 +355,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
             </div>
           </div>
 
-          {/* Fixed Table Body with proper borders */}
+          {/* Table Body */}
           <div className="overflow-y-auto flex-1">
             {sortedExecutions.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-gray-500 dark:text-gray-400">
@@ -395,7 +364,9 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   <p className="text-xs">
                     {searchQuery
                       ? `No executions match "${searchQuery}"`
-                      : "No tool executions yet"}
+                      : showDemoData
+                        ? "Demo data will appear here"
+                        : "No tool executions yet"}
                   </p>
                   {searchQuery && (
                     <button
@@ -455,11 +426,11 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
           </div>
         </div>
 
-        {/* Request Details Panel - 65% of space with proper borders */}
+        {/* Request Details Panel */}
         <div className="h-2/3 overflow-hidden flex flex-col bg-white dark:bg-gray-900">
           {selected ? (
             <div className="h-full flex flex-col">
-              {/* Details Header with consistent border */}
+              {/* Details Header */}
               <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex-shrink-0 bg-white dark:bg-gray-900">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -490,9 +461,9 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                 </div>
               </div>
 
-              {/* Scrollable Details Content with proper internal borders and bottom padding */}
+              {/* Scrollable Details Content */}
               <div className="flex-1 overflow-y-auto p-4 pb-8 space-y-4">
-                {/* Request Section with border */}
+                {/* Request Section */}
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <div
                     className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -516,6 +487,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                       className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
                       title="Copy request"
                       type="button"
+                      disabled={showDemoData}
                     >
                       <Copy className="w-3 h-3 text-gray-400" />
                     </button>
@@ -530,7 +502,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   )}
                 </div>
 
-                {/* Response/Error Section with border */}
+                {/* Response/Error Section */}
                 {(selected.response || selected.error) && (
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                     <div
@@ -559,6 +531,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                         className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
                         title="Copy response"
                         type="button"
+                        disabled={showDemoData}
                       >
                         <Copy className="w-3 h-3 text-gray-400" />
                       </button>
@@ -579,48 +552,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                     )}
                   </div>
                 )}
-
-                {/* Summary Stats in a bordered card */}
-                {selected.status === "success" && selected.duration && (
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
-                    <h5 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-3">
-                      Execution Summary
-                    </h5>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="text-center p-3 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
-                        <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                          {formatDuration(selected.duration)}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Response Time
-                        </div>
-                      </div>
-                      <div className="text-center p-3 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
-                        <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                          {(() => {
-                            const size = JSON.stringify(
-                              selected.response || selected.request
-                            ).length;
-                            return size > 1024
-                              ? `${(size / 1024).toFixed(1)}KB`
-                              : `${size}B`;
-                          })()}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Data Size
-                        </div>
-                      </div>
-                      <div className="text-center p-3 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
-                        <div className="text-lg font-semibold text-green-600 dark:text-green-400">
-                          {selected.status === "success" ? "✓" : "✗"}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Status
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           ) : (
@@ -628,10 +559,14 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
               <div className="text-center">
                 <Database className="w-12 h-12 mx-auto mb-4 opacity-30" />
                 <p className="font-medium mb-2 text-sm text-gray-900 dark:text-gray-100">
-                  Select a request to view details
+                  {showDemoData
+                    ? "Demo: Select a request to view details"
+                    : "Select a request to view details"}
                 </p>
                 <p className="text-xs">
-                  Click on a tool call above to see request and response data
+                  {showDemoData
+                    ? "Demo requests will show their data when selected"
+                    : "Click on a tool call above to see request and response data"}
                 </p>
               </div>
             </div>
