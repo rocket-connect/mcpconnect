@@ -1,0 +1,48 @@
+{
+  "name": "MCP Connect - Professional Model Context Protocol Development Workbench",
+  "short_name": "MCP Connect",
+  "description": "Professional browser-based development environment for Model Context Protocol debugging and development",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#1A2735",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["development", "productivity", "developer-tools"],
+  "screenshots": [
+    {
+      "src": "/social-preview.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "label": "MCP Connect main interface showing protocol debugging capabilities"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/rconnect.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Connection",
+      "url": "/connections?action=new",
+      "description": "Create a new MCP connection"
+    },
+    {
+      "name": "View Connections",
+      "url": "/connections",
+      "description": "Manage MCP connections"
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "web",
+      "url": "https://github.com/rocket-connect/mcpconnect"
+    }
+  ],
+  "prefer_related_applications": false
+}

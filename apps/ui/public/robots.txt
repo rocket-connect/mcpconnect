@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://www.mcp.rconnect.tech/sitemap.xml
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1
+
+# Allow important static assets
+Allow: /social-preview.png
+Allow: /rconnect.svg
