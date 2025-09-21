@@ -27,15 +27,12 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@headlessui/react": "^1.7.17",
-    "@heroicons/react": "^2.0.18",
     "@mcpconnect/adapter-ai-sdk": "workspace:*",
     "@mcpconnect/adapter-localstorage": "workspace:*",
     "@mcpconnect/base-adapters": "workspace:*",
     "@mcpconnect/components": "workspace:*",
     "@mcpconnect/schemas": "workspace:*",
     "clsx": "^2.0.0",
-    "framer-motion": "^10.16.16",
     "lucide-react": "^0.302.0",
     "nanoid": "^5.1.5",
     "react": "^18.2.0",
