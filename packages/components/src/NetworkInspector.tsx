@@ -572,12 +572,12 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                 </div>
               </div>
 
-              {/* Scrollable Details Content */}
-              <div className="flex-1 overflow-y-auto p-4 pb-8 space-y-4">
-                {/* Request Section */}
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              {/* Scrollable Details Content - More Compact */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {/* Request Section - Inline Style */}
+                <div>
                   <div
-                    className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-colors"
                     onClick={() => toggleExpanded(`${selected.id}-request`)}
                   >
                     {expandedItems.has(`${selected.id}-request`) ? (
@@ -585,13 +585,26 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                     ) : (
                       <ChevronRight className="w-4 h-4 text-gray-400" />
                     )}
-                    <h5 className="font-semibold text-gray-900 dark:text-gray-100 text-sm flex-1">
+                    <svg
+                      className="w-4 h-4 text-blue-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.955 8.955 0 01-4.126-.98L3 21l1.98-5.874A8.955 8.955 0 013 12c0-4.418 3.582-8 8-8s8 3.582 8 8z"
+                      />
+                    </svg>
+                    <h5 className="font-medium text-gray-900 dark:text-gray-100 text-sm flex-1">
                       Request
                     </h5>
                   </div>
 
                   {expandedItems.has(`${selected.id}-request`) && (
-                    <div className="p-4 bg-white dark:bg-gray-900">
+                    <div className="ml-6 mt-2">
                       <JsonCodeBlock
                         data={selected.request}
                         onCopy={() =>
@@ -605,11 +618,11 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   )}
                 </div>
 
-                {/* Response/Error Section */}
+                {/* Response/Error Section - Inline Style */}
                 {(selected.response || selected.error) && (
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <div>
                     <div
-                      className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-colors"
                       onClick={() => toggleExpanded(`${selected.id}-response`)}
                     >
                       {expandedItems.has(`${selected.id}-response`) ? (
@@ -617,13 +630,35 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                       ) : (
                         <ChevronRight className="w-4 h-4 text-gray-400" />
                       )}
-                      <h5 className="font-semibold text-gray-900 dark:text-gray-100 text-sm flex-1">
+                      <svg
+                        className={`w-4 h-4 ${selected.error ? "text-red-500" : "text-green-500"}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        {selected.error ? (
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                          />
+                        ) : (
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        )}
+                      </svg>
+                      <h5 className="font-medium text-gray-900 dark:text-gray-100 text-sm flex-1">
                         {selected.error ? "Error" : "Response"}
                       </h5>
                     </div>
 
                     {expandedItems.has(`${selected.id}-response`) && (
-                      <div className="p-4 bg-white dark:bg-gray-900">
+                      <div className="ml-6 mt-2">
                         {selected.error ? (
                           <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-200 text-sm font-mono">
                             {selected.error}
@@ -643,6 +678,48 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                     )}
                   </div>
                 )}
+
+                {/* Metadata Section - Compact */}
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Tool:
+                      </span>
+                      <span className="font-mono text-gray-900 dark:text-gray-100">
+                        {selected.tool || "Unknown"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Duration:
+                      </span>
+                      <span className="text-gray-900 dark:text-gray-100">
+                        {formatDuration(selected.duration)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Status:
+                      </span>
+                      <span
+                        className={`font-medium ${getStatusColor(selected.status)}`}
+                      >
+                        {selected.status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Time:
+                      </span>
+                      <span className="text-gray-900 dark:text-gray-100">
+                        {formatTimestamp(
+                          selected.timestamp || selected.request?.timestamp
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
