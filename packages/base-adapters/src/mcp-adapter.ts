@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
 import { BaseConfigSchema, AdapterError, AdapterStatus } from "./types";
 import { Connection, Tool, Resource } from "@mcpconnect/schemas";

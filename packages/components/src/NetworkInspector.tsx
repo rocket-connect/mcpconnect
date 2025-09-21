@@ -1,5 +1,3 @@
-// packages/components/src/NetworkInspector.tsx
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 import React, { useState, useEffect, useRef, useMemo } from "react";
@@ -304,7 +302,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
 
   const selected = displayExecutions.find(e => e.id === selectedExecution);
 
-  // Filter executions based on search query
   const filteredExecutions = useMemo(() => {
     if (!searchQuery.trim()) {
       return displayExecutions;

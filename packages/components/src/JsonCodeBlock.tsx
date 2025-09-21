@@ -1,4 +1,3 @@
-// packages/components/src/JsonCodeBlock.tsx
 import React from "react";
 import { Copy } from "lucide-react";
 
@@ -146,7 +145,6 @@ const JsonHighlighter: React.FC<JsonHighlighterProps> = ({
   );
 };
 
-// Code Block Component for JSON
 export const JsonCodeBlock: React.FC<JsonCodeBlockProps> = ({
   data,
   onCopy,
@@ -190,7 +188,6 @@ export const JsonCodeBlock: React.FC<JsonCodeBlockProps> = ({
   );
 };
 
-// Utility functions for timestamp handling
 export const parseTimestampToNumber = (timestamp: unknown): number => {
   if (typeof timestamp === "number") {
     return timestamp;

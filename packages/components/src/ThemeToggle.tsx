@@ -16,7 +16,6 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
   className,
 }) => {
   const handleToggle = () => {
-    // Cycle through themes: light -> dark -> system -> light
     if (theme === "light") {
       onToggle?.("dark");
     } else if (theme === "dark") {
@@ -30,14 +29,12 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
   const isLight = theme === "light";
   const isSystem = theme === "system";
 
-  // Get the appropriate label for accessibility
   const getAriaLabel = () => {
     if (isLight) return "Switch to dark theme";
     if (isDark) return "Switch to system theme";
     return "Switch to light theme";
   };
 
-  // Get the appropriate title for tooltip
   const getTitle = () => {
     if (isLight) return "Light theme (click for dark)";
     if (isDark) return "Dark theme (click for system)";

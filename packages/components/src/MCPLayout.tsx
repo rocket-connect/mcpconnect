@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// packages/components/src/MCPLayout.tsx
 import React, { ReactNode, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, PanelLeft, Database } from "lucide-react";
 

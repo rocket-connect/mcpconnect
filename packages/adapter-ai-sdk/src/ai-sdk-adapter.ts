@@ -1,5 +1,4 @@
 /* eslint-disable no-case-declarations */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   LLMAdapter,
   LLMConfig,
@@ -45,9 +44,6 @@ import {
   toolsToLLMFormat,
 } from "./utils";
 
-/**
- * AI SDK implementation of LLMAdapter with integrated chat and model services
- */
 export class AISDKAdapter extends LLMAdapter {
   protected config: AISDKConfig;
   private static storageAdapter: StorageAdapter | null = null;
@@ -60,9 +56,6 @@ export class AISDKAdapter extends LLMAdapter {
     this.initializeAIModel();
   }
 
-  /**
-   * Initialize the AI SDK model based on configuration
-   */
   private initializeAIModel() {
     try {
       switch (this.config.provider) {
@@ -86,9 +79,6 @@ export class AISDKAdapter extends LLMAdapter {
     }
   }
 
-  /**
-   * Set the storage adapter for static methods
-   */
   static setStorageAdapter(adapter: StorageAdapter) {
     this.storageAdapter = adapter;
   }
@@ -253,7 +243,6 @@ export class AISDKAdapter extends LLMAdapter {
       const accumulatedToolCalls: any[] = [];
 
       try {
-        // Listen for text stream
         for await (const delta of result.textStream) {
           hasGeneratedContent = true;
           yield {
@@ -265,7 +254,6 @@ export class AISDKAdapter extends LLMAdapter {
           };
         }
 
-        // Listen for tool calls
         for await (const chunk of result.fullStream) {
           if (chunk.type === "tool-call") {
             hasGeneratedContent = true;
@@ -450,7 +438,6 @@ export class AISDKAdapter extends LLMAdapter {
     try {
       while (iteration < maxIterations) {
         iteration++;
-        console.log(`[Tool Chain] Iteration ${iteration}`);
 
         const toolCalls: LLMToolCall[] = [];
         let iterationContent = "";
@@ -553,17 +540,9 @@ export class AISDKAdapter extends LLMAdapter {
 
         // If no tool calls in this iteration, we're done
         if (toolCalls.length === 0) {
-          console.log(
-            `[Tool Chain] No tool calls in iteration ${iteration}, ending`
-          );
           break;
         }
 
-        console.log(
-          `[Tool Chain] Executing ${toolCalls.length} tools in iteration ${iteration}`
-        );
-
-        // Add the assistant message with tool calls to the conversation
         currentMessages.push({
           role: "assistant",
           content: iterationContent || "",
@@ -617,14 +596,7 @@ export class AISDKAdapter extends LLMAdapter {
             toolExecution: toolResult.toolExecution,
           };
         }
-
-        console.log(
-          `[Tool Chain] Added ${toolCalls.length} tool results to conversation`
-        );
       }
-
-      // Final response after all tool iterations
-      console.log(`[Tool Chain] Completed after ${iteration} iterations`);
 
       const assistantMessage = createAssistantMessage(fullContent);
       yield {

@@ -13,16 +13,10 @@ import {
   AISDKConfig,
 } from "./types";
 
-/**
- * Generate unique ID utility
- */
 export function generateId(): string {
   return `tool_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
 
-/**
- * Map JSON Schema types to parameter types utility
- */
 export function mapJsonSchemaTypeToParameterType(
   jsonType: string
 ): NonNullable<Tool["parameters"]>[0]["type"] {
@@ -43,9 +37,6 @@ export function mapJsonSchemaTypeToParameterType(
   }
 }
 
-/**
- * Convert MCP tool definition to internal Tool format utility
- */
 export function convertMCPToolToTool(mcpTool: MCPToolDefinition): Tool {
   const parameters: Tool["parameters"] = [];
 
@@ -85,9 +76,6 @@ export function convertMCPToolToTool(mcpTool: MCPToolDefinition): Tool {
   };
 }
 
-/**
- * Convert LLM messages to AI SDK format with proper tool message handling
- */
 export function convertToAIMessages(
   messages: (LLMMessage | ExtendedLLMMessage)[]
 ): AIModelMessage[] {
@@ -99,7 +87,6 @@ export function convertToAIMessages(
         const toolCallId = (msg as any).toolCallId || generateId();
         const toolName = (msg as any).name || "unknown";
 
-        // Parse the content to extract the actual result
         let resultData: any;
         try {
           // If content is a string, try to parse it as JSON
@@ -254,9 +241,6 @@ export function convertToAITools(tools?: LLMTool[]) {
   return convertedTools;
 }
 
-/**
- * Convert JSON Schema to Zod schema for AI SDK tools
- */
 export function jsonSchemaToZod(jsonSchema: any): z.ZodTypeAny {
   if (!jsonSchema || typeof jsonSchema !== "object") {
     return z.object({});
@@ -293,9 +277,6 @@ export function jsonSchemaToZod(jsonSchema: any): z.ZodTypeAny {
   return z.object({});
 }
 
-/**
- * Convert individual JSON Schema property to Zod type
- */
 export function jsonSchemaPropertyToZod(propSchema: any): z.ZodTypeAny {
   if (!propSchema || typeof propSchema !== "object") {
     return z.string();
@@ -360,9 +341,6 @@ export function jsonSchemaPropertyToZod(propSchema: any): z.ZodTypeAny {
   }
 }
 
-/**
- * Check if adapter configuration needs reinitialization
- */
 export function needsReinit(
   config: AISDKConfig,
   settings: LLMSettings
@@ -374,9 +352,6 @@ export function needsReinit(
   );
 }
 
-/**
- * Update adapter configuration with new settings
- */
 export function updateConfigWithSettings(
   config: AISDKConfig,
   settings: LLMSettings
@@ -391,9 +366,6 @@ export function updateConfigWithSettings(
   };
 }
 
-/**
- * Create thinking message utility
- */
 export function createThinkingMessage(): ChatMessage {
   return {
     id: Math.random().toString(36).substring(2, 15),
@@ -404,9 +376,6 @@ export function createThinkingMessage(): ChatMessage {
   };
 }
 
-/**
- * Create assistant message from content
- */
 export function createAssistantMessage(content: string): ChatMessage {
   return {
     id: generateId(),
@@ -417,9 +386,6 @@ export function createAssistantMessage(content: string): ChatMessage {
   };
 }
 
-/**
- * Get error message from unknown error
- */
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     if (error.message.includes("401")) {
@@ -436,9 +402,6 @@ export function getErrorMessage(error: unknown): string {
   return "An unexpected error occurred. Please try again.";
 }
 
-/**
- * Validate chat context
- */
 export function validateChatContext(context: any): boolean {
   return Boolean(
     context.connection &&
@@ -447,9 +410,6 @@ export function validateChatContext(context: any): boolean {
   );
 }
 
-/**
- * Format tool result for LLM consumption with proper structure
- */
 export function formatToolResultForLLM(
   toolCallId: string,
   result: any,
@@ -457,7 +417,6 @@ export function formatToolResultForLLM(
 ): LLMMessage {
   let formattedResult = result || { status: "completed" };
 
-  // Handle MCP content structures
   if (formattedResult.content && Array.isArray(formattedResult.content)) {
     const textContent = formattedResult.content
       .filter((item: any) => item.type === "text")
@@ -473,7 +432,6 @@ export function formatToolResultForLLM(
     }
   }
 
-  // Return tool message in the correct format for LLM processing
   return {
     role: "tool" as const,
     content: JSON.stringify(formattedResult),
@@ -482,9 +440,6 @@ export function formatToolResultForLLM(
   };
 }
 
-/**
- * Create tool execution from args
- */
 export function createBaseToolExecution(
   toolName: string,
   toolArgs: Record<string, any>
@@ -504,9 +459,6 @@ export function createBaseToolExecution(
   };
 }
 
-/**
- * Convert conversation history to LLM messages
- */
 export function conversationToLLMMessages(
   conversationHistory: ChatMessage[]
 ): LLMMessage[] {
@@ -528,9 +480,6 @@ export function conversationToLLMMessages(
     }));
 }
 
-/**
- * Convert tools to LLM format
- */
 export function toolsToLLMFormat(tools: Tool[]): LLMTool[] {
   return tools.map(tool => {
     let inputSchema = tool.inputSchema;

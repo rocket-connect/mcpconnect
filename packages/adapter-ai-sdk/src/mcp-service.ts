@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-constant-condition */
 /* eslint-disable no-async-promise-executor */
 import {
@@ -28,9 +27,6 @@ import { APICallError } from "@ai-sdk/provider";
 import { z } from "zod";
 import { AdapterError, AdapterStatus } from "@mcpconnect/base-adapters";
 
-/**
- * MCP Error Response Schema for AI SDK error handling
- */
 const MCPErrorResponseSchema = z.object({
   error: z.object({
     code: z.number(),
@@ -39,16 +35,10 @@ const MCPErrorResponseSchema = z.object({
   }),
 });
 
-/**
- * MCP Success Response Schema
- */
 const MCPSuccessResponseSchema = z.object({
   result: z.unknown(),
 });
 
-/**
- * Enhanced MCP Service implementation with improved SSE handling for large responses
- */
 export class MCPService extends MCPAdapter {
   private static instance: MCPService | null = null;
   private static requestId = 1;

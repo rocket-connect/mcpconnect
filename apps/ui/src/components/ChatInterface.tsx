@@ -252,7 +252,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     handleNewChat,
   ]);
 
-  // ENHANCED: Delete a chat conversation with proper tool execution cleanup
   const handleDeleteChat = async (
     chatToDeleteId: string,
     event?: React.MouseEvent
@@ -289,17 +288,12 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           await handleNewChat();
         }
       }
-
-      console.log(
-        `[ChatInterface] Successfully deleted chat ${chatToDeleteId}`
-      );
     } catch (error) {
       console.error("Failed to delete chat:", error);
       alert("Failed to delete chat. Please try again.");
     }
   };
 
-  // ENHANCED: Clear all chats for the current connection with proper tool execution cleanup
   const handleClearAllChats = async () => {
     if (!connectionId) return;
 
@@ -338,10 +332,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
 
       // Force a refresh to ensure all components are in sync
       await refreshAll();
-
-      console.log(
-        `[ChatInterface] Successfully cleared all chats for connection ${connectionId}`
-      );
     } catch (error) {
       console.error("Failed to clear all chats:", error);
       alert("Failed to clear all chats. Please try again.");

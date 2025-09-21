@@ -8,7 +8,6 @@ import compression from "compression";
 
 const app = express();
 
-// Get current directory in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -20,7 +19,6 @@ export interface ServerOptions {
 }
 
 function findUiBuildPath(): string {
-  // Same logic as before...
   const possiblePaths = [
     path.join(__dirname, "..", "node_modules", "@mcpconnect", "ui", "dist"),
     path.join(__dirname, "..", "..", "..", "apps", "ui", "dist"),
@@ -122,20 +120,16 @@ export function createServer(options: ServerOptions = {}): {
 
   app.use(express.json());
 
-  // Health check endpoint
   app.get("/health", (req, res) => {
     res.json({ status: "ok", message: "MCPConnect server running" });
   });
 
-  // API routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "MCPConnect API running" });
   });
 
-  // Get UI build path
   const uiBuildPath = findUiBuildPath();
 
-  // Add compression middleware
   app.use(
     compression({
       filter: (req, res) => {
@@ -150,14 +144,12 @@ export function createServer(options: ServerOptions = {}): {
     })
   );
 
-  // Enhanced static file serving with better MIME type handling
   app.use(
     express.static(uiBuildPath, {
       maxAge: "1y", // Cache static assets for 1 year
       etag: true,
       lastModified: true,
       setHeaders: (res, filePath) => {
-        // Enhanced MIME type detection
         const ext = path.extname(filePath).toLowerCase();
 
         switch (ext) {
@@ -216,11 +208,9 @@ export function createServer(options: ServerOptions = {}): {
             res.setHeader("Content-Type", "text/plain; charset=utf-8");
             break;
           default:
-            // Let Express handle other types
             break;
         }
 
-        // Cache control for non-HTML files
         if (ext !== ".html") {
           res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         }
@@ -228,7 +218,6 @@ export function createServer(options: ServerOptions = {}): {
     })
   );
 
-  // Function to check if a request is for a static asset
   function isAssetRequest(reqPath: string): boolean {
     const assetExtensions = [
       ".js",
@@ -256,23 +245,17 @@ export function createServer(options: ServerOptions = {}): {
     return assetExtensions.some(ext => reqPath.toLowerCase().endsWith(ext));
   }
 
-  // Catch-all handler for SPA routing - IMPORTANT: This must be last
   app.get("*", (req, res) => {
     const reqPath = req.path;
 
-    // Don't serve index.html for API routes
     if (reqPath.startsWith("/api/") || reqPath.startsWith("/health")) {
       return res.status(404).json({ error: "API endpoint not found" });
     }
 
-    // Check if this is a static asset request that wasn't handled by express.static
     if (isAssetRequest(reqPath)) {
-      // The express.static middleware should have handled this already
-      // If we get here, the file doesn't exist
       return res.status(404).json({ error: "Asset not found" });
     }
 
-    // Serve index.html for SPA routes (all non-asset, non-API requests)
     const indexPath = path.join(uiBuildPath, "index.html");
     res.sendFile(indexPath, err => {
       if (err) {

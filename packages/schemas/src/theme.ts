@@ -14,8 +14,6 @@ export const ThemeContextSchema = z.object({
   theme: ThemeSchema,
   systemTheme: ThemeSchema.exclude(["system"]).optional(),
   resolvedTheme: ThemeSchema.exclude(["system"]),
-  // Functions cannot be properly validated with Zod, so we'll omit them from the schema
-  // and define them separately in the TypeScript type
 });
 
 export type ThemeContextType = z.infer<typeof ThemeContextSchema> & {

@@ -263,12 +263,11 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     setIsLoading(true);
 
     try {
-      // Create the connection data with proper typing - ensure all required fields are defined
       const connectionData: Connection = {
-        id: connection?.id || "", // Will be generated in service if empty
+        id: connection?.id || "",
         name: formData.name.trim(),
         url: formData.url.trim(),
-        connectionType: formData.connectionType, // FormData guarantees this is defined
+        connectionType: formData.connectionType,
         isActive: false,
         isConnected: false,
         authType: formData.authType,

@@ -2,9 +2,6 @@ import { z } from "zod";
 import { AISDKConfig } from "../types";
 import { createAnthropic } from "@ai-sdk/anthropic";
 
-/**
- * Anthropic-specific configuration schema
- */
 export const AnthropicConfigSchema = z.object({
   provider: z.literal("anthropic"),
   apiKey: z.string().min(1, "Anthropic API key is required"),
@@ -25,19 +22,10 @@ export const AnthropicConfigSchema = z.object({
 
 export type AnthropicConfig = z.infer<typeof AnthropicConfigSchema>;
 
-/**
- * Anthropic provider factory function
- */
 export class AnthropicProvider {
   static createConfig(
     config: Partial<AnthropicConfig> & { apiKey: string }
   ): AISDKConfig {
-    console.log("AnthropicProvider.createConfig:", {
-      hasApiKey: !!config.apiKey,
-      model: config.model,
-      baseUrl: config.baseUrl,
-    });
-
     const anthropicConfig = AnthropicConfigSchema.parse({
       provider: "anthropic" as const,
       ...config,
@@ -63,9 +51,6 @@ export class AnthropicProvider {
     };
   }
 
-  /**
-   * Get available Anthropic models
-   */
   static getAvailableModels(): Array<{
     value: string;
     label: string;
@@ -115,28 +100,15 @@ export class AnthropicProvider {
     ];
   }
 
-  /**
-   * Test API key validity with CORS headers
-   */
   static async testApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
     try {
-      console.log("Testing Anthropic API key with CORS headers...", {
-        hasApiKey: !!apiKey,
-        hasBaseUrl: !!baseUrl,
-        baseUrl: baseUrl || "default",
-      });
-
-      // Create the provider with CORS-friendly configuration
       const anthropicProvider = createAnthropic({
         apiKey,
-        // Use the provided baseUrl or fall back to Anthropic's default
         ...(baseUrl && { baseURL: baseUrl }),
-        // Add headers for direct browser access
         headers: {
           "anthropic-dangerous-direct-browser-access": "true",
           "Content-Type": "application/json",
         },
-        // Additional fetch options for CORS
         fetch: (url, options) => {
           return fetch(url, {
             ...options,
@@ -151,57 +123,41 @@ export class AnthropicProvider {
         },
       });
 
-      // Get a model instance - use the smallest/fastest model for testing
       const model = anthropicProvider("claude-3-haiku-20240307");
 
-      // Make a minimal test request using the AI SDK v5 generateText function
       const { generateText } = await import("ai");
 
-      console.log("Making test API call to Anthropic with CORS headers...");
-
-      const result = await generateText({
+      await generateText({
         model,
         messages: [{ role: "user", content: "Hi" }],
         maxOutputTokens: 1,
       });
 
-      console.log("Anthropic API test successful:", {
-        hasText: !!result.text,
-        usage: result.usage,
-      });
-
       return true;
     } catch (error) {
-      console.error("Anthropic API key test failed:", error);
-
-      // Log more details about the error for debugging
       if (error instanceof Error) {
         console.error("Error details:", {
           name: error.name,
           message: error.message,
-          // Check if it's a CORS error
           isCorsError:
             error.message.includes("CORS") || error.message.includes("Origin"),
         });
+      } else {
+        console.error("Anthropic API key test failed:", error);
       }
 
       return false;
     }
   }
 
-  /**
-   * Create Anthropic provider with CORS configuration
-   */
   static createProviderWithCors(apiKey: string, baseUrl?: string) {
     return createAnthropic({
       apiKey,
       ...(baseUrl && { baseURL: baseUrl }),
-      // Essential header for direct browser access
       headers: {
         "anthropic-dangerous-direct-browser-access": "true",
         "Content-Type": "application/json",
       },
-      // Custom fetch with CORS configuration
       fetch: (url, options) => {
         return fetch(url, {
           ...options,
@@ -217,19 +173,11 @@ export class AnthropicProvider {
     });
   }
 
-  /**
-   * Validate Anthropic API key format
-   */
   static validateApiKey(apiKey: string): boolean {
-    // Anthropic API keys start with "sk-ant-"
     return apiKey.startsWith("sk-ant-") && apiKey.length > 20;
   }
 
-  /**
-   * Get model context limits
-   */
   static getContextLimit(model: string): number {
-    // Most Claude models support 200k context
     const limits: Record<string, number> = {
       "claude-3-5-sonnet-20241022": 200000,
       "claude-3-5-haiku-20241022": 200000,

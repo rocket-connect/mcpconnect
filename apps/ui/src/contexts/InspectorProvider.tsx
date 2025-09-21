@@ -37,7 +37,6 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
 
   const urlParts = location.pathname.split("/");
 
-  // Manual extraction as fallback
   let manualConnectionId = "";
   let manualChatId = "";
   let manualToolId = "";
@@ -106,14 +105,12 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// UI Component (uses the context)
 export function InspectorUI() {
   const params = useParams();
   const location = useLocation();
   const { connections, conversations, toolExecutions } = useStorage();
   const { selectedToolCall, syncToolCallState } = useInspector();
 
-  // Manual URL parsing as backup (same logic as above)
   const urlParts = location.pathname.split("/");
   const connectionsIndex = urlParts.findIndex(part => part === "connections");
   let manualConnectionId = "";
@@ -130,11 +127,9 @@ export function InspectorUI() {
   const connectionId = params.connectionId || manualConnectionId || "";
   const chatId = params.chatId || manualChatId || "";
 
-  // Helper function to check if chat has tool calls
   const chatHasToolCalls = (chatId: string, connectionId: string): boolean => {
     if (!chatId || !connectionId) return false;
 
-    // Get conversations for this connection
     const connectionConversations = conversations[connectionId] || [];
     const currentChat = connectionConversations.find(
       conv => conv.id === chatId
@@ -142,7 +137,6 @@ export function InspectorUI() {
 
     if (!currentChat) return false;
 
-    // Check if any message has tool execution data
     return currentChat.messages.some(
       msg =>
         Boolean(msg.executingTool) ||
@@ -151,11 +145,9 @@ export function InspectorUI() {
     );
   };
 
-  // Determine what to show based on our logic
   const hasAnyConnections = connections.length > 0;
   const currentChatHasToolCalls = chatHasToolCalls(chatId, connectionId);
 
-  // Early return if no connection is selected
   if (!connectionId) {
     return (
       <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors h-full">
@@ -196,8 +188,6 @@ export function InspectorUI() {
     );
 
     executionsToShow = chatSpecificExecutions;
-  } else {
-    console.log("No specific chat selected, showing all connection executions");
   }
 
   const handleToolCallClick = (toolCallId: string) => {

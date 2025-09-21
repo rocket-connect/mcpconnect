@@ -1,4 +1,3 @@
-// Don't forget to add JsonCodeBlock to packages/components/src/index.ts:
 export { JsonCodeBlock } from "./JsonCodeBlock";
 import React from "react";
 import { Loader } from "lucide-react";
