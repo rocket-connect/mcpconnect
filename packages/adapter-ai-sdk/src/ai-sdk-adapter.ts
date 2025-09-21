@@ -392,8 +392,7 @@ export class AISDKAdapter extends LLMAdapter {
         errorMessage = error.message;
 
         if (errorMessage.includes("API key")) {
-          errorMessage =
-            "Invalid API key. Please check your LLM API settings.";
+          errorMessage = "Invalid API key. Please check your LLM API settings.";
           errorType = "AUTH_ERROR";
         } else if (
           errorMessage.includes("network") ||
