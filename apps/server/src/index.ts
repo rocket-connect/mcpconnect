@@ -4,6 +4,7 @@ import helmet from "helmet";
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync } from "fs";
+import compression from "compression";
 
 const app = express();
 
@@ -183,6 +184,22 @@ export function createServer(options: ServerOptions = {}): {
           res.setHeader("Cache-Control", "no-cache");
         }
       },
+    })
+  );
+
+  app.use(
+    compression({
+      filter: (req, res) => {
+        // Don't compress if the request has a 'x-no-compression' header
+        if (req.headers["x-no-compression"]) {
+          return false;
+        }
+        // Compress everything else
+        return compression.filter(req, res);
+      },
+      level: 6, // Compression level (1-9, 6 is good balance)
+      threshold: 1024, // Only compress files larger than 1KB
+      memLevel: 8, // Memory usage (1-9, 8 is default)
     })
   );
 
