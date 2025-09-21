@@ -1,137 +1,177 @@
 # MCP Connect
 
 <div align="center">
-
-**Build and debug Model Context Protocol integrations with a browser-based interface that connects directly to your MCP servers.**
-
-[🚀 Live Demo](https://mcp.rconnect.tech)
-
-</div>
-
-## Overview
-
-<div align="center">
   <img src="./docs/mcpconnect-github-ui.png" width="90%" alt="MCP Connect Interface Overview" />
+  <p><a href="https://mcp.rconnect.tech" target="_blank" rel="noopener noreferrer">Live Playground</a></p>
 </div>
 
-MCP Connect is a developer-focused tool for testing and debugging Model Context Protocol (MCP) servers. It provides a visual interface to connect to MCP servers, explore their tools and resources, and interact with them through conversational AI.
+A browser-based development tool for testing, debugging, and building Model Context Protocol (MCP) integrations. MCP Connect provides a visual interface for connecting to MCP servers, managing tools, and testing AI interactions.
 
-**🎯 Perfect for:** MCP server developers, AI application builders, and teams integrating Claude or other LLMs with custom tools.
+## What is MCP Connect?
 
-## 🌟 Key Features
+MCP Connect is a developer workbench that simplifies working with the Model Context Protocol. It acts as a bridge between MCP servers and AI language models, allowing you to:
 
-| Feature                              | Description                                                               |
-| ------------------------------------ | ------------------------------------------------------------------------- |
-| **🔌 Direct MCP Protocol Support**   | WebSocket, HTTP, and SSE transport using standard MCP protocols           |
-| **🛠️ Visual Tool Testing**           | Interactive forms for tool execution with real-time feedback              |
-| **🤖 Conversational AI Integration** | Connect your own OpenAI or Anthropic API keys for chat-based interactions |
-| **🔍 Request Inspector**             | Debug protocol messages, monitor performance, and track executions        |
-| **🌐 Zero Configuration**            | Works entirely in the browser with no server-side dependencies            |
+- Connect to MCP servers via HTTP, WebSocket, or Server-Sent Events
+- Test and debug MCP tools in a visual interface
+- Chat with AI models while using MCP tools
+- Inspect tool executions and protocol communications
+- Manage multiple MCP connections and conversations
 
-## 🚀 Quick Start
+Think of it as a development environment for MCP, similar to how Postman is used for REST APIs.
 
-Get up and running in under 30 seconds:
+## Quick Start
+
+Get started in under 30 seconds:
 
 ```bash
 npx @mcpconnect/cli
 ```
 
-This opens MCP Connect at `http://localhost:3001` with a complete debugging environment.
+This command starts the MCP Connect server and opens your browser to the interface. No installation required.
 
-## 💻 Developer Workflow
+## How It Works
 
-<div align="center">
-  <table>
-    <tr>
-      <td width="50%">
-        <img src="./docs/create-connection.png" alt="Create Connection" />
-        <h4 align="center">🔗 Connection Setup</h4>
-        <p align="center">Easily connect to any MCP server with authentication support</p>
-      </td>
-      <td width="50%">
-        <img src="./docs/llm-config.png" alt="LLM Configuration" />
-        <h4 align="center">🧠 LLM Configuration</h4>
-        <p align="center">Connect your Claude or OpenAI API keys for AI-powered interactions</p>
-      </td>
-    </tr>
-  </table>
-</div>
+MCP Connect consists of three main components:
 
-MCP Connect streamlines MCP server development:
+### 1. Connection Management
 
-1. **🏗️ Start your MCP server** on any port with any transport
-2. **🚀 Run MCP Connect** to launch the debugging interface
-3. **🔍 Connect and introspect** - automatically discover tools and resources
-4. **🧪 Test tools visually** with form-based parameter input
-5. **🐛 Debug with inspector** - view raw protocol messages and performance metrics
+- Configure connections to MCP servers
+- Support for multiple transport protocols (HTTP, WebSocket, SSE)
+- Handle authentication (Bearer tokens, API keys, Basic auth)
+- Auto-discovery of available tools and resources
 
-## 🛠️ Installation Options
+### 2. Visual Tool Testing
 
-### 🌐 Online (No Installation)
+- Browse available MCP tools in a sidebar
+- Enable/disable tools for specific conversations
+- Execute tools individually or through AI chat
+- Inspect tool inputs, outputs, and execution details
 
-Visit **[mcp.rconnect.tech](https://mcp.rconnect.tech)** to use MCP Connect directly in your browser.
+### 3. AI Integration
 
-### ⚡ CLI (Recommended for Local Development)
+- Connect your AI provider (Anthropic Claude, OpenAI)
+- Chat with AI models that can use your MCP tools
+- Stream responses in real-time
+- Track tool usage across conversations
+
+## Installation Options
+
+### CLI (Recommended)
 
 ```bash
+# Run once without installation
 npx @mcpconnect/cli
+
+# Or install globally
+npm install -g @mcpconnect/cli
+mcpconnect
 ```
 
-### 🔧 Self-hosted
+### Programmatic Usage
 
-```bash
-git clone https://github.com/rocket-connect/mcpconnect
-cd mcpconnect
-pnpm install && pnpm build
-pnpm start
+```javascript
+import { startServer } from "@mcpconnect/server";
+
+const { url } = await startServer({
+  port: 3001,
+  host: "localhost",
+});
+
+console.log(`MCP Connect running at ${url}`);
 ```
 
-## 🔌 Supported Protocols
+## Architecture
 
-| Protocol               | Description                             | Status    |
-| ---------------------- | --------------------------------------- | --------- |
-| **HTTP**               | Standard request/response MCP over HTTP | ✅ Stable |
-| **Server-Sent Events** | Streaming MCP responses (recommended)   | ✅ Stable |
-| **WebSocket**          | Bidirectional real-time communication   | 🚧 Beta   |
+MCP Connect is built as a modular TypeScript monorepo:
 
-**Authentication supported:** Bearer tokens, API keys, Basic auth, custom headers.
+- **@mcpconnect/cli** - Command-line interface for quick setup
+- **@mcpconnect/server** - Express server with integrated UI
+- **@mcpconnect/ui** - React frontend application
+- **@mcpconnect/components** - Reusable UI components
+- **@mcpconnect/adapter-ai-sdk** - AI provider integration layer
+- **@mcpconnect/adapter-localstorage** - Browser storage adapter
+- **@mcpconnect/schemas** - TypeScript type definitions
 
-## 🤖 LLM Integration
+All data is stored locally in your browser using localStorage, with no external dependencies or data transmission.
 
-MCP Connect supports multiple LLM providers with your own API keys:
+## Configuration
 
-| Provider             | Models                      | Status          |
-| -------------------- | --------------------------- | --------------- |
-| **Anthropic Claude** | 3.5 Sonnet, 3 Opus, 3 Haiku | ✅ Full Support |
-| **OpenAI**           | GPT-4, GPT-3.5              | 🚧 Coming Soon  |
-| **Local Models**     | OpenAI-compatible endpoints | 🚧 Coming Soon  |
+### MCP Server Connection
 
-Configure your API key in the settings panel to enable conversational interactions with discovered MCP tools.
+1. Click "Add Connection" in the interface
+2. Enter your MCP server URL (supports http://, https://, ws://, wss://)
+3. Configure authentication if required
+4. Test the connection to verify tools are discoverable
 
-## 🔧 Configuration
+### AI Provider Setup
 
-MCP Connect stores configuration in browser localStorage:
+1. Open Settings from the header
+2. Add your AI provider API key
+3. Select your preferred model and adjust parameters
+4. Test the API key to ensure connectivity
 
-- **🔗 Connections** - MCP server endpoints and authentication
-- **🤖 LLM Settings** - API keys and model preferences
-- **🎨 UI State** - Theme, layout preferences
-- **📊 Tool Executions** - Request/response history for debugging
+## Browser Compatibility
 
-## 🛡️ Security & Privacy
+MCP Connect works in modern browsers that support:
 
-- **🔒 Local-first** - All data stored in your browser
-- **🚫 No telemetry** - We don't track your usage
-- **🔐 API keys** - Stored locally, never sent to our servers
-- **🌐 CORS-friendly** - Works with any MCP server configuration
+- ES2020+ JavaScript features
+- WebSocket API
+- Server-Sent Events
+- localStorage API
+- Fetch API
 
-## 📄 License
+Tested browsers: Chrome 90+, Firefox 88+, Safari 14+, Edge 90+
 
-MIT License - see [LICENSE](LICENSE) for details.
+## Security
 
-<div align="center">
+- All data stored locally in browser localStorage
+- No external data transmission except to configured MCP servers and AI providers
+- HTTPS/WSS recommended for production MCP server connections
+- API keys stored locally and never transmitted to MCP Connect servers
 
-**Built with ❤️ by [rconnect.tech](https://rconnect.tech)**
+## Performance
 
-_Connecting developers through open source tools_
+- Optimized bundle size with code splitting
+- Lazy loading of UI components
+- Efficient local storage with compression options
+- Streaming support for real-time AI responses
 
-</div>
+## Troubleshooting
+
+### Connection Issues
+
+- Verify MCP server URL is accessible
+- Check CORS configuration on MCP server
+- Ensure proper authentication credentials
+- Test with HTTP before trying WebSocket/SSE
+
+### Tool Execution Problems
+
+- Confirm tools are enabled in the sidebar
+- Check tool parameters match MCP server expectations
+- Review inspector panel for detailed execution logs
+- Verify AI provider API key is configured correctly
+
+## Contributing
+
+We welcome contributions to MCP Connect:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please ensure your code follows the existing patterns and includes appropriate tests.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Support
+
+- GitHub Issues: [Report bugs and request features](https://github.com/rocket-connect/mcpconnect/issues)
+- Documentation: Available in the repository wiki
+- Community: Join discussions in GitHub Discussions
+
+Built by [rconnect.tech](https://rconnect.tech) - Advancing AI integration tools for developers.
