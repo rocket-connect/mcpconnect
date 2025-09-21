@@ -1,8 +1,11 @@
 # MCP Connect
 
 <div align="center">
-  <img src="./docs/mcpconnect-github-ui.png" width="90%" alt="MCP Connect Interface Overview" />
-  <p><a href="https://mcp.rconnect.tech" target="_blank" rel="noopener noreferrer">Live Playground</a></p>
+  <picture>
+    <source srcset="./docs/mcpconnect-github-ui-dark.png" media="(prefers-color-scheme: dark)">
+    <img src="./docs/mcpconnect-github-ui-light.png" width="90%" alt="MCP Connect Interface Overview" />
+  </picture>
+  <p><a href="https://mcp.rconnect.tech" target="_blank" rel="noopener noreferrer">mcp.rconnect.tech</a></p>
 </div>
 
 A browser-based development tool for testing, debugging, and building Model Context Protocol (MCP) integrations. MCP Connect provides a visual interface for connecting to MCP servers, managing tools, and testing AI interactions.
