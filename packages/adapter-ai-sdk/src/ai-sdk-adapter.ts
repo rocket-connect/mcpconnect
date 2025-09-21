@@ -332,7 +332,7 @@ export class AISDKAdapter extends LLMAdapter {
           // Check for specific Anthropic API errors
           if (errorMessage.includes("overloaded")) {
             errorMessage =
-              "Claude is experiencing high demand. Please try again in a moment.";
+              "Your LLM is experiencing high demand. Please try again in a moment.";
             errorType = "OVERLOADED_ERROR";
           } else if (errorMessage.includes("rate_limit")) {
             errorMessage =
@@ -393,7 +393,7 @@ export class AISDKAdapter extends LLMAdapter {
 
         if (errorMessage.includes("API key")) {
           errorMessage =
-            "Invalid API key. Please check your Claude API settings.";
+            "Invalid API key. Please check your LLM API settings.";
           errorType = "AUTH_ERROR";
         } else if (
           errorMessage.includes("network") ||

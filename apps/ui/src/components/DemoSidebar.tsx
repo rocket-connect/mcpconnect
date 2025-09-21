@@ -193,9 +193,9 @@ export const getExampleServers = () => [
 // Onboarding steps
 export const getOnboardingSteps = () => [
   {
-    id: "configure-claude",
-    title: "Configure Claude API",
-    description: "Add your Anthropic API key to start chatting",
+    id: "configure-llm",
+    title: "Configure Your LLM",
+    description: "Add your AI provider API key in settings",
     icon: "brain",
     completed: false,
   },

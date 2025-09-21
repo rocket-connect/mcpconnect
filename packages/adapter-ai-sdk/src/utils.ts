@@ -423,13 +423,13 @@ export function createAssistantMessage(content: string): ChatMessage {
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     if (error.message.includes("401")) {
-      return "Invalid API key. Please check your Claude API settings.";
+      return "Invalid API key. Please check your LLM API settings.";
     }
     if (error.message.includes("429")) {
       return "Rate limit exceeded. Please wait a moment and try again.";
     }
     if (error.message.includes("500")) {
-      return "Claude API is experiencing issues. Please try again later.";
+      return "Your LLM API is experiencing issues. Please try again later.";
     }
     return error.message;
   }

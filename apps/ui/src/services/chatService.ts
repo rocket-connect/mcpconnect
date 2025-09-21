@@ -75,7 +75,7 @@ export class ChatService {
   }
 
   /**
-   * Send a message to Claude using AISDKAdapter
+   * Send a message to LLM using AISDKAdapter
    */
   static async sendMessage(
     userMessage: string,
@@ -85,7 +85,7 @@ export class ChatService {
     const { llmSettings } = context;
 
     if (!llmSettings.apiKey) {
-      throw new Error("No Claude API key configured");
+      throw new Error("No AI provider API key configured");
     }
 
     this.initializeAdapter(llmSettings);
@@ -120,7 +120,7 @@ export class ChatService {
     const { llmSettings } = context;
 
     if (!llmSettings.apiKey) {
-      throw new Error("No Claude API key configured");
+      throw new Error("No AI provider API key configured");
     }
 
     this.initializeAdapter(llmSettings);

@@ -13,7 +13,7 @@ export const ApiWarning: React.FC<ApiWarningProps> = ({ onConfigure }) => {
             <span className="text-xs text-amber-900">!</span>
           </div>
           <span>
-            Configure your Anthropic API key to start chatting with Claude
+            Configure your AI provider API key to start using MCP tools
           </span>
         </div>
         <button

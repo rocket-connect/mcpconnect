@@ -61,7 +61,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               <>
                 <span>•</span>
                 <span className="text-amber-600 dark:text-amber-400">
-                  Claude API not configured
+                  AI provider not configured
                 </span>
               </>
             )}

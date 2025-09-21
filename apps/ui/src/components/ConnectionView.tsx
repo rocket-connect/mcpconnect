@@ -165,25 +165,27 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
     <>
       <div className="flex-1 overflow-y-auto p-6 bg-white dark:bg-gray-900 transition-colors">
         <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                MCP Connections
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400">
-                Connect to Model Context Protocol servers to extend Claude's
-                capabilities
-              </p>
+          {/* Header - Only show when we have connections */}
+          {connections.length > 0 && (
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  MCP Connections
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Connect to Model Context Protocol servers to extend your LLM's
+                  capabilities
+                </p>
+              </div>
+              <button
+                onClick={handleCreateConnection}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Connection
+              </button>
             </div>
-            <button
-              onClick={handleCreateConnection}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Connection
-            </button>
-          </div>
+          )}
 
           {/* Connections Grid or Empty State */}
           {connections.length === 0 ? (
@@ -196,7 +198,7 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
               </h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
                 Create your first MCP connection to start using external tools
-                with Claude
+                with AI assistants
               </p>
               <button
                 onClick={handleCreateConnection}
@@ -207,14 +209,14 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
               </button>
               <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Learn more about MCP servers at{" "}
+                  Support this project on Github{" "}
                   <a
-                    href="https://github.com/modelcontextprotocol/servers"
+                    href="https://github.com/rocket-connect/mcpconnect"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 dark:text-blue-400 hover:underline"
                   >
-                    github.com/modelcontextprotocol/servers
+                    github.com/rocket-connect/mcpconnect
                   </a>
                 </p>
               </div>

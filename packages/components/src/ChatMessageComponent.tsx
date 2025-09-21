@@ -57,7 +57,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
             {message.isExecuting && !message.message && !hasToolExecution ? (
               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                 <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                <span>Claude is thinking...</span>
+                <span>Your LLM is thinking...</span>
               </div>
             ) : hasToolExecution ? (
               <div className="space-y-2">

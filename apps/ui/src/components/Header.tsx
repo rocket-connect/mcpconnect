@@ -1,6 +1,6 @@
 import { ThemeToggle } from "@mcpconnect/components";
 import { useTheme } from "../contexts/ThemeContext";
-import { Server, Settings } from "lucide-react";
+import { Server, Settings, Github } from "lucide-react";
 import { useState } from "react";
 import { SettingsModal } from "./SettingsModal";
 
@@ -24,6 +24,15 @@ export const Header = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <a
+              href="https://github.com/rocket-connect/mcpconnect"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              title="View on GitHub"
+            >
+              <Github className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </a>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <button
               onClick={() => setIsSettingsOpen(true)}

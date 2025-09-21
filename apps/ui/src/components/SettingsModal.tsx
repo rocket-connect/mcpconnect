@@ -312,7 +312,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* API Key */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Anthropic API Key
+                    AI Provider API Key
                   </label>
                   <div className="relative">
                     <input
@@ -343,7 +343,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   {!isApiKeyFormatValid && (
                     <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                      Invalid API key format for Anthropic
+                      Invalid API key format for AI provider
                     </p>
                   )}
                   {apiKeyStatus === "invalid" && (
@@ -373,7 +373,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Leave empty to use the default Anthropic API endpoint
+                    Leave empty to use the default API endpoint
                   </p>
                 </div>
 

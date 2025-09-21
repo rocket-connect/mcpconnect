@@ -12,7 +12,6 @@ export interface EmptyStateProps {
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   showApiWarning,
-  connectionName,
   enabledToolsCount,
   disabledToolsCount,
   streamingEnabled,
@@ -25,19 +24,19 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           <ExternalLink className="w-8 h-8" />
         </div>
         <p className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
-          {showApiWarning ? "Configure Claude API" : "Start a conversation"}
+          {showApiWarning ? "Configure AI Provider" : "Start a conversation"}
         </p>
         <p className="text-sm">
           {showApiWarning
-            ? "Add your Anthropic API key to begin chatting with Claude"
-            : `Start chatting with Claude about ${connectionName}. ${enabledToolsCount} tools are available${disabledToolsCount > 0 ? ` (${disabledToolsCount} disabled)` : ""}.`}
+            ? "Add your AI provider API key to begin using MCP tools"
+            : `Start using MCP tools with your AI assistant. ${enabledToolsCount} tools are available${disabledToolsCount > 0 ? ` (${disabledToolsCount} disabled)` : ""}.`}
         </p>
         {showApiWarning && (
           <button
             onClick={onConfigure}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            Configure Claude
+            Configure AI Provider
           </button>
         )}
         {!showApiWarning && (

@@ -389,7 +389,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     async (event: SSEEvent) => {
       switch (event.type) {
         case "thinking":
-          setStreamingStatus("Claude is thinking...");
+          setStreamingStatus("Your LLM is thinking...");
           setCurrentStreamingContent("");
           break;
 
@@ -557,7 +557,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     ) {
       if (!llmSettings?.apiKey) {
         console.warn(
-          "No API key configured. Please configure Claude settings."
+          "No API key configured. Please configure AI provider settings."
         );
       }
       return;

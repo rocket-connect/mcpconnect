@@ -33,10 +33,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const getPlaceholder = () => {
     if (disabled) {
-      return "Configure API key to start chatting...";
+      return "Configure API key to start using tools...";
     }
     if (connectionName) {
-      return `Message Claude about ${connectionName}... (${enabledToolsCount} tools enabled${disabledToolsCount > 0 ? `, ${disabledToolsCount} disabled` : ""}, ${streamingEnabled ? "streaming" : "standard"} mode)`;
+      return `Chat with AI about ${connectionName}... (${enabledToolsCount} tools enabled${disabledToolsCount > 0 ? `, ${disabledToolsCount} disabled` : ""}, ${streamingEnabled ? "streaming" : "standard"} mode)`;
     }
     return "Type a message...";
   };

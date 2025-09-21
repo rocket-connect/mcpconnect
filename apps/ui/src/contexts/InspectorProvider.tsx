@@ -130,6 +130,31 @@ export function InspectorUI() {
   const connectionId = params.connectionId || manualConnectionId || "";
   const chatId = params.chatId || manualChatId || "";
 
+  // Helper function to check if chat has tool calls
+  const chatHasToolCalls = (chatId: string, connectionId: string): boolean => {
+    if (!chatId || !connectionId) return false;
+
+    // Get conversations for this connection
+    const connectionConversations = conversations[connectionId] || [];
+    const currentChat = connectionConversations.find(
+      conv => conv.id === chatId
+    );
+
+    if (!currentChat) return false;
+
+    // Check if any message has tool execution data
+    return currentChat.messages.some(
+      msg =>
+        Boolean(msg.executingTool) ||
+        Boolean(msg.toolExecution) ||
+        Boolean(msg.isExecuting)
+    );
+  };
+
+  // Determine what to show based on our logic
+  const hasAnyConnections = connections.length > 0;
+  const currentChatHasToolCalls = chatHasToolCalls(chatId, connectionId);
+
   // Early return if no connection is selected
   if (!connectionId) {
     return (
@@ -141,6 +166,8 @@ export function InspectorUI() {
           chatId=""
           chatTitle=""
           onToolCallClick={() => {}}
+          hasAnyConnections={hasAnyConnections}
+          chatHasToolCalls={false}
         />
       </div>
     );
@@ -187,6 +214,8 @@ export function InspectorUI() {
         chatTitle={currentChat?.title || "No Chat Selected"}
         onToolCallClick={handleToolCallClick}
         selectedExecution={selectedToolCall}
+        hasAnyConnections={hasAnyConnections}
+        chatHasToolCalls={currentChatHasToolCalls}
       />
     </div>
   );
