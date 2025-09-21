@@ -44,6 +44,7 @@ jobs:
             echo "pm2 version: $(pm2 --version 2>/dev/null || echo 'not found')"
 
             cd /root/mcpconnect
+            git reset --hard
             git pull origin main
             pnpm install --frozen-lockfile
             pnpm build
