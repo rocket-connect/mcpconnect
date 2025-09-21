@@ -1,13 +1,10 @@
-import { ConnectionItem } from "@mcpconnect/components";
+import {
+  ConnectionGrid,
+  ConnectionEmptyState,
+  ConnectionHeader,
+} from "@mcpconnect/components";
 import { Connection, Resource, Tool } from "@mcpconnect/schemas";
 import { useNavigate } from "react-router-dom";
-import {
-  Plus,
-  Settings,
-  Trash2,
-  MessageSquare,
-  ExternalLink,
-} from "lucide-react";
 import { useState } from "react";
 import { ConnectionModal } from "./ConnectionModal";
 import { useStorage } from "../contexts/StorageContext";
@@ -44,7 +41,11 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteConnection = async (connectionId: string) => {
+  const handleDeleteConnection = async (
+    connectionId: string,
+    event: React.MouseEvent
+  ) => {
+    event.stopPropagation();
     const connection = connections.find(c => c.id === connectionId);
     if (!connection) return;
 
@@ -167,106 +168,23 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         <div className="max-w-6xl mx-auto">
           {/* Header - Only show when we have connections */}
           {connections.length > 0 && (
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                  MCP Connections
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Connect to Model Context Protocol servers to extend your LLM's
-                  capabilities
-                </p>
-              </div>
-              <button
-                onClick={handleCreateConnection}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Connection
-              </button>
-            </div>
+            <ConnectionHeader
+              connectionCount={connections.length}
+              onCreateConnection={handleCreateConnection}
+            />
           )}
 
           {/* Connections Grid or Empty State */}
           {connections.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                <ExternalLink className="w-8 h-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No connections yet
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Create your first MCP connection to start using external tools
-                with AI assistants
-              </p>
-              <button
-                onClick={handleCreateConnection}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                <Plus className="w-5 h-5" />
-                Create Connection
-              </button>
-              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Support this project on Github{" "}
-                  <a
-                    href="https://github.com/rocket-connect/mcpconnect"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    github.com/rocket-connect/mcpconnect
-                  </a>
-                </p>
-              </div>
-            </div>
+            <ConnectionEmptyState onCreateConnection={handleCreateConnection} />
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {connections.map(connection => (
-                <div key={connection.id} className="group relative">
-                  <ConnectionItem
-                    {...connection}
-                    onClick={() => handleConnectionClick(connection)}
-                  />
-
-                  {/* Action buttons on hover */}
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="flex gap-1">
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleConnectionClick(connection);
-                        }}
-                        className="p-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/50 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md"
-                        title="Open connection"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
-                      </button>
-
-                      <button
-                        onClick={e => handleEditConnection(connection, e)}
-                        className="p-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/50 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md"
-                        title="Edit connection"
-                      >
-                        <Settings className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
-                      </button>
-
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleDeleteConnection(connection.id);
-                        }}
-                        className="p-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/50 dark:border-gray-600/50 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200 hover:shadow-md group/delete"
-                        title="Delete connection"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 group-hover/delete:text-red-600 dark:group-hover/delete:text-red-400 transition-colors" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ConnectionGrid
+              connections={connections}
+              onConnectionClick={handleConnectionClick}
+              onEditConnection={handleEditConnection}
+              onDeleteConnection={handleDeleteConnection}
+              conversations={conversations}
+            />
           )}
         </div>
       </div>
@@ -275,7 +193,10 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveConnection}
-        onDelete={handleDeleteConnection}
+        onDelete={(connectionId: string) => {
+          const mockEvent = { stopPropagation: () => {} } as React.MouseEvent;
+          handleDeleteConnection(connectionId, mockEvent);
+        }}
         connection={editingConnection}
         existingConnections={connections}
       />
