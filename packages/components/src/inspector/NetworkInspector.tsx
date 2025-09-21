@@ -17,7 +17,7 @@ import {
   JsonCodeBlock,
   parseTimestampToNumber,
   formatTimestamp,
-} from "./JsonCodeBlock";
+} from "../common/JsonCodeBlock";
 
 export interface NetworkInspectorProps {
   executions?: ToolExecution[];

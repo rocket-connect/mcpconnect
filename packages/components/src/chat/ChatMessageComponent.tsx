@@ -1,8 +1,8 @@
-export { JsonCodeBlock } from "./JsonCodeBlock";
+export { JsonCodeBlock } from "../common/JsonCodeBlock";
 import React from "react";
 import { Loader } from "lucide-react";
 import { ChatMessage } from "@mcpconnect/schemas";
-import { JsonCodeBlock } from "./JsonCodeBlock";
+import { JsonCodeBlock } from "../common/JsonCodeBlock";
 
 export interface ChatMessageComponentProps {
   message: ChatMessage;

@@ -1,7 +1,7 @@
 import React from "react";
 import { Moon, Sun, Monitor } from "lucide-react";
 import { Button } from "./Button";
-import { cn } from "./lib/utils";
+import { cn } from "../lib/utils";
 import { Theme } from "@mcpconnect/schemas";
 
 export interface ThemeToggleProps {

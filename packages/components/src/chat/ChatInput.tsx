@@ -1,6 +1,6 @@
 import React from "react";
 import { Send, Loader, Zap } from "lucide-react";
-import { Button } from "./Button";
+import { Button } from "../common/Button";
 
 export interface ChatInputProps {
   value: string;
