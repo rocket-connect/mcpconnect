@@ -4,11 +4,8 @@ import {
   Globe,
   Lock,
   Loader,
-  AlertCircle,
-  CheckCircle,
   Eye,
   EyeOff,
-  TestTube,
   Trash2,
   Plus,
   Zap,
@@ -307,19 +304,6 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     if (confirmed) {
       onDelete(connection.id);
       onClose();
-    }
-  };
-
-  const getTestStatusIcon = () => {
-    switch (testStatus) {
-      case "testing":
-        return <Loader className="w-4 h-4 animate-spin text-blue-500" />;
-      case "success":
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case "error":
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
-      default:
-        return <TestTube className="w-4 h-4 text-gray-400" />;
     }
   };
 
@@ -728,7 +712,6 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 disabled={testStatus === "testing"}
                 className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {getTestStatusIcon()}
                 Test Connection
               </button>
             </div>

@@ -236,18 +236,18 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
                           e.stopPropagation();
                           handleConnectionClick(connection);
                         }}
-                        className="p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        className="p-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/50 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md"
                         title="Open connection"
                       >
-                        <MessageSquare className="w-3 h-3 text-gray-600 dark:text-gray-400" />
+                        <MessageSquare className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
                       </button>
 
                       <button
                         onClick={e => handleEditConnection(connection, e)}
-                        className="p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        className="p-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/50 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md"
                         title="Edit connection"
                       >
-                        <Settings className="w-3 h-3 text-gray-600 dark:text-gray-400" />
+                        <Settings className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
                       </button>
 
                       <button
@@ -255,10 +255,10 @@ export const ConnectionView = ({ connections }: ConnectionViewProps) => {
                           e.stopPropagation();
                           handleDeleteConnection(connection.id);
                         }}
-                        className="p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        className="p-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/50 dark:border-gray-600/50 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200 hover:shadow-md group/delete"
                         title="Delete connection"
                       >
-                        <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
+                        <Trash2 className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 group-hover/delete:text-red-600 dark:group-hover/delete:text-red-400 transition-colors" />
                       </button>
                     </div>
                   </div>
