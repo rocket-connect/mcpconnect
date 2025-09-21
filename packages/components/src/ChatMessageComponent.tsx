@@ -1,6 +1,9 @@
+// Don't forget to add JsonCodeBlock to packages/components/src/index.ts:
+export { JsonCodeBlock } from "./JsonCodeBlock";
 import React from "react";
 import { Loader } from "lucide-react";
 import { ChatMessage } from "@mcpconnect/schemas";
+import { JsonCodeBlock } from "./JsonCodeBlock";
 
 export interface ChatMessageComponentProps {
   message: ChatMessage;
@@ -28,6 +31,27 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
   if (message.isExecuting && !message.message && !hasToolExecution) {
     return null;
   }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        textArea.remove();
+      }
+    } catch (err) {
+      console.warn("Failed to copy text: ", err);
+    }
+  };
 
   return (
     <div className="group relative">
@@ -157,7 +181,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
             )}
           </div>
 
-          {/* Improved expanded details section */}
+          {/* Enhanced expanded details section with JSON highlighting */}
           {isExpanded && hasToolExecution && (
             <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               {/* Header */}
@@ -218,99 +242,113 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                   )}
                 </div>
 
-                {/* Result section */}
-                {message.toolExecution?.result !== undefined && (
-                  <div>
-                    <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm flex items-center gap-2">
-                      <svg
-                        className="w-4 h-4 text-green-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                {/* Tool arguments section with JSON formatting */}
+                {message.toolExecution && (
+                  <div className="space-y-4">
+                    {/* Arguments section - create a mock request structure if we have tool info */}
+                    {toolName && (
+                      <div>
+                        <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm flex items-center gap-2">
+                          <svg
+                            className="w-4 h-4 text-blue-500"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.955 8.955 0 01-4.126-.98L3 21l1.98-5.874A8.955 8.955 0 013 12c0-4.418 3.582-8 8-8s8 3.582 8 8z"
+                            />
+                          </svg>
+                          Request
+                        </h5>
+                        <JsonCodeBlock
+                          data={{
+                            tool: toolName,
+                            arguments: message.metadata?.arguments || {},
+                            timestamp: message.timestamp,
+                          }}
+                          onCopy={() => {
+                            const requestData = {
+                              tool: toolName,
+                              arguments: message.metadata?.arguments || {},
+                              timestamp: message.timestamp,
+                            };
+                            copyToClipboard(
+                              JSON.stringify(requestData, null, 2)
+                            );
+                          }}
                         />
-                      </svg>
-                      Result
-                    </h5>
-                    <div className="relative">
-                      <pre className="text-xs bg-gray-50 dark:bg-gray-950 p-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-48 text-gray-800 dark:text-gray-100 font-mono leading-relaxed">
-                        {(() => {
-                          const result = message.toolExecution?.result;
-                          if (typeof result === "string") {
-                            return result;
-                          }
-                          try {
-                            return JSON.stringify(result, null, 2);
-                          } catch {
-                            return String(result);
-                          }
-                        })()}
-                      </pre>
-                      <button
-                        onClick={() => {
-                          const result = message.toolExecution?.result;
-                          let text: string;
-                          if (typeof result === "string") {
-                            text = result;
-                          } else {
-                            try {
-                              text = JSON.stringify(result, null, 2);
-                            } catch {
-                              text = String(result);
-                            }
-                          }
-                          navigator.clipboard?.writeText(text);
-                        }}
-                        className="absolute top-2 right-2 p-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        title="Copy result"
-                      >
-                        <svg
-                          className="w-3 h-3 text-gray-500 dark:text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Error section */}
-                {message.toolExecution?.error && (
-                  <div>
-                    <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm flex items-center gap-2">
-                      <svg
-                        className="w-4 h-4 text-red-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                        />
-                      </svg>
-                      Error
-                    </h5>
-                    <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                      <div className="text-red-800 dark:text-red-200 text-sm font-mono">
-                        {message.toolExecution.error}
                       </div>
-                    </div>
+                    )}
+
+                    {/* Result section with JSON formatting */}
+                    {message.toolExecution?.result !== undefined && (
+                      <div>
+                        <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm flex items-center gap-2">
+                          <svg
+                            className="w-4 h-4 text-green-500"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          Response
+                        </h5>
+                        <JsonCodeBlock
+                          data={{
+                            success: true,
+                            result: message.toolExecution.result,
+                            timestamp: message.timestamp,
+                          }}
+                          onCopy={() => {
+                            const responseData = {
+                              success: true,
+                              result: message.toolExecution?.result,
+                              timestamp: message.timestamp,
+                            };
+                            copyToClipboard(
+                              JSON.stringify(responseData, null, 2)
+                            );
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Error section */}
+                    {message.toolExecution?.error && (
+                      <div>
+                        <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm flex items-center gap-2">
+                          <svg
+                            className="w-4 h-4 text-red-500"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                            />
+                          </svg>
+                          Error
+                        </h5>
+                        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                          <div className="text-red-800 dark:text-red-200 text-sm font-mono">
+                            {message.toolExecution.error}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

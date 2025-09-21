@@ -10,12 +10,16 @@ import {
   Database,
   AlertCircle,
   CheckCircle,
-  Copy,
   Search,
   X,
   Sparkles,
 } from "lucide-react";
 import { ToolExecution } from "@mcpconnect/schemas";
+import {
+  JsonCodeBlock,
+  parseTimestampToNumber,
+  formatTimestamp,
+} from "./JsonCodeBlock";
 
 export interface NetworkInspectorProps {
   executions?: ToolExecution[];
@@ -26,8 +30,8 @@ export interface NetworkInspectorProps {
   onToolCallClick?: (toolCallId: string) => void;
   selectedExecution?: string | null;
   className?: string;
-  hasAnyConnections?: boolean; // Indicates if user has any connections at all
-  chatHasToolCalls?: boolean; // Indicates if the current chat has any tool calls
+  hasAnyConnections?: boolean;
+  chatHasToolCalls?: boolean;
 }
 
 // Demo tool executions for onboarding
@@ -37,7 +41,7 @@ const createDemoExecutions = (): ToolExecution[] => [
     tool: "repo_browse",
     status: "success",
     duration: 850,
-    timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 minutes ago
+    timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     request: {
       tool: "repo_browse",
       arguments: {
@@ -65,7 +69,7 @@ const createDemoExecutions = (): ToolExecution[] => [
     tool: "list_issues",
     status: "success",
     duration: 1200,
-    timestamp: new Date(Date.now() - 3 * 60 * 1000).toISOString(), // 3 minutes ago
+    timestamp: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
     request: {
       tool: "list_issues",
       arguments: {
@@ -104,7 +108,7 @@ const createDemoExecutions = (): ToolExecution[] => [
     tool: "create_pr",
     status: "error",
     duration: 2100,
-    timestamp: new Date(Date.now() - 1 * 60 * 1000).toISOString(), // 1 minute ago
+    timestamp: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
     request: {
       tool: "create_pr",
       arguments: {
@@ -122,7 +126,7 @@ const createDemoExecutions = (): ToolExecution[] => [
     id: "demo-4",
     tool: "web_search",
     status: "pending",
-    timestamp: new Date().toISOString(), // Just now
+    timestamp: new Date().toISOString(),
     request: {
       tool: "web_search",
       arguments: {
@@ -157,26 +161,16 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const prevExecutionsRef = useRef<ToolExecution[]>([]);
 
-  // Show demo data ONLY when user has no connections at all
   const showDemoData = !hasAnyConnections;
-
   const demoExecutions = useMemo(() => createDemoExecutions(), []);
 
-  // Determine what executions to display based on the logic:
-  // 1. If no connections exist (new user) -> show demo
-  // 2. If connections exist but no chat selected or chat has no tool calls -> show empty
-  // 3. If chat selected and has tool calls -> show actual executions for that chat
   const displayExecutions = useMemo(() => {
     if (showDemoData) {
       return demoExecutions;
     }
-
-    // If user has connections but current chat has no tool calls, show empty
     if (!chatHasToolCalls) {
       return [];
     }
-
-    // Show actual executions for the current chat
     return executions;
   }, [showDemoData, demoExecutions, chatHasToolCalls, executions]);
 
@@ -335,32 +329,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     });
   }, [displayExecutions, searchQuery]);
 
-  // Helper function to safely parse timestamps to numbers
-  const parseTimestampToNumber = (timestamp: any): number => {
-    if (typeof timestamp === "number") {
-      return timestamp;
-    }
-
-    if (timestamp instanceof Date) {
-      return timestamp.getTime();
-    }
-
-    if (typeof timestamp === "string") {
-      const parsed = new Date(timestamp);
-      if (!isNaN(parsed.getTime())) {
-        return parsed.getTime();
-      }
-
-      const numericTimestamp = parseInt(timestamp, 10);
-      if (!isNaN(numericTimestamp)) {
-        return numericTimestamp;
-      }
-    }
-
-    return Date.now();
-  };
-
-  // Sort filtered executions by timestamp (newest first) for display
   const sortedExecutions = useMemo(() => {
     return [...filteredExecutions].sort((a, b) => {
       const aTime = parseTimestampToNumber(
@@ -369,56 +337,10 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       const bTime = parseTimestampToNumber(
         b.request?.timestamp || b.timestamp || Date.now()
       );
-      return bTime - aTime; // Newest first
+      return bTime - aTime;
     });
   }, [filteredExecutions]);
 
-  // Enhanced timestamp formatting function
-  const formatTimestamp = (execution: ToolExecution) => {
-    const timestamp = execution.timestamp || execution.request?.timestamp;
-
-    if (!timestamp) return "—";
-
-    try {
-      let date: Date;
-
-      // @ts-ignore
-      if (timestamp instanceof Date) {
-        date = timestamp;
-      } else if (typeof timestamp === "string") {
-        date = new Date(timestamp);
-
-        if (isNaN(date.getTime())) {
-          const numericTimestamp = parseInt(timestamp, 10);
-          if (!isNaN(numericTimestamp)) {
-            date = new Date(numericTimestamp);
-          } else {
-            return "Invalid Date";
-          }
-        }
-      } else if (typeof timestamp === "number") {
-        date = new Date(timestamp);
-      } else {
-        return "—";
-      }
-
-      if (isNaN(date.getTime())) {
-        return "Invalid Date";
-      }
-
-      return date.toLocaleTimeString("en-US", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    } catch (error) {
-      console.warn("Error formatting timestamp:", timestamp, error);
-      return "Invalid Date";
-    }
-  };
-
-  // Get appropriate empty state message
   const getEmptyStateMessage = () => {
     if (showDemoData) {
       return {
@@ -493,7 +415,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       <div className="flex flex-col flex-1 min-h-0">
         {/* Tool Execution List */}
         <div className="h-1/3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 flex flex-col">
-          {/* Search Bar - Only show if there are executions to search */}
+          {/* Search Bar */}
           {displayExecutions.length > 0 && (
             <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
               <div className="relative">
@@ -521,7 +443,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
             </div>
           )}
 
-          {/* Table Header - Only show if there are executions */}
+          {/* Table Header */}
           {displayExecutions.length > 0 && (
             <div className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 py-2 flex-shrink-0">
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-600 dark:text-gray-400">
@@ -579,7 +501,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   }
                 >
                   <div className="grid grid-cols-12 gap-2 items-center text-xs">
-                    {/* Tool Name with Icon */}
                     <div className="col-span-6 flex items-center gap-1.5 min-w-0">
                       {getStatusIcon(execution.status)}
                       <span className="text-gray-900 dark:text-gray-100 truncate font-mono text-xs">
@@ -587,19 +508,18 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                       </span>
                     </div>
 
-                    {/* Status */}
                     <div
                       className={`col-span-2 text-center font-medium text-xs ${getStatusColor(execution.status)}`}
                     >
                       {getStatusCode(execution.status)}
                     </div>
 
-                    {/* Timestamp */}
                     <div className="col-span-2 text-center text-gray-500 dark:text-gray-400 text-xs">
-                      {formatTimestamp(execution)}
+                      {formatTimestamp(
+                        execution.timestamp || execution.request?.timestamp
+                      )}
                     </div>
 
-                    {/* Duration */}
                     <div className="col-span-2 text-center text-gray-600 dark:text-gray-400 font-mono text-xs">
                       {formatDuration(execution.duration)}
                     </div>
@@ -644,8 +564,10 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                     )}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatTimestamp(selected)} •{" "}
-                    {formatDuration(selected.duration)}
+                    {formatTimestamp(
+                      selected.timestamp || selected.request?.timestamp
+                    )}{" "}
+                    • {formatDuration(selected.duration)}
                   </div>
                 </div>
               </div>
@@ -666,27 +588,19 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                     <h5 className="font-semibold text-gray-900 dark:text-gray-100 text-sm flex-1">
                       Request
                     </h5>
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        copyToClipboard(
-                          JSON.stringify(selected.request, null, 2)
-                        );
-                      }}
-                      className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-                      title="Copy request"
-                      type="button"
-                      disabled={showDemoData}
-                    >
-                      <Copy className="w-3 h-3 text-gray-400" />
-                    </button>
                   </div>
 
                   {expandedItems.has(`${selected.id}-request`) && (
                     <div className="p-4 bg-white dark:bg-gray-900">
-                      <pre className="text-xs text-gray-800 dark:text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-950 p-3 rounded border border-gray-200 dark:border-gray-700">
-                        {JSON.stringify(selected.request, null, 2)}
-                      </pre>
+                      <JsonCodeBlock
+                        data={selected.request}
+                        onCopy={() =>
+                          copyToClipboard(
+                            JSON.stringify(selected.request, null, 2)
+                          )
+                        }
+                        showDemo={showDemoData}
+                      />
                     </div>
                   )}
                 </div>
@@ -706,36 +620,24 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                       <h5 className="font-semibold text-gray-900 dark:text-gray-100 text-sm flex-1">
                         {selected.error ? "Error" : "Response"}
                       </h5>
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          copyToClipboard(
-                            JSON.stringify(
-                              selected.response || selected.error,
-                              null,
-                              2
-                            )
-                          );
-                        }}
-                        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-                        title="Copy response"
-                        type="button"
-                        disabled={showDemoData}
-                      >
-                        <Copy className="w-3 h-3 text-gray-400" />
-                      </button>
                     </div>
 
                     {expandedItems.has(`${selected.id}-response`) && (
                       <div className="p-4 bg-white dark:bg-gray-900">
                         {selected.error ? (
-                          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-200 text-sm">
+                          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-200 text-sm font-mono">
                             {selected.error}
                           </div>
                         ) : (
-                          <pre className="text-xs text-gray-800 dark:text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-950 p-3 rounded border border-gray-200 dark:border-gray-700">
-                            {JSON.stringify(selected.response, null, 2)}
-                          </pre>
+                          <JsonCodeBlock
+                            data={selected.response}
+                            onCopy={() =>
+                              copyToClipboard(
+                                JSON.stringify(selected.response, null, 2)
+                              )
+                            }
+                            showDemo={showDemoData}
+                          />
                         )}
                       </div>
                     )}
