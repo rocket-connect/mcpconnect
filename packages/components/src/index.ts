@@ -4,7 +4,6 @@ export { Card, type CardProps } from "./Card";
 
 // MCP-specific Components
 export { ConnectionItem, type ConnectionItemProps } from "./ConnectionItem";
-export { ResourceItem, type ResourceItemProps } from "./ResourceItem";
 export { ChatMessage, type ChatMessageProps } from "./ChatMessage";
 export {
   ConnectionStatus,

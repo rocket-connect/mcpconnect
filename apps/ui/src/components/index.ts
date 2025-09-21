@@ -1,9 +1,7 @@
 export { Header } from "./Header";
 export { Sidebar } from "./Sidebar";
 export { ChatInterface } from "./ChatInterface";
-export { ModeToggle } from "./ModeToggle";
 export { RconnectLogo } from "./RconnectLogo";
 export { ConnectionView } from "./ConnectionView";
 export { ConnectionModal } from "./ConnectionModal";
-export { ResourceView } from "./ResourceView";
 export { SettingsModal } from "./SettingsModal";

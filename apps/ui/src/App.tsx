@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -7,20 +6,11 @@ import {
   useParams,
 } from "react-router-dom";
 import { MCPLayout } from "@mcpconnect/components";
-import { Resource } from "@mcpconnect/schemas";
-import {
-  Header,
-  Sidebar,
-  ChatInterface,
-  ConnectionView,
-  ResourceView,
-} from "./components";
+import { Header, Sidebar, ChatInterface, ConnectionView } from "./components";
 import { useStorage } from "./contexts/StorageContext";
 import { InspectorProvider, InspectorUI } from "./contexts/InspectorProvider";
 
 function AppContent() {
-  const [selectedResource] = useState<Resource | null>(null);
-
   const { connections, resources, conversations, isLoading, error } =
     useStorage();
 
@@ -132,15 +122,6 @@ function AppContent() {
                 <Route
                   path="/connections/:connectionId/chat/:chatId/tools/:toolId"
                   element={<ChatInterface expandedToolCall={true} />}
-                />
-
-                <Route
-                  path="/connections/:connectionId/resources"
-                  element={<ResourceView selectedResource={selectedResource} />}
-                />
-                <Route
-                  path="/connections/:connectionId/resources/:resourceId"
-                  element={<ResourceView selectedResource={selectedResource} />}
                 />
 
                 {/* Catch-all for main app routes */}
