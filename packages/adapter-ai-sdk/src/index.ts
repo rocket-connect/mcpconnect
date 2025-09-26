@@ -20,6 +20,17 @@ export { MCPService } from "./mcp-service";
 // Export system tools
 export { SystemToolsService, type SystemToolResult } from "./system-tools";
 
+// Export SVG visualization tool
+export {
+  generateVisualization,
+  createVisualizationTool,
+  generateVisualizationSchema,
+  type GenerateGraphArgs,
+  type GraphNode,
+  type GraphRelationship,
+  type GraphStyle,
+} from "./svg-visualization-tool";
+
 // Re-export utilities for external use if needed
 export {
   generateId,

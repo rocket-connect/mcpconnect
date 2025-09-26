@@ -1,3 +1,4 @@
+// packages/components/src/common/index.ts
 export { Button, type ButtonProps } from "./Button";
 export { MCPLayout, type MCPLayoutProps } from "./MCPLayout";
 export { ApiWarning, type ApiWarningProps } from "./ApiWarning";
@@ -14,3 +15,9 @@ export {
   ToolActionsPanel,
   type ToolActionsPanelProps,
 } from "./ToolActionsPanel";
+export {
+  SvgDisplay,
+  type SvgDisplayProps,
+  isSvgContent,
+  extractSvgTitle,
+} from "./SvgDisplay";

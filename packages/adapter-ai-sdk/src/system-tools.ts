@@ -1,5 +1,11 @@
+// packages/adapter-ai-sdk/src/system-tools.ts
 import { Tool, ToolExecution } from "@mcpconnect/schemas";
 import { generateId } from "./utils";
+import {
+  generateVisualization,
+  createVisualizationTool,
+  type GenerateGraphArgs,
+} from "./svg-visualization-tool";
 
 /**
  * System tool execution result
@@ -60,6 +66,8 @@ export class SystemToolsService {
         tags: ["date", "time", "utility", "system"],
         deprecated: false,
       },
+      // Add the visualization tool
+      createVisualizationTool(),
     ];
   }
 
@@ -92,6 +100,9 @@ export class SystemToolsService {
       switch (toolName) {
         case "get_today_date":
           result = await this.executeGetTodayDate(args);
+          break;
+        case "generate_svg_visualization":
+          result = await this.executeGenerateVisualization(args);
           break;
         default:
           throw new Error(`Unknown system tool: ${toolName}`);
@@ -205,6 +216,42 @@ export class SystemToolsService {
           86400000
       ),
     };
+  }
+
+  /**
+   * Execute generate_svg_visualization tool
+   */
+  private static async executeGenerateVisualization(args: Record<string, any>) {
+    try {
+      const visualizationArgs = args as GenerateGraphArgs;
+      const result = await generateVisualization(visualizationArgs);
+
+      // Extract the SVG content from the result
+      const svgContent = result.content[0]?.text;
+
+      if (!svgContent) {
+        throw new Error("No SVG content generated");
+      }
+
+      if (
+        svgContent.startsWith("Error:") ||
+        svgContent.startsWith("Validation error:")
+      ) {
+        throw new Error(svgContent);
+      }
+
+      return {
+        svg: svgContent,
+        format: "svg",
+        nodeCount: visualizationArgs.nodes?.length || 0,
+        relationshipCount: visualizationArgs.relationships?.length || 0,
+        title: visualizationArgs.title,
+        generatedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("Error in executeGenerateVisualization:", error);
+      throw error;
+    }
   }
 
   /**

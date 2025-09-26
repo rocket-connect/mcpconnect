@@ -1,8 +1,19 @@
+// packages/components/src/chat/ChatMessageComponent.tsx
 export { JsonCodeBlock } from "../common/JsonCodeBlock";
+export {
+  SvgDisplay,
+  isSvgContent,
+  extractSvgTitle,
+} from "../common/SvgDisplay";
 import React from "react";
 import { Loader } from "lucide-react";
 import { ChatMessage } from "@mcpconnect/schemas";
 import { JsonCodeBlock } from "../common/JsonCodeBlock";
+import {
+  SvgDisplay,
+  isSvgContent,
+  extractSvgTitle,
+} from "../common/SvgDisplay";
 
 export interface ChatMessageComponentProps {
   message: ChatMessage;
@@ -50,6 +61,52 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
     } catch (err) {
       console.warn("Failed to copy text: ", err);
     }
+  };
+
+  // Function to render message content with SVG detection
+  const renderMessageContent = (content: string) => {
+    // Check if the content contains SVG
+    if (isSvgContent(content)) {
+      const svgTitle = extractSvgTitle(content) || "Generated Visualization";
+      return (
+        <div className="my-4">
+          <SvgDisplay
+            svgContent={content}
+            title={svgTitle}
+            showControls={true}
+          />
+        </div>
+      );
+    }
+
+    // Check if tool execution result contains SVG
+    if (
+      message.toolExecution?.result &&
+      typeof message.toolExecution.result === "object"
+    ) {
+      const result = message.toolExecution.result as any;
+      if (result.svg && isSvgContent(result.svg)) {
+        return (
+          <div className="my-4">
+            <SvgDisplay
+              svgContent={result.svg}
+              title={result.title || "Generated Visualization"}
+              showControls={true}
+            />
+            {result.nodeCount !== undefined && (
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Generated {result.nodeCount} nodes
+                {result.relationshipCount > 0 &&
+                  ` and ${result.relationshipCount} relationships`}
+              </div>
+            )}
+          </div>
+        );
+      }
+    }
+
+    // Regular text content
+    return <div className="leading-relaxed whitespace-pre-wrap">{content}</div>;
   };
 
   return (
@@ -110,6 +167,22 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                         </span>
                       )}
                     </div>
+                    {/* Render the tool result with SVG support */}
+                    {message.toolExecution.result ? (
+                      <div className="mt-3">
+                        {renderMessageContent(
+                          typeof message.toolExecution.result === "string"
+                            ? message.toolExecution.result
+                            : JSON.stringify(
+                                message.toolExecution.result,
+                                null,
+                                2
+                              )
+                        )}
+                      </div>
+                    ) : (
+                      <></>
+                    )}
                   </div>
                 ) : (
                   <div>{message.message}</div>
@@ -174,9 +247,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="leading-relaxed whitespace-pre-wrap">
-                {message.message}
-              </div>
+              renderMessageContent(message.message || "")
             )}
           </div>
 

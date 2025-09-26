@@ -1,4 +1,4 @@
-// apps/ui/src/components/ChatInterface.tsx
+// apps/ui/src/components/ChatInterface.tsx - Updated with Export Button
 /* eslint-disable react-hooks/exhaustive-deps */
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
@@ -9,9 +9,9 @@ import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
 import { ChatService, SSEEvent } from "../services/chatService";
 import { SettingsModal } from "./SettingsModal";
+import { ChatExportButton } from "./ChatExportButton"; // New import
 import { nanoid } from "nanoid";
 import {
-  ChatHeader,
   ChatTabs,
   ChatMessageComponent,
   StreamingMessage,
@@ -52,7 +52,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const [messageInput, setMessageInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingEnabled, setStreamingEnabled] = useState(true);
+  const [streamingEnabled] = useState(true);
   const [currentStreamingContent, setCurrentStreamingContent] = useState("");
   const [streamingStatus, setStreamingStatus] = useState<string>("");
   const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
@@ -362,21 +362,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       console.error("Failed to clear all chats:", error);
       alert("Failed to clear all chats. Please try again.");
     }
-  };
-
-  // Handle streaming toggle
-  const handleStreamingToggle = () => {
-    if (isStreaming) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      setIsStreaming(false);
-      setCurrentStreamingContent("");
-      setStreamingStatus("");
-      setStreamingToolMessages([]);
-      streamingMessageRef.current = "";
-    }
-    setStreamingEnabled(!streamingEnabled);
   };
 
   // Update conversation messages in both storage and state
@@ -761,21 +746,62 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   return (
     <>
       <div className="flex flex-col h-full bg-white dark:bg-gray-950 transition-colors">
-        {/* Fixed Header with Connection Info */}
-        <ChatHeader
-          connectionName={currentConnection?.name}
-          messageCount={currentMessages.length}
-          enabledToolsCount={enabledConnectionTools.length}
-          disabledToolsCount={disabledConnectionToolsCount}
-          enabledSystemToolsCount={enabledSystemTools.length}
-          disabledSystemToolsCount={disabledSystemToolsCount}
-          isConnected={currentConnection?.isConnected}
-          showApiWarning={showApiWarning}
-          streamingEnabled={streamingEnabled}
-          onStreamingToggle={handleStreamingToggle}
-          isLoading={isLoading}
-          isStreaming={isStreaming}
-        />
+        {/* Fixed Header with Connection Info and Export Button */}
+        <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {currentConnection?.name}
+              </h2>
+              <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                <span>{currentMessages.length} messages</span>
+                <span className="flex items-center gap-1">
+                  {totalEnabledToolsCount} tools enabled
+                  {totalDisabledToolsCount > 0 && (
+                    <span className="text-amber-600 dark:text-amber-400">
+                      ({totalDisabledToolsCount} disabled)
+                    </span>
+                  )}
+                </span>
+                {currentConnection?.isConnected !== undefined && (
+                  <>
+                    <span>•</span>
+                    <div className="flex items-center gap-1">
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          currentConnection.isConnected
+                            ? "bg-green-500"
+                            : "bg-gray-400"
+                        }`}
+                      />
+                      {currentConnection.isConnected
+                        ? "Connected"
+                        : "Disconnected"}
+                    </div>
+                  </>
+                )}
+                {showApiWarning && (
+                  <>
+                    <span>•</span>
+                    <span className="text-amber-600 dark:text-amber-400">
+                      AI provider not configured
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Export Button - Only show when there are messages to export */}
+            {currentConversation && currentMessages.length > 0 && (
+              <ChatExportButton
+                conversation={currentConversation}
+                connectionName={currentConnection?.name || "Unknown Connection"}
+                disabled={isLoading || isStreaming}
+                className="ml-4"
+              />
+            )}
+          </div>
+        </div>
 
         {/* Fixed Chat Tabs with Delete Buttons and Clear All Button */}
         {connectionConversations.length > 0 && (

@@ -1,5 +1,4 @@
 // apps/ui/src/components/Sidebar.tsx
-/* eslint-disable react-hooks/exhaustive-deps */
 import { Connection, Resource } from "@mcpconnect/schemas";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { RconnectLogo } from "./RconnectLogo";
