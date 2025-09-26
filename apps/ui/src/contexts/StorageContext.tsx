@@ -1,3 +1,4 @@
+// apps/ui/src/contexts/StorageContext.tsx
 import React, {
   createContext,
   useContext,
@@ -15,15 +16,18 @@ import {
 } from "@mcpconnect/schemas";
 import { ModelService } from "../services/modelService";
 import { ChatService } from "../services/chatService";
+import { SystemToolsService } from "@mcpconnect/adapter-ai-sdk";
 
 interface StorageContextType {
   adapter: LocalStorageAdapter;
   connections: Connection[];
-  tools: Record<string, Tool[]>;
+  tools: Record<string, Tool[]>; // MCP tools by connection
+  systemTools: Tool[]; // Built-in system tools
   resources: Record<string, Resource[]>;
   conversations: Record<string, ChatConversation[]>;
   toolExecutions: Record<string, ToolExecution[]>;
   disabledTools: Record<string, Set<string>>; // connectionId -> Set of disabled tool IDs
+  disabledSystemTools: Set<string>; // disabled system tool IDs
   isLoading: boolean;
   error: string | null;
   updateConnections: (connections: Connection[]) => Promise<void>;
@@ -37,13 +41,19 @@ interface StorageContextType {
   updateConnection: (connection: Connection) => Promise<void>;
   deleteConnection: (connectionId: string) => Promise<void>;
   getEnabledTools: (connectionId: string) => Tool[];
+  getEnabledSystemTools: () => Tool[];
+  getAllEnabledTools: (connectionId?: string) => Tool[]; // Combined MCP + system tools
   updateDisabledTools: (
     connectionId: string,
     disabledToolIds: Set<string>
   ) => Promise<void>;
+  updateDisabledSystemTools: (disabledToolIds: Set<string>) => Promise<void>;
   isToolEnabled: (connectionId: string, toolId: string) => boolean;
+  isSystemToolEnabled: (toolId: string) => boolean;
   onToolStateChange: (callback: (connectionId: string) => void) => () => void;
+  onSystemToolStateChange: (callback: () => void) => () => void;
   refreshToolState: (connectionId: string) => Promise<void>;
+  refreshSystemToolState: () => Promise<void>;
   deleteChatWithCleanup: (
     connectionId: string,
     chatId: string
@@ -76,6 +86,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   // Initialize with empty state
   const [connections, setConnections] = useState<Connection[]>([]);
   const [tools, setTools] = useState<Record<string, Tool[]>>({});
+  const [systemTools, setSystemTools] = useState<Tool[]>([]);
   const [resources, setResources] = useState<Record<string, Resource[]>>({});
   const [conversations, setConversations] = useState<
     Record<string, ChatConversation[]>
@@ -86,12 +97,19 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const [disabledTools, setDisabledTools] = useState<
     Record<string, Set<string>>
   >({});
+  const [disabledSystemTools, setDisabledSystemTools] = useState<Set<string>>(
+    new Set()
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Tool state change listeners
   const [toolStateListeners, setToolStateListeners] = useState<
     Set<(connectionId: string) => void>
+  >(new Set());
+
+  const [systemToolStateListeners, setSystemToolStateListeners] = useState<
+    Set<() => void>
   >(new Set());
 
   // Notify listeners when tool state changes
@@ -107,6 +125,16 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     },
     [toolStateListeners]
   );
+
+  const notifySystemToolStateChange = useCallback(() => {
+    systemToolStateListeners.forEach(listener => {
+      try {
+        listener();
+      } catch (error) {
+        console.error("Error in system tool state listener:", error);
+      }
+    });
+  }, [systemToolStateListeners]);
 
   // Add tool state change listener
   const onToolStateChange = useCallback(
@@ -124,6 +152,20 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     },
     []
   );
+
+  // Add system tool state change listener
+  const onSystemToolStateChange = useCallback((callback: () => void) => {
+    setSystemToolStateListeners(prev => new Set(prev).add(callback));
+
+    // Return cleanup function
+    return () => {
+      setSystemToolStateListeners(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(callback);
+        return newSet;
+      });
+    };
+  }, []);
 
   // Load disabled tools for a specific connection
   const loadDisabledTools = useCallback(
@@ -143,6 +185,21 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     },
     [adapter]
   );
+
+  // Load disabled system tools
+  const loadDisabledSystemTools = useCallback(async (): Promise<
+    Set<string>
+  > => {
+    try {
+      const stored = await adapter.get("disabled-system-tools");
+      if (stored?.value && Array.isArray(stored.value)) {
+        return new Set(stored.value);
+      }
+    } catch (error) {
+      console.error("Failed to load disabled system tools:", error);
+    }
+    return new Set();
+  }, [adapter]);
 
   // Refresh tool state for specific connection
   const refreshToolState = useCallback(
@@ -167,6 +224,17 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [loadDisabledTools, notifyToolStateChange]
   );
 
+  // Refresh system tool state
+  const refreshSystemToolState = useCallback(async () => {
+    try {
+      const newDisabledSystemTools = await loadDisabledSystemTools();
+      setDisabledSystemTools(newDisabledSystemTools);
+      notifySystemToolStateChange();
+    } catch (error) {
+      console.error("Failed to refresh system tool state:", error);
+    }
+  }, [loadDisabledSystemTools, notifySystemToolStateChange]);
+
   // Load disabled tools for all connections
   const loadAllDisabledTools = useCallback(async () => {
     const newDisabledTools: Record<string, Set<string>> = {};
@@ -176,7 +244,11 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     }
 
     setDisabledTools(newDisabledTools);
-  }, [connections, loadDisabledTools]);
+
+    // Also load disabled system tools
+    const newDisabledSystemTools = await loadDisabledSystemTools();
+    setDisabledSystemTools(newDisabledSystemTools);
+  }, [connections, loadDisabledTools, loadDisabledSystemTools]);
 
   const getToolExecutionIdsFromChat = useCallback(
     (chat: ChatConversation): string[] => {
@@ -384,6 +456,9 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         setToolExecutions(executionsData);
       }
 
+      // Load system tools
+      setSystemTools(SystemToolsService.getSystemTools());
+
       // Load disabled tools after connections are loaded
       await loadAllDisabledTools();
     } catch (err) {
@@ -395,10 +470,12 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const forceRefresh = useCallback(async () => {
     setConnections([]);
     setTools({});
+    setSystemTools([]);
     setResources({});
     setConversations({});
     setToolExecutions({});
     setDisabledTools({});
+    setDisabledSystemTools(new Set());
 
     await refreshAll();
   }, [refreshAll]);
@@ -543,6 +620,24 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [adapter, notifyToolStateChange]
   );
 
+  // System tool management
+  const updateDisabledSystemTools = useCallback(
+    async (disabledToolIds: Set<string>) => {
+      try {
+        await adapter.set("disabled-system-tools", Array.from(disabledToolIds));
+
+        // Update local state immediately
+        setDisabledSystemTools(disabledToolIds);
+
+        // Notify all listeners that system tool state changed
+        notifySystemToolStateChange();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [adapter, notifySystemToolStateChange]
+  );
+
   // Always get fresh tool state
   const getEnabledTools = useCallback(
     (connectionId: string): Tool[] => {
@@ -554,12 +649,35 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [tools, disabledTools] // This will cause re-computation when disabledTools changes
   );
 
+  // Get enabled system tools
+  const getEnabledSystemTools = useCallback((): Tool[] => {
+    return systemTools.filter(tool => !disabledSystemTools.has(tool.id));
+  }, [systemTools, disabledSystemTools]);
+
+  // Get all enabled tools (MCP + System)
+  const getAllEnabledTools = useCallback(
+    (connectionId?: string): Tool[] => {
+      const mcpTools = connectionId ? getEnabledTools(connectionId) : [];
+      const enabledSystemTools = getEnabledSystemTools();
+
+      return [...mcpTools, ...enabledSystemTools];
+    },
+    [getEnabledTools, getEnabledSystemTools]
+  );
+
   const isToolEnabled = useCallback(
     (connectionId: string, toolId: string): boolean => {
       const disabled = disabledTools[connectionId] || new Set();
       return !disabled.has(toolId);
     },
     [disabledTools]
+  );
+
+  const isSystemToolEnabled = useCallback(
+    (toolId: string): boolean => {
+      return !disabledSystemTools.has(toolId);
+    },
+    [disabledSystemTools]
   );
 
   useEffect(() => {
@@ -638,6 +756,9 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           setToolExecutions(executionsData);
         }
 
+        // Load system tools
+        setSystemTools(SystemToolsService.getSystemTools());
+
         // Load disabled tools for all connections
         const newDisabledTools: Record<string, Set<string>> = {};
         for (const connection of storedConnections) {
@@ -646,6 +767,10 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           );
         }
         setDisabledTools(newDisabledTools);
+
+        // Load disabled system tools
+        const newDisabledSystemTools = await loadDisabledSystemTools();
+        setDisabledSystemTools(newDisabledSystemTools);
       } catch (err) {
         console.error("Failed to load existing data:", err);
         setError(err instanceof Error ? err.message : String(err));
@@ -657,16 +782,18 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [adapter, loadDisabledTools]);
+  }, [adapter, loadDisabledTools, loadDisabledSystemTools]);
 
   const contextValue: StorageContextType = {
     adapter,
     connections,
     tools,
+    systemTools,
     resources,
     conversations,
     toolExecutions,
     disabledTools,
+    disabledSystemTools,
     isLoading,
     error,
     updateConnections,
@@ -678,10 +805,16 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     updateConnection,
     deleteConnection,
     getEnabledTools,
+    getEnabledSystemTools,
+    getAllEnabledTools,
     updateDisabledTools,
+    updateDisabledSystemTools,
     isToolEnabled,
+    isSystemToolEnabled,
     onToolStateChange,
+    onSystemToolStateChange,
     refreshToolState,
+    refreshSystemToolState,
     deleteChatWithCleanup,
     clearAllChatsWithCleanup,
   };

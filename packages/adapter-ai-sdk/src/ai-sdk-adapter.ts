@@ -43,6 +43,7 @@ import {
   conversationToLLMMessages,
   toolsToLLMFormat,
 } from "./utils";
+import { SystemToolsService } from "./system-tools";
 
 export class AISDKAdapter extends LLMAdapter {
   protected config: AISDKConfig;
@@ -627,6 +628,37 @@ export class AISDKAdapter extends LLMAdapter {
     const startTime = Date.now();
 
     try {
+      // Check if it's a system tool first
+      if (SystemToolsService.isSystemTool(toolName)) {
+        const systemResult = await SystemToolsService.executeSystemTool(
+          toolName,
+          toolArgs
+        );
+
+        const chatMessage: ChatMessage = {
+          id: executionId,
+          isUser: false,
+          executingTool: toolName,
+          timestamp: new Date(),
+          toolExecution: {
+            toolName,
+            status: systemResult.success ? "success" : "error",
+            result: systemResult.result,
+            error: systemResult.error,
+          },
+          isExecuting: false,
+        };
+
+        return {
+          success: systemResult.success,
+          result: systemResult.result,
+          error: systemResult.error,
+          toolExecution: systemResult.execution,
+          chatMessage,
+        };
+      }
+
+      // Otherwise, execute via MCP
       const mcpResult = await MCPService.executeTool(
         connection,
         toolName,
@@ -640,7 +672,6 @@ export class AISDKAdapter extends LLMAdapter {
       let cleanResult = mcpResult.result;
 
       // Handle MCP content array structure
-      // @ts-ignore
       if (
         cleanResult &&
         // @ts-ignore
@@ -712,7 +743,7 @@ export class AISDKAdapter extends LLMAdapter {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      console.error(`[MCP] Tool execution failed:`, error);
+      console.error(`[Tool Execution] Failed:`, error);
 
       const chatMessage: ChatMessage = {
         id: executionId,

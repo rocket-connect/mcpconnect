@@ -1,3 +1,4 @@
+// packages/adapter-ai-sdk/src/index.ts
 export { AISDKAdapter } from "./ai-sdk-adapter";
 export type {
   AISDKConfig,
@@ -15,6 +16,9 @@ export type {
 
 export { AnthropicProvider } from "./providers/anthropic";
 export { MCPService } from "./mcp-service";
+
+// Export system tools
+export { SystemToolsService, type SystemToolResult } from "./system-tools";
 
 // Re-export utilities for external use if needed
 export {

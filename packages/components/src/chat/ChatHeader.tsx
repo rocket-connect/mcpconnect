@@ -1,11 +1,14 @@
+// packages/components/src/chat/ChatHeader.tsx
 import React from "react";
-import { Zap, ZapOff } from "lucide-react";
+import { Zap, ZapOff, Wrench } from "lucide-react";
 
 export interface ChatHeaderProps {
   connectionName?: string;
   messageCount: number;
   enabledToolsCount: number;
   disabledToolsCount: number;
+  enabledSystemToolsCount?: number;
+  disabledSystemToolsCount?: number;
   isConnected?: boolean;
   showApiWarning: boolean;
   streamingEnabled: boolean;
@@ -19,6 +22,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   messageCount,
   enabledToolsCount,
   disabledToolsCount,
+  enabledSystemToolsCount = 0,
+  disabledSystemToolsCount = 0,
   isConnected,
   showApiWarning,
   streamingEnabled,
@@ -26,6 +31,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   isLoading,
   isStreaming,
 }) => {
+  const totalEnabledTools = enabledToolsCount + enabledSystemToolsCount;
+  const totalDisabledTools = disabledToolsCount + disabledSystemToolsCount;
+  const hasSystemTools =
+    enabledSystemToolsCount > 0 || disabledSystemToolsCount > 0;
+
   return (
     <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-950">
       <div className="flex items-center justify-between">
@@ -35,12 +45,17 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </h2>
           <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
             <span>{messageCount} messages</span>
-            <span>
-              {enabledToolsCount} tools enabled
-              {disabledToolsCount > 0 && (
+            <span className="flex items-center gap-1">
+              {totalEnabledTools} tools enabled
+              {hasSystemTools && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded text-xs">
+                  <Wrench className="w-2.5 h-2.5" />
+                  {enabledSystemToolsCount} system
+                </span>
+              )}
+              {totalDisabledTools > 0 && (
                 <span className="text-amber-600 dark:text-amber-400">
-                  {" "}
-                  ({disabledToolsCount} disabled)
+                  ({totalDisabledTools} disabled)
                 </span>
               )}
             </span>

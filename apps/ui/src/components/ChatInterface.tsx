@@ -1,3 +1,4 @@
+// apps/ui/src/components/ChatInterface.tsx
 /* eslint-disable react-hooks/exhaustive-deps */
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
@@ -30,12 +31,17 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const {
     connections,
     tools,
+    systemTools,
     conversations,
     updateConversations,
     refreshAll,
+    getAllEnabledTools, // New method that combines MCP + system tools
     getEnabledTools,
+    getEnabledSystemTools,
     isToolEnabled,
+    isSystemToolEnabled,
     onToolStateChange,
+    onSystemToolStateChange,
     deleteChatWithCleanup,
     clearAllChatsWithCleanup,
   } = useStorage();
@@ -102,18 +108,28 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     loadSettings();
   }, []);
 
-  // Listen for tool state changes and force re-render
+  // Listen for both MCP and system tool state changes
   useEffect(() => {
-    if (!connectionId) return;
+    const cleanups: (() => void)[] = [];
 
-    const cleanup = onToolStateChange(changedConnectionId => {
-      if (changedConnectionId === connectionId) {
-        setToolStateVersion(prev => prev + 1);
-      }
+    if (connectionId) {
+      const mcpCleanup = onToolStateChange(changedConnectionId => {
+        if (changedConnectionId === connectionId) {
+          setToolStateVersion(prev => prev + 1);
+        }
+      });
+      cleanups.push(mcpCleanup);
+    }
+
+    const systemCleanup = onSystemToolStateChange(() => {
+      setToolStateVersion(prev => prev + 1);
     });
+    cleanups.push(systemCleanup);
 
-    return cleanup;
-  }, [connectionId, onToolStateChange]);
+    return () => {
+      cleanups.forEach(cleanup => cleanup());
+    };
+  }, [connectionId, onToolStateChange, onSystemToolStateChange]);
 
   // Reload settings when settings modal closes
   const handleSettingsClose = useCallback(async () => {
@@ -154,16 +170,26 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       : connectionConversations[0];
 
   const currentMessages = currentConversation?.messages || [];
+
+  // Get all tools (MCP + System) with enabled state calculations
   const allConnectionTools = connectionId ? tools[connectionId] || [] : [];
+  const allSystemTools = systemTools || [];
 
   // Get enabled tools reactively - this will update when toolStateVersion changes
   const enabledConnectionTools = connectionId
     ? getEnabledTools(connectionId)
     : [];
+  const enabledSystemTools = getEnabledSystemTools();
 
-  // Calculate disabled tools count reactively
-  const disabledToolsCount =
+  // Calculate disabled tools count reactively (both MCP and system)
+  const disabledConnectionToolsCount =
     allConnectionTools.length - enabledConnectionTools.length;
+  const disabledSystemToolsCount =
+    allSystemTools.length - enabledSystemTools.length;
+  const totalEnabledToolsCount =
+    enabledConnectionTools.length + enabledSystemTools.length;
+  const totalDisabledToolsCount =
+    disabledConnectionToolsCount + disabledSystemToolsCount;
 
   // Use inspector's expanded state instead of local state
   const isToolCallExpanded = (messageId: string) => {
@@ -534,7 +560,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     [refreshAll, updateConversationMessages] // Simplified dependencies
   );
 
-  // Send message with fresh enabled tools
+  // Send message with all enabled tools (MCP + System)
   const handleSendMessage = async () => {
     if (
       !messageInput.trim() ||
@@ -579,11 +605,12 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const messagesWithUser = [...currentMessages, userMessage];
       await updateConversationMessages(messagesWithUser);
 
-      const currentEnabledTools = getEnabledTools(connectionId);
+      // Get all enabled tools (both MCP and system tools)
+      const allCurrentEnabledTools = getAllEnabledTools(connectionId);
 
       const chatContext = {
         connection: currentConnection,
-        tools: currentEnabledTools,
+        tools: allCurrentEnabledTools, // Now includes both MCP and system tools
         llmSettings,
       };
 
@@ -739,7 +766,9 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           connectionName={currentConnection?.name}
           messageCount={currentMessages.length}
           enabledToolsCount={enabledConnectionTools.length}
-          disabledToolsCount={disabledToolsCount}
+          disabledToolsCount={disabledConnectionToolsCount}
+          enabledSystemToolsCount={enabledSystemTools.length}
+          disabledSystemToolsCount={disabledSystemToolsCount}
           isConnected={currentConnection?.isConnected}
           showApiWarning={showApiWarning}
           streamingEnabled={streamingEnabled}
@@ -768,8 +797,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         )}
 
         {/* Tool Status Warning */}
-        {disabledToolsCount > 0 && !showApiWarning && (
-          <ToolStatusWarning disabledToolsCount={disabledToolsCount} />
+        {totalDisabledToolsCount > 0 && !showApiWarning && (
+          <ToolStatusWarning disabledToolsCount={totalDisabledToolsCount} />
         )}
 
         {/* Scrollable Messages Container */}
@@ -780,8 +809,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                 <EmptyState
                   showApiWarning={showApiWarning}
                   connectionName={currentConnection?.name}
-                  enabledToolsCount={enabledConnectionTools.length}
-                  disabledToolsCount={disabledToolsCount}
+                  enabledToolsCount={totalEnabledToolsCount}
+                  disabledToolsCount={totalDisabledToolsCount}
                   streamingEnabled={streamingEnabled}
                   onConfigure={() => setIsSettingsOpen(true)}
                 />
@@ -808,11 +837,18 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                             msg.id || `msg-${index}`
                           )}
                           onToolCallExpand={handleToolCallExpand}
-                          isToolEnabled={(toolName: string) =>
-                            connectionId
+                          isToolEnabled={(toolName: string) => {
+                            // Check if it's a system tool first
+                            if (
+                              systemTools.some(tool => tool.name === toolName)
+                            ) {
+                              return isSystemToolEnabled(toolName);
+                            }
+                            // Otherwise check MCP tools
+                            return connectionId
                               ? isToolEnabled(connectionId, toolName)
-                              : true
-                          }
+                              : true;
+                          }}
                         />
                       ))}
 
@@ -840,8 +876,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           onSend={handleSendMessage}
           disabled={showApiWarning || isLoading || isStreaming}
           connectionName={currentConnection?.name}
-          enabledToolsCount={enabledConnectionTools.length}
-          disabledToolsCount={disabledToolsCount}
+          enabledToolsCount={totalEnabledToolsCount}
+          disabledToolsCount={totalDisabledToolsCount}
           streamingEnabled={streamingEnabled}
           isConnected={currentConnection?.isConnected}
           isLoading={isLoading}

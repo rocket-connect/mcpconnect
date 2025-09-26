@@ -1,3 +1,4 @@
+// apps/ui/src/components/Sidebar.tsx
 /* eslint-disable react-hooks/exhaustive-deps */
 import { Connection, Resource } from "@mcpconnect/schemas";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
@@ -9,7 +10,7 @@ import {
   ToolActionsPanel,
 } from "@mcpconnect/components";
 import { useState, useMemo, useEffect } from "react";
-import { Users, Plus, Search, X } from "lucide-react";
+import { Users, Plus, Search, X, Wrench, Zap } from "lucide-react";
 
 interface SidebarProps {
   connections: Connection[];
@@ -65,13 +66,19 @@ export const Sidebar = ({ connections }: SidebarProps) => {
   const {
     conversations,
     tools,
+    systemTools,
     disabledTools,
+    disabledSystemTools,
     updateDisabledTools,
+    updateDisabledSystemTools,
     isToolEnabled,
+    isSystemToolEnabled,
     onToolStateChange,
+    onSystemToolStateChange,
   } = useStorage();
 
   const [toolSearchQuery, setToolSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"mcp" | "system">("mcp");
 
   // Manual URL parsing as backup since useParams seems to be failing
   const urlParts = location.pathname.split("/");
@@ -96,12 +103,20 @@ export const Sidebar = ({ connections }: SidebarProps) => {
   // Check if this is a first-time user
   const isFirstTime = connections.length === 0;
 
-  // Use demo tools if first time, otherwise use real tools
-  const toolsToShow = isFirstTime
+  // Get tools based on active tab - ONLY show when connection is active
+  const mcpToolsToShow = isFirstTime
     ? demoTools
     : currentConnectionId
       ? tools[currentConnectionId] || []
       : [];
+
+  // System tools are only shown when there's an active connection
+  const systemToolsToShow = currentConnectionId ? systemTools : [];
+
+  const toolsToShow = activeTab === "mcp" ? mcpToolsToShow : systemToolsToShow;
+
+  // Show tools section only if we have a connection or it's first time
+  const showToolsSection = isFirstTime || currentConnectionId;
 
   // Filter tools based on search query
   const filteredTools = useMemo(() => {
@@ -123,55 +138,106 @@ export const Sidebar = ({ connections }: SidebarProps) => {
 
   // Tool management functions using reactive storage context
   const toggleTool = async (toolId: string) => {
-    if (!currentConnectionId || isFirstTime) return;
+    if (isFirstTime || !currentConnectionId) return;
 
-    const currentDisabled = disabledTools[currentConnectionId] || new Set();
-    const newDisabledTools = new Set(currentDisabled);
+    if (activeTab === "system") {
+      // Handle system tool toggle
+      const currentDisabled = disabledSystemTools || new Set();
+      const newDisabledTools = new Set(currentDisabled);
 
-    if (newDisabledTools.has(toolId)) {
-      newDisabledTools.delete(toolId);
+      if (newDisabledTools.has(toolId)) {
+        newDisabledTools.delete(toolId);
+      } else {
+        newDisabledTools.add(toolId);
+      }
+
+      await updateDisabledSystemTools(newDisabledTools);
     } else {
-      newDisabledTools.add(toolId);
-    }
+      // Handle MCP tool toggle
+      const currentDisabled = disabledTools[currentConnectionId] || new Set();
+      const newDisabledTools = new Set(currentDisabled);
 
-    await updateDisabledTools(currentConnectionId, newDisabledTools);
+      if (newDisabledTools.has(toolId)) {
+        newDisabledTools.delete(toolId);
+      } else {
+        newDisabledTools.add(toolId);
+      }
+
+      await updateDisabledTools(currentConnectionId, newDisabledTools);
+    }
   };
 
   const enableAllTools = async () => {
-    if (!currentConnectionId || isFirstTime) return;
-    await updateDisabledTools(currentConnectionId, new Set());
+    if (isFirstTime || !currentConnectionId) return;
+
+    if (activeTab === "system") {
+      await updateDisabledSystemTools(new Set());
+    } else {
+      await updateDisabledTools(currentConnectionId, new Set());
+    }
   };
 
   const disableAllTools = async () => {
-    if (!currentConnectionId || isFirstTime) return;
-    const allToolIds = new Set(toolsToShow.map(tool => tool.id));
-    await updateDisabledTools(currentConnectionId, allToolIds);
+    if (isFirstTime || !currentConnectionId) return;
+
+    if (activeTab === "system") {
+      const allToolIds = new Set(systemToolsToShow.map(tool => tool.id));
+      await updateDisabledSystemTools(allToolIds);
+    } else {
+      const allToolIds = new Set(mcpToolsToShow.map(tool => tool.id));
+      await updateDisabledTools(currentConnectionId, allToolIds);
+    }
   };
 
   const toggleSelectedTools = async () => {
-    if (!currentConnectionId || isFirstTime) return;
+    if (isFirstTime || !currentConnectionId) return;
 
     const visibleToolIds = filteredTools.map(tool => tool.id);
-    const currentDisabled = disabledTools[currentConnectionId] || new Set();
-    const newDisabledTools = new Set(currentDisabled);
 
-    const hasEnabledTool = visibleToolIds.some(id => !newDisabledTools.has(id));
+    if (activeTab === "system") {
+      const currentDisabled = disabledSystemTools || new Set();
+      const newDisabledTools = new Set(currentDisabled);
 
-    if (hasEnabledTool) {
-      visibleToolIds.forEach(id => newDisabledTools.add(id));
+      const hasEnabledTool = visibleToolIds.some(
+        id => !newDisabledTools.has(id)
+      );
+
+      if (hasEnabledTool) {
+        visibleToolIds.forEach(id => newDisabledTools.add(id));
+      } else {
+        visibleToolIds.forEach(id => newDisabledTools.delete(id));
+      }
+
+      await updateDisabledSystemTools(newDisabledTools);
     } else {
-      visibleToolIds.forEach(id => newDisabledTools.delete(id));
-    }
+      const currentDisabled = disabledTools[currentConnectionId] || new Set();
+      const newDisabledTools = new Set(currentDisabled);
 
-    await updateDisabledTools(currentConnectionId, newDisabledTools);
+      const hasEnabledTool = visibleToolIds.some(
+        id => !newDisabledTools.has(id)
+      );
+
+      if (hasEnabledTool) {
+        visibleToolIds.forEach(id => newDisabledTools.add(id));
+      } else {
+        visibleToolIds.forEach(id => newDisabledTools.delete(id));
+      }
+
+      await updateDisabledTools(currentConnectionId, newDisabledTools);
+    }
   };
 
   // Calculate counts reactively using the storage context methods
   const enabledCount = isFirstTime
     ? filteredTools.length
-    : filteredTools.filter(tool =>
-        currentConnectionId ? isToolEnabled(currentConnectionId, tool.id) : true
-      ).length;
+    : activeTab === "system"
+      ? filteredTools.filter(tool => isSystemToolEnabled(tool.id)).length
+      : currentConnectionId
+        ? filteredTools.filter(tool =>
+            isToolEnabled(currentConnectionId, tool.id)
+          ).length
+        : 0;
+
   const totalCount = filteredTools.length;
 
   // Reactive tool state - forces re-render when tool enablement changes
@@ -179,16 +245,43 @@ export const Sidebar = ({ connections }: SidebarProps) => {
 
   // Listen for tool state changes and force re-render
   useEffect(() => {
-    if (!currentConnectionId) return;
+    if (!currentConnectionId && !isFirstTime) return;
 
-    const cleanup = onToolStateChange(changedConnectionId => {
-      if (changedConnectionId === currentConnectionId) {
+    const cleanups: (() => void)[] = [];
+
+    if (activeTab === "system") {
+      const cleanup = onSystemToolStateChange(() => {
         setToolStateVersion(prev => prev + 1);
-      }
-    });
+      });
+      cleanups.push(cleanup);
+    }
 
-    return cleanup;
-  }, [currentConnectionId, onToolStateChange]);
+    if (currentConnectionId) {
+      const cleanup = onToolStateChange(changedConnectionId => {
+        if (changedConnectionId === currentConnectionId) {
+          setToolStateVersion(prev => prev + 1);
+        }
+      });
+      cleanups.push(cleanup);
+    }
+
+    return () => {
+      cleanups.forEach(cleanup => cleanup());
+    };
+  }, [
+    currentConnectionId,
+    activeTab,
+    onToolStateChange,
+    onSystemToolStateChange,
+    isFirstTime,
+  ]);
+
+  // Auto-switch to MCP tab when connection is selected
+  useEffect(() => {
+    if (currentConnectionId && !isFirstTime) {
+      setActiveTab("mcp");
+    }
+  }, [currentConnectionId, isFirstTime]);
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-800 transition-colors">
@@ -271,8 +364,8 @@ export const Sidebar = ({ connections }: SidebarProps) => {
           )}
         </div>
 
-        {/* Tools - Show when a connection is selected OR in demo mode */}
-        {(currentConnectionId || isFirstTime) && toolsToShow.length > 0 && (
+        {/* Tools Section - Only show when connection is active or first time */}
+        {showToolsSection && (
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-base text-gray-900 dark:text-white">
@@ -280,55 +373,101 @@ export const Sidebar = ({ connections }: SidebarProps) => {
               </h2>
             </div>
 
+            {/* Tool Type Tabs - Only show if we have both types and a connection */}
+            {!isFirstTime &&
+              currentConnectionId &&
+              (mcpToolsToShow.length > 0 || systemTools.length > 0) && (
+                <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 mb-3">
+                  <button
+                    onClick={() => setActiveTab("mcp")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      activeTab === "mcp"
+                        ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
+                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Zap className="w-3 h-3" />
+                    MCP ({mcpToolsToShow.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("system")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      activeTab === "system"
+                        ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
+                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Wrench className="w-3 h-3" />
+                    System ({systemTools.length})
+                  </button>
+                </div>
+              )}
+
             {/* Tool Actions - Compact */}
-            <ToolActionsPanel
-              enabledCount={enabledCount}
-              totalCount={totalCount}
-              filteredCount={filteredTools.length}
-              onEnableAll={enableAllTools}
-              onDisableAll={disableAllTools}
-              onToggleFiltered={toggleSelectedTools}
-              isDemoMode={isFirstTime}
-            />
+            {toolsToShow.length > 0 && (
+              <ToolActionsPanel
+                enabledCount={enabledCount}
+                totalCount={totalCount}
+                filteredCount={filteredTools.length}
+                onEnableAll={enableAllTools}
+                onDisableAll={disableAllTools}
+                onToggleFiltered={toggleSelectedTools}
+                isDemoMode={isFirstTime}
+              />
+            )}
 
             {/* Search Box - Compact */}
-            <div className={`relative mb-3 ${isFirstTime ? "opacity-60" : ""}`}>
-              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                <Search className="h-3.5 w-3.5 text-gray-400" />
+            {toolsToShow.length > 0 && (
+              <div
+                className={`relative mb-3 ${isFirstTime ? "opacity-60" : ""}`}
+              >
+                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                  <Search className="h-3.5 w-3.5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder={`Search ${activeTab === "system" ? "system" : "MCP"} tools...`}
+                  value={toolSearchQuery}
+                  onChange={e => setToolSearchQuery(e.target.value)}
+                  disabled={isFirstTime}
+                  className="block w-full pl-8 pr-8 py-2 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed"
+                />
+                {toolSearchQuery && (
+                  <button
+                    onClick={() => setToolSearchQuery("")}
+                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center"
+                  >
+                    <X className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 transition-colors" />
+                  </button>
+                )}
               </div>
-              <input
-                type="text"
-                placeholder="Search tools..."
-                value={toolSearchQuery}
-                onChange={e => setToolSearchQuery(e.target.value)}
-                disabled={isFirstTime}
-                className="block w-full pl-8 pr-8 py-2 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed"
-              />
-              {toolSearchQuery && (
-                <button
-                  onClick={() => setToolSearchQuery("")}
-                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center"
-                >
-                  <X className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 transition-colors" />
-                </button>
-              )}
-            </div>
+            )}
 
             {/* Tools List - Compact */}
             <div className={`space-y-2 ${isFirstTime ? "opacity-60" : ""}`}>
               {filteredTools.length === 0 ? (
                 <div className="text-center py-4 text-xs text-gray-500 dark:text-gray-400">
                   {toolSearchQuery.trim()
-                    ? "No tools match your search"
-                    : "No tools available"}
+                    ? `No ${activeTab} tools match your search`
+                    : toolsToShow.length === 0
+                      ? currentConnectionId
+                        ? `No ${activeTab} tools available`
+                        : "Select a connection to view tools"
+                      : "No tools to display"}
                 </div>
               ) : (
                 filteredTools.map((tool, idx) => {
-                  const enabled =
-                    isFirstTime ||
-                    (currentConnectionId
+                  let enabled: boolean;
+
+                  if (isFirstTime) {
+                    enabled = true;
+                  } else if (activeTab === "system") {
+                    enabled = isSystemToolEnabled(tool.id);
+                  } else {
+                    enabled = currentConnectionId
                       ? isToolEnabled(currentConnectionId, tool.id)
-                      : true);
+                      : true;
+                  }
 
                   return (
                     <ToolCard
@@ -346,9 +485,24 @@ export const Sidebar = ({ connections }: SidebarProps) => {
             {/* Search results summary */}
             {toolSearchQuery.trim() && (
               <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-                {filteredTools.length} of {toolsToShow.length} tools
+                {filteredTools.length} of {toolsToShow.length} {activeTab} tools
               </div>
             )}
+          </div>
+        )}
+
+        {/* Message when no connection selected and no first time */}
+        {!showToolsSection && !isFirstTime && (
+          <div className="text-center py-8">
+            <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg mx-auto mb-4 flex items-center justify-center">
+              <Zap className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+            </div>
+            <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+              Select a Connection
+            </p>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Choose a connection to view and manage its tools
+            </p>
           </div>
         )}
       </div>
