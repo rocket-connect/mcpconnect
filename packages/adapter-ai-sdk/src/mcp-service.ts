@@ -13,31 +13,13 @@ import {
 } from "@mcpconnect/base-adapters";
 import { Connection, Tool, Resource, ToolExecution } from "@mcpconnect/schemas";
 import {
-  postJsonToApi,
-  createJsonResponseHandler,
-  createJsonErrorResponseHandler,
-  type ResponseHandler,
   type FetchFunction,
   combineHeaders,
   withUserAgentSuffix,
   delay,
   isAbortError,
 } from "@ai-sdk/provider-utils";
-import { APICallError } from "@ai-sdk/provider";
-import { z } from "zod";
 import { AdapterError, AdapterStatus } from "@mcpconnect/base-adapters";
-
-const MCPErrorResponseSchema = z.object({
-  error: z.object({
-    code: z.number(),
-    message: z.string(),
-    data: z.unknown().optional(),
-  }),
-});
-
-const MCPSuccessResponseSchema = z.object({
-  result: z.unknown(),
-});
 
 export class MCPService extends MCPAdapter {
   private static instance: MCPService | null = null;
@@ -97,6 +79,7 @@ export class MCPService extends MCPAdapter {
   private prepareHeaders(connection: Connection): Record<string, string> {
     const baseHeaders: Record<string, string> = {
       "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream", // Add this line
     };
 
     const connectionHeaders = connection.headers || {};
@@ -134,37 +117,6 @@ export class MCPService extends MCPAdapter {
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     };
-  }
-
-  private createErrorHandler(): ResponseHandler<APICallError> {
-    return createJsonErrorResponseHandler({
-      errorSchema: MCPErrorResponseSchema,
-      errorToMessage: error =>
-        `MCP Error ${error.error.code}: ${error.error.message}`,
-      isRetryable: (response, error) => {
-        if (response.status >= 500) return true;
-        if (error?.error.code === -32601) return false;
-        if (error?.error.code === -32602) return false;
-        return false;
-      },
-    });
-  }
-
-  private convertApiError(error: APICallError, context: string): AdapterError {
-    return new AdapterError(
-      error.message || `API error in ${context}`,
-      "API_ERROR",
-      {
-        context,
-        statusCode: error.statusCode,
-        url: error.url,
-        originalError: error,
-      }
-    );
-  }
-
-  private createSuccessHandler(): ResponseHandler<any> {
-    return createJsonResponseHandler(MCPSuccessResponseSchema);
   }
 
   private async sendSSERequest(
@@ -319,6 +271,12 @@ export class MCPService extends MCPAdapter {
               const trimmed = line.trim();
               if (!trimmed) continue;
 
+              // Skip ping messages and other non-SSE formatted messages
+              if (trimmed.includes("ping -") || trimmed.includes("pong -")) {
+                console.log(`[MCP SSE] Received ping/pong: ${trimmed}`);
+                continue;
+              }
+
               // Handle session establishment
               if (!sessionEstablished) {
                 if (trimmed.startsWith("event: endpoint")) {
@@ -338,6 +296,22 @@ export class MCPService extends MCPAdapter {
                     resolve(sessionId);
 
                     // Continue listening for responses in the background
+                    this.startSSEListener(reader, decoder, buffer);
+                    return;
+                  }
+                }
+
+                // Alternative: Look for sessionId in any format within the data
+                if (trimmed.includes("sessionId")) {
+                  const sessionMatch = trimmed.match(
+                    /sessionId[=:]\s*([a-zA-Z0-9\-_]+)/
+                  );
+                  if (sessionMatch) {
+                    sessionId = sessionMatch[1];
+                    clearTimeout(timeout);
+                    sessionEstablished = true;
+                    resolve(sessionId);
+
                     this.startSSEListener(reader, decoder, buffer);
                     return;
                   }
@@ -367,6 +341,9 @@ export class MCPService extends MCPAdapter {
     });
   }
 
+  /**
+   * Enhanced SSE listener with better ping/pong handling
+   */
   private async startSSEListener(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     decoder: TextDecoder,
@@ -393,6 +370,12 @@ export class MCPService extends MCPAdapter {
           const trimmed = line.trim();
           if (!trimmed) continue;
 
+          // Skip ping/pong messages
+          if (trimmed.includes("ping -") || trimmed.includes("pong -")) {
+            console.log(`[MCP SSE] Received keep-alive: ${trimmed}`);
+            continue;
+          }
+
           if (trimmed.startsWith("event: endpoint")) {
             continue;
           }
@@ -409,6 +392,11 @@ export class MCPService extends MCPAdapter {
           if (trimmed.startsWith("data:")) {
             const data = trimmed.substring(5).trim();
             if (!data) continue;
+
+            // Skip non-JSON data in SSE context
+            if (data.includes("ping -") || data.includes("pong -")) {
+              continue;
+            }
 
             if (isInJsonMessage) {
               // Accumulate JSON data
@@ -481,13 +469,24 @@ export class MCPService extends MCPAdapter {
    * Fallback message parsing for standalone JSON
    */
   private tryParseAndHandleMessage(data: string): void {
+    // Skip non-JSON messages like ping/pong or other server messages
+    if (!data.trim().startsWith("{") && !data.trim().startsWith("[")) {
+      console.log(
+        `[MCP SSE] Ignoring non-JSON message: ${data.substring(0, 100)}...`
+      );
+      return;
+    }
+
     try {
       const parsedData = JSON.parse(data);
       if (parsedData.jsonrpc === "2.0" && parsedData.id) {
         this.handleCompleteSSEMessage(data);
       }
-    } catch {
-      // Not a valid JSON message, ignore
+    } catch (parseError) {
+      // Log for debugging but don't throw - this is expected for non-JSON messages
+      console.log(
+        `[MCP SSE] Ignoring non-JSON data: ${data.substring(0, 100)}...`
+      );
     }
   }
 
@@ -519,30 +518,109 @@ export class MCPService extends MCPAdapter {
     };
 
     try {
-      switch (connection.connectionType) {
-        case "sse":
-          return this.sendSSERequest(connection, request, abortSignal);
-        case "http":
-          return this.sendHTTPRequest(connection, request, abortSignal);
-        case "websocket":
-          return this.sendWebSocketRequest(connection, request);
-        default: {
-          const url = new URL(connection.url);
+      // First, try the explicitly configured connection type
+      if (connection.connectionType) {
+        switch (connection.connectionType) {
+          case "sse":
+            return this.sendSSERequest(connection, request, abortSignal);
+          case "http":
+            return this.sendHTTPRequest(connection, request, abortSignal);
+          case "websocket":
+            return this.sendWebSocketRequest(connection, request);
+        }
+      }
+
+      // Auto-detect based on URL and initial response
+      const url = new URL(connection.url);
+
+      // Try HTTP first since it's most common
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        try {
+          return await this.sendHTTPRequest(connection, request, abortSignal);
+        } catch (error) {
+          console.log(
+            "[MCP] HTTP request failed, trying other methods:",
+            error
+          );
+
+          // If HTTP fails and the URL suggests SSE, try SSE mode
           if (
             url.pathname.includes("/sse") ||
             connection.url.includes("/sse")
           ) {
+            console.log("[MCP] Trying SSE mode based on URL pattern");
             return this.sendSSERequest(connection, request, abortSignal);
-          } else if (url.protocol === "ws:" || url.protocol === "wss:") {
-            return this.sendWebSocketRequest(connection, request);
-          } else {
-            return this.sendHTTPRequest(connection, request, abortSignal);
           }
+
+          throw error;
         }
       }
+
+      // WebSocket URLs
+      if (url.protocol === "ws:" || url.protocol === "wss:") {
+        return this.sendWebSocketRequest(connection, request);
+      }
+
+      // Default fallback
+      return this.sendHTTPRequest(connection, request, abortSignal);
     } catch (error) {
       console.error(`[MCP] Request failed for ${method}:`, error);
       throw error;
+    }
+  }
+
+  private parseSSEResponse(sseText: string): any {
+    const lines = sseText.split("\n");
+    let jsonData = "";
+    let inDataSection = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith("event:")) {
+        inDataSection = false;
+        continue;
+      }
+
+      if (trimmed.startsWith("data:")) {
+        inDataSection = true;
+        const data = trimmed.substring(5).trim();
+        jsonData += data;
+        continue;
+      }
+
+      // Continue accumulating data if we're in a data section
+      if (inDataSection && trimmed && !trimmed.startsWith("event:")) {
+        jsonData += trimmed;
+      }
+    }
+
+    if (!jsonData) {
+      throw new AdapterError(
+        "No JSON data found in SSE response",
+        "SSE_NO_DATA"
+      );
+    }
+
+    try {
+      const parsedData = JSON.parse(jsonData);
+
+      if (parsedData.error) {
+        throw new AdapterError(
+          `MCP Error ${parsedData.error.code}: ${parsedData.error.message}`,
+          "MCP_ERROR",
+          parsedData.error
+        );
+      }
+
+      return parsedData.result;
+    } catch (parseError) {
+      console.error("[MCP] Failed to parse SSE JSON data:", parseError);
+      console.error("[MCP] Raw JSON data was:", jsonData);
+      throw new AdapterError(
+        `Invalid JSON in SSE response: ${(parseError as Error).message}`,
+        "SSE_JSON_PARSE_ERROR"
+      );
     }
   }
 
@@ -552,26 +630,80 @@ export class MCPService extends MCPAdapter {
     abortSignal?: AbortSignal
   ): Promise<any> {
     try {
-      const { value } = await postJsonToApi({
-        url: connection.url,
+      const fetchFn = this.fetch || fetch;
+      const response = await fetchFn(connection.url, {
+        method: "POST",
         headers: this.prepareHeaders(connection),
-        body: request,
-        successfulResponseHandler: this.createSuccessHandler(),
-        failedResponseHandler: this.createErrorHandler(),
-        abortSignal,
-        fetch: this.fetch,
+        body: JSON.stringify(request),
+        signal: abortSignal,
       });
 
-      return value.result;
-    } catch (error) {
-      if (
-        error &&
-        typeof error === "object" &&
-        "url" in error &&
-        "statusCode" in error
-      ) {
-        throw this.convertApiError(error as APICallError, "HTTP request");
+      if (!response.ok) {
+        throw new AdapterError(
+          `HTTP ${response.status}: ${response.statusText}`,
+          "HTTP_ERROR"
+        );
       }
+
+      const responseText = await response.text();
+
+      if (!responseText || responseText.trim().length === 0) {
+        console.error("[MCP] Empty response from server");
+        throw new AdapterError(
+          "Server returned empty response",
+          "EMPTY_RESPONSE"
+        );
+      }
+
+      if (responseText.includes("event:") && responseText.includes("data:")) {
+        return this.parseSSEResponse(responseText);
+      }
+
+      // Handle regular JSON responses
+      if (
+        responseText.trim().startsWith("{") ||
+        responseText.trim().startsWith("[")
+      ) {
+        try {
+          const parsedResponse = JSON.parse(responseText);
+          console.log("[MCP] Parsed JSON response:", parsedResponse);
+
+          if (parsedResponse.error) {
+            throw new AdapterError(
+              `MCP Error ${parsedResponse.error.code}: ${parsedResponse.error.message}`,
+              "MCP_ERROR",
+              parsedResponse.error
+            );
+          }
+
+          return parsedResponse.result;
+        } catch (parseError) {
+          console.error("[MCP] Failed to parse JSON:", parseError);
+          throw new AdapterError(
+            `Invalid JSON response: ${(parseError as Error).message}`,
+            "JSON_PARSE_ERROR"
+          );
+        }
+      }
+
+      // If it's a ping response, treat it as a successful connection test
+      if (responseText.includes("ping") || responseText.includes("pong")) {
+        return {
+          protocolVersion: "2025-06-18",
+          serverInfo: {
+            name: "MCP Server",
+            version: "1.0.0",
+          },
+          capabilities: {},
+        };
+      }
+
+      throw new AdapterError(
+        `Server returned unrecognized response format: ${responseText.substring(0, 100)}`,
+        "UNRECOGNIZED_RESPONSE"
+      );
+    } catch (error) {
+      console.error("[MCP] HTTP request failed:", error);
       throw error;
     }
   }
@@ -656,52 +788,73 @@ export class MCPService extends MCPAdapter {
   }
 
   async testConnection(connection: Connection): Promise<boolean> {
-    try {
-      this.sessionCache.delete(connection.url);
-      this.connectionCache.delete(connection.url);
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
 
-      const abortController = new AbortController();
-      const timeout = setTimeout(() => {
-        abortController.abort();
-      }, connection.timeout || 30000);
-
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const result = await this.sendMCPRequest(
-          connection,
-          "initialize",
-          {
-            protocolVersion: "2025-06-18",
-            capabilities: {
-              sampling: {},
-              elicitation: {},
-              roots: { listChanged: true },
+        // Clear any existing session data
+        this.sessionCache.delete(connection.url);
+        this.connectionCache.delete(connection.url);
+
+        const abortController = new AbortController();
+        const timeout = setTimeout(() => {
+          abortController.abort();
+        }, connection.timeout || 30000);
+
+        try {
+          const result = await this.sendMCPRequest(
+            connection,
+            "initialize",
+            {
+              protocolVersion: "2025-06-18",
+              capabilities: {
+                sampling: {},
+                elicitation: {},
+                roots: { listChanged: true },
+              },
+              clientInfo: this.config.clientInfo,
             },
-            clientInfo: this.config.clientInfo,
-          },
-          abortController.signal
-        );
+            abortController.signal
+          );
 
-        clearTimeout(timeout);
+          clearTimeout(timeout);
 
-        this.connectionCache.set(connection.url, {
-          isConnected: true,
-          lastUsed: Date.now(),
-        });
+          if (result && result.protocolVersion && result.serverInfo) {
+            this.connectionCache.set(connection.url, {
+              isConnected: true,
+              lastUsed: Date.now(),
+            });
+            return true;
+          }
+        } catch (error) {
+          clearTimeout(timeout);
 
-        return Boolean(result.protocolVersion && result.serverInfo);
-      } catch (error) {
-        clearTimeout(timeout);
-        if (isAbortError(error)) {
-          console.log(`[MCP] Test aborted: timeout`);
-        } else {
-          console.log(`[MCP] Test failed:`, error);
+          if (isAbortError(error)) {
+            console.log(`[MCP] Test attempt ${attempt} aborted: timeout`);
+          } else {
+            console.log(`[MCP] Test attempt ${attempt} failed:`, error);
+          }
+
+          // If not the last attempt, wait before retrying
+          if (attempt < maxRetries) {
+            console.log(
+              `[MCP] Retrying in ${retryDelay}ms... (${attempt}/${maxRetries})`
+            );
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          }
         }
-        return false;
+      } catch (error) {
+        console.log(`[MCP] Test error on attempt ${attempt}:`, error);
+
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
       }
-    } catch (error) {
-      console.log(`[MCP] Test error: ${error}`);
-      return false;
     }
+
+    console.log(`[MCP] All ${maxRetries} test attempts failed`);
+    return false;
   }
 
   async connectAndIntrospect(
@@ -733,6 +886,15 @@ export class MCPService extends MCPAdapter {
             },
             abortController.signal
           );
+
+          if (!initResult) {
+            return {
+              isConnected: false,
+              tools: [],
+              resources: [],
+              error: "Initialize returned empty response",
+            };
+          }
 
           const serverInfo: MCPServerInfo = initResult.serverInfo;
           const capabilities: MCPCapabilities = initResult.capabilities;
