@@ -116,6 +116,73 @@ body {
     color 0.2s ease;
 }
 
+/* Elegant scrollbars for all browsers */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+/* Light mode scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Dark mode scrollbars */
+.dark * {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+
+.dark ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+.dark ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Hide scrollbars utility class */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Enhanced utility classes for better theme switching */
 @layer utilities {
   .bg-background-main {
@@ -347,25 +414,6 @@ body {
 
   .dark :-ms-input-placeholder {
     color: #6e7681;
-  }
-
-  /* Elegant scrollbars */
-  .dark ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  .dark ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .dark ::-webkit-scrollbar-thumb {
-    background: #30363d;
-    border-radius: 3px;
-  }
-
-  .dark ::-webkit-scrollbar-thumb:hover {
-    background: #484f58;
   }
 
   /* Professional status colors */

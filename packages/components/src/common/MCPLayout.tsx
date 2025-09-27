@@ -71,20 +71,16 @@ export const MCPLayout: React.FC<MCPLayoutProps> = ({
   };
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors">
+    <div className="h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors overflow-hidden">
       {header}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative min-h-0">
         {/* Sidebar Section */}
         {sidebar && (
           <>
             {/* Full Sidebar */}
-            <div
-              className={`flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto transition-all duration-300 ease-in-out ${
-                isSidebarCollapsed ? "w-0" : "w-80"
-              }`}
-            >
-              {!isSidebarCollapsed && (
-                <div className="w-80 h-full flex flex-col">
+            {!isSidebarCollapsed && (
+              <div className="w-80 flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out overflow-hidden">
+                <div className="w-80 h-full flex flex-col overflow-hidden">
                   {/* Sidebar Header with Collapse Button */}
                   <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -99,10 +95,12 @@ export const MCPLayout: React.FC<MCPLayoutProps> = ({
                     </button>
                   </div>
                   {/* Sidebar Content */}
-                  <div className="flex-1 overflow-y-auto">{sidebar}</div>
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+                    {sidebar}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Collapsed Sidebar Bar */}
             {isSidebarCollapsed && (
@@ -125,7 +123,7 @@ export const MCPLayout: React.FC<MCPLayoutProps> = ({
         )}
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-gray-950 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-white dark:bg-gray-950 overflow-hidden min-w-0">
           {children}
         </div>
 
@@ -151,13 +149,9 @@ export const MCPLayout: React.FC<MCPLayoutProps> = ({
             )}
 
             {/* Full Inspector */}
-            <div
-              className={`flex-shrink-0 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-y-auto transition-all duration-300 ease-in-out ${
-                isInspectorCollapsed ? "w-0" : "w-[500px]"
-              }`}
-            >
-              {!isInspectorCollapsed && (
-                <div className="w-[500px] h-full flex flex-col">
+            {!isInspectorCollapsed && (
+              <div className="w-[500px] flex-shrink-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out overflow-hidden">
+                <div className="w-[500px] h-full flex flex-col overflow-hidden">
                   {/* Inspector Header with Collapse Button */}
                   <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                     <button
@@ -172,10 +166,12 @@ export const MCPLayout: React.FC<MCPLayoutProps> = ({
                     </span>
                   </div>
                   {/* Inspector Content */}
-                  <div className="flex-1 overflow-y-auto">{inspector}</div>
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+                    {inspector}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </div>

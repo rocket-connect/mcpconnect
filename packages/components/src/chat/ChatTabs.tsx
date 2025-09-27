@@ -33,13 +33,13 @@ export const ChatTabs: React.FC<ChatTabsProps> = ({
               <div key={conv.id} className="relative flex-shrink-0 group">
                 <button
                   onClick={() => onTabClick(conv.id)}
-                  className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex items-center px-4 py-3 pr-8 text-sm font-medium border-b-2 transition-colors ${
                     isActive
                       ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-950"
                       : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
                   }`}
                 >
-                  <span className="truncate max-w-32">{conv.title}</span>
+                  <span className="truncate max-w-28">{conv.title}</span>
                   <span className="ml-2 text-xs opacity-60">
                     ({conv.messages.length})
                   </span>
@@ -48,10 +48,10 @@ export const ChatTabs: React.FC<ChatTabsProps> = ({
                 {conversations.length > 1 && (
                   <button
                     onClick={e => onDeleteChat(conv.id, e)}
-                    className={`absolute top-1 right-1 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                    className={`absolute top-1.5 right-2 p-1 rounded transition-all duration-200 ${
                       isActive
-                        ? "text-gray-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        : "text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        ? "opacity-60 group-hover:opacity-100 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                        : "opacity-40 group-hover:opacity-100 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                     }`}
                     title={`Delete "${conv.title}"`}
                   >

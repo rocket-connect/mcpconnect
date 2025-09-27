@@ -283,18 +283,18 @@ export const Sidebar = ({ connections }: SidebarProps) => {
   }, [currentConnectionId, isFirstTime]);
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-800 transition-colors">
-      <div className="flex-1 p-4 overflow-y-auto">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-800 transition-colors overflow-hidden">
+      <div className="flex-1 p-4 overflow-y-auto overflow-x-hidden">
         {/* Demo State for First-time Users */}
         {isFirstTime && (
           <div className="mb-6">
             {/* Call to Action */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800 mb-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Plus className="w-4 h-4 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-sm text-gray-900 dark:text-white">
                     Connect to MCP Server
                   </h3>
@@ -320,7 +320,7 @@ export const Sidebar = ({ connections }: SidebarProps) => {
             </h2>
             <button
               onClick={() => navigate("/connections")}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors font-medium"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors font-medium flex-shrink-0"
             >
               Manage
             </button>
@@ -365,7 +365,7 @@ export const Sidebar = ({ connections }: SidebarProps) => {
 
         {/* Tools Section - Only show when connection is active or first time */}
         {showToolsSection && (
-          <div>
+          <div className="min-w-0 overflow-hidden">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-base text-gray-900 dark:text-white">
                 Tools ({enabledCount}/{totalCount})
@@ -379,25 +379,29 @@ export const Sidebar = ({ connections }: SidebarProps) => {
                 <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 mb-3">
                   <button
                     onClick={() => setActiveTab("mcp")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-w-0 ${
                       activeTab === "mcp"
                         ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
                         : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
-                    <Zap className="w-3 h-3" />
-                    MCP ({mcpToolsToShow.length})
+                    <Zap className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">
+                      MCP ({mcpToolsToShow.length})
+                    </span>
                   </button>
                   <button
                     onClick={() => setActiveTab("system")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-w-0 ${
                       activeTab === "system"
                         ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
                         : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
-                    <Wrench className="w-3 h-3" />
-                    System ({systemTools.length})
+                    <Wrench className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">
+                      System ({systemTools.length})
+                    </span>
                   </button>
                 </div>
               )}
@@ -421,7 +425,7 @@ export const Sidebar = ({ connections }: SidebarProps) => {
                 className={`relative mb-3 ${isFirstTime ? "opacity-60" : ""}`}
               >
                 <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                  <Search className="h-3.5 w-3.5 text-gray-400" />
+                  <Search className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
                 </div>
                 <input
                   type="text"
@@ -429,21 +433,23 @@ export const Sidebar = ({ connections }: SidebarProps) => {
                   value={toolSearchQuery}
                   onChange={e => setToolSearchQuery(e.target.value)}
                   disabled={isFirstTime}
-                  className="block w-full pl-8 pr-8 py-2 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed"
+                  className="block w-full pl-8 pr-8 py-2 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed min-w-0"
                 />
                 {toolSearchQuery && (
                   <button
                     onClick={() => setToolSearchQuery("")}
                     className="absolute inset-y-0 right-0 pr-2.5 flex items-center"
                   >
-                    <X className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 transition-colors" />
+                    <X className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0" />
                   </button>
                 )}
               </div>
             )}
 
             {/* Tools List - Compact */}
-            <div className={`space-y-2 ${isFirstTime ? "opacity-60" : ""}`}>
+            <div
+              className={`space-y-2 ${isFirstTime ? "opacity-60" : ""} min-w-0 overflow-hidden`}
+            >
               {filteredTools.length === 0 ? (
                 <div className="text-center py-4 text-xs text-gray-500 dark:text-gray-400">
                   {toolSearchQuery.trim()
@@ -507,7 +513,7 @@ export const Sidebar = ({ connections }: SidebarProps) => {
       </div>
 
       {/* RconnectLogo at bottom */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
         <RconnectLogo className="transition-opacity" />
       </div>
     </div>
