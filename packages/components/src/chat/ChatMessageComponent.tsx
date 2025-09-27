@@ -63,7 +63,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
     }
   };
 
-  // Function to render message content with SVG detection
+  // Function to render message content with SVG detection - ONLY for regular messages
   const renderMessageContent = (content: string) => {
     // Check if the content contains SVG
     if (isSvgContent(content)) {
@@ -77,32 +77,6 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
           />
         </div>
       );
-    }
-
-    // Check if tool execution result contains SVG
-    if (
-      message.toolExecution?.result &&
-      typeof message.toolExecution.result === "object"
-    ) {
-      const result = message.toolExecution.result as any;
-      if (result.svg && isSvgContent(result.svg)) {
-        return (
-          <div className="my-4">
-            <SvgDisplay
-              svgContent={result.svg}
-              title={result.title || "Generated Visualization"}
-              showControls={true}
-            />
-            {result.nodeCount !== undefined && (
-              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Generated {result.nodeCount} nodes
-                {result.relationshipCount > 0 &&
-                  ` and ${result.relationshipCount} relationships`}
-              </div>
-            )}
-          </div>
-        );
-      }
     }
 
     // Regular text content
@@ -167,22 +141,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                         </span>
                       )}
                     </div>
-                    {/* Render the tool result with SVG support */}
-                    {message.toolExecution.result ? (
-                      <div className="mt-3">
-                        {renderMessageContent(
-                          typeof message.toolExecution.result === "string"
-                            ? message.toolExecution.result
-                            : JSON.stringify(
-                                message.toolExecution.result,
-                                null,
-                                2
-                              )
-                        )}
-                      </div>
-                    ) : (
-                      <></>
-                    )}
+                    {/* DO NOT render tool result here - only in expanded details */}
                   </div>
                 ) : (
                   <div>{message.message}</div>
@@ -247,6 +206,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                 </div>
               </div>
             ) : (
+              // Regular message content - only render if it's not a tool execution
               renderMessageContent(message.message || "")
             )}
           </div>
@@ -354,7 +314,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                       </div>
                     )}
 
-                    {/* Result section with JSON formatting */}
+                    {/* Result section with JSON formatting - ONLY show in expanded view */}
                     {message.toolExecution?.result !== undefined && (
                       <div>
                         <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm flex items-center gap-2">
@@ -373,23 +333,65 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                           </svg>
                           Response
                         </h5>
-                        <JsonCodeBlock
-                          data={{
-                            success: true,
-                            result: message.toolExecution.result,
-                            timestamp: message.timestamp,
-                          }}
-                          onCopy={() => {
-                            const responseData = {
+
+                        {/* Check if result contains SVG for special handling */}
+                        {typeof message.toolExecution.result === "object" &&
+                        message.toolExecution.result !== null &&
+                        "svg" in message.toolExecution.result &&
+                        isSvgContent(
+                          (message.toolExecution.result as any).svg
+                        ) ? (
+                          <div className="space-y-4">
+                            {/* Show SVG visualization */}
+                            <SvgDisplay
+                              svgContent={
+                                (message.toolExecution.result as any).svg
+                              }
+                              title={
+                                (message.toolExecution.result as any).title ||
+                                "Generated Visualization"
+                              }
+                              showControls={true}
+                            />
+                            {/* Also show raw JSON for complete details */}
+                            <JsonCodeBlock
+                              data={{
+                                success: true,
+                                result: message.toolExecution.result,
+                                timestamp: message.timestamp,
+                              }}
+                              onCopy={() => {
+                                const responseData = {
+                                  success: true,
+                                  result: message.toolExecution?.result,
+                                  timestamp: message.timestamp,
+                                };
+                                copyToClipboard(
+                                  JSON.stringify(responseData, null, 2)
+                                );
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          /* Regular JSON result */
+                          <JsonCodeBlock
+                            data={{
                               success: true,
-                              result: message.toolExecution?.result,
+                              result: message.toolExecution.result,
                               timestamp: message.timestamp,
-                            };
-                            copyToClipboard(
-                              JSON.stringify(responseData, null, 2)
-                            );
-                          }}
-                        />
+                            }}
+                            onCopy={() => {
+                              const responseData = {
+                                success: true,
+                                result: message.toolExecution?.result,
+                                timestamp: message.timestamp,
+                              };
+                              copyToClipboard(
+                                JSON.stringify(responseData, null, 2)
+                              );
+                            }}
+                          />
+                        )}
                       </div>
                     )}
 
