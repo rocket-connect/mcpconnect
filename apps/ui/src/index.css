@@ -310,7 +310,7 @@ body {
 
   /* Refined hover states - very subtle */
   .dark .group:hover {
-    background-color: #161b22;
+    background-color: transparent; /* Remove the ugly chat message hover effect */
   }
 
   .dark .hover\:bg-gray-300:hover {
