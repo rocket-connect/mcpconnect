@@ -1,8 +1,7 @@
-// apps/ui/src/components/ChatInterface.tsx - Updated with Export Button
 /* eslint-disable react-hooks/exhaustive-deps */
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams, useNavigate } from "react-router-dom";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, AlertTriangle, Wrench } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
@@ -545,6 +544,26 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     [refreshAll, updateConversationMessages] // Simplified dependencies
   );
 
+  // Function to estimate character count of conversation
+  const getConversationCharCount = () => {
+    return currentMessages.reduce((count, msg) => {
+      const messageText = msg.message || "";
+      const toolText = msg.toolExecution?.result
+        ? JSON.stringify(msg.toolExecution.result)
+        : "";
+      return count + messageText.length + toolText.length;
+    }, 0);
+  };
+
+  // Check if conversation is long
+  const isConversationLong = () => {
+    const charCount = getConversationCharCount();
+    const messageCount = currentMessages.length;
+
+    // Warning if more than 5 messages OR more than 20,000 characters
+    return messageCount > 5 || charCount > 20000;
+  };
+
   // Send message with all enabled tools (MCP + System)
   const handleSendMessage = async () => {
     if (
@@ -562,6 +581,43 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         );
       }
       return;
+    }
+
+    // Get all enabled tools for checking
+    const allCurrentEnabledTools = getAllEnabledTools(connectionId);
+
+    // Check for long conversation warning
+    if (isConversationLong()) {
+      const charCount = getConversationCharCount();
+      const messageCount = currentMessages.length;
+
+      const confirmed = confirm(
+        `⚠️ Long Conversation Warning\n\n` +
+          `This conversation has ${messageCount} messages with approximately ${charCount.toLocaleString()} characters.\n\n` +
+          `Sending this message will use a significant number of tokens and may result in higher API costs.\n\n` +
+          `Do you want to continue?\n\n` +
+          `Tip: Consider starting a new chat for better performance and lower costs.`
+      );
+
+      if (!confirmed) return;
+    }
+
+    // Check for many tools warning
+    if (allCurrentEnabledTools.length > 5) {
+      const toolNames = allCurrentEnabledTools.map(t => t.name).join(", ");
+
+      const confirmed = confirm(
+        `🛠️ Many Tools Available Warning\n\n` +
+          `You have ${allCurrentEnabledTools.length} tools enabled:\n${toolNames}\n\n` +
+          `The AI may choose to use multiple tools, which could:\n` +
+          `• Take longer to process\n` +
+          `• Use more API tokens\n` +
+          `• Increase costs\n\n` +
+          `Do you want to proceed with this message?\n\n` +
+          `Tip: You can disable some tools in the sidebar if not needed.`
+      );
+
+      if (!confirmed) return;
     }
 
     abortControllerRef.current = new AbortController();
@@ -589,9 +645,6 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       // Add user message to conversation immediately for both streaming and non-streaming
       const messagesWithUser = [...currentMessages, userMessage];
       await updateConversationMessages(messagesWithUser);
-
-      // Get all enabled tools (both MCP and system tools)
-      const allCurrentEnabledTools = getAllEnabledTools(connectionId);
 
       const chatContext = {
         connection: currentConnection,
@@ -743,6 +796,13 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   // Create display messages array that includes streaming messages
   const displayMessages = [...currentMessages, ...streamingToolMessages];
 
+  // Check for warnings to display
+  const showLongConversationWarning = isConversationLong() && !showApiWarning;
+  const showManyToolsWarning =
+    totalEnabledToolsCount > 5 &&
+    !showApiWarning &&
+    !showLongConversationWarning;
+
   return (
     <>
       <div className="flex flex-col h-full bg-white dark:bg-gray-950 transition-colors">
@@ -822,10 +882,42 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           <ApiWarning onConfigure={() => setIsSettingsOpen(true)} />
         )}
 
-        {/* Tool Status Warning */}
-        {totalDisabledToolsCount > 0 && !showApiWarning && (
-          <ToolStatusWarning disabledToolsCount={totalDisabledToolsCount} />
+        {/* Long Conversation Warning */}
+        {showLongConversationWarning && (
+          <div className="flex-shrink-0 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800 px-6 py-3">
+            <div className="flex items-center gap-2 text-sm text-orange-800 dark:text-orange-200">
+              <AlertTriangle className="w-4 h-4" />
+              <span>
+                Long conversation detected ({currentMessages.length} messages, ~
+                {getConversationCharCount().toLocaleString()} characters).
+                Sending messages may use significant tokens and increase costs.
+                Consider starting a new chat.
+              </span>
+            </div>
+          </div>
         )}
+
+        {/* Many Tools Warning */}
+        {showManyToolsWarning && (
+          <div className="flex-shrink-0 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-6 py-3">
+            <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200">
+              <Wrench className="w-4 h-4" />
+              <span>
+                {totalEnabledToolsCount} tools enabled. The AI may use multiple
+                tools which could increase processing time and costs. You can
+                disable unused tools in the sidebar.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Tool Status Warning */}
+        {totalDisabledToolsCount > 0 &&
+          !showApiWarning &&
+          !showLongConversationWarning &&
+          !showManyToolsWarning && (
+            <ToolStatusWarning disabledToolsCount={totalDisabledToolsCount} />
+          )}
 
         {/* Scrollable Messages Container */}
         <div className="flex-1 overflow-y-auto min-h-0">
