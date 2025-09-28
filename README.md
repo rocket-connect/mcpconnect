@@ -239,18 +239,9 @@ pnpm run dev
 
 MIT License - see [LICENSE](LICENSE) file for complete terms.
 
-## Support
-
-- **Documentation**: Comprehensive guides in repository wiki
-- **Issues**: Bug reports and feature requests via GitHub Issues
-- **Community**: Development discussions in GitHub Discussions
-- **Professional Support**: Available through rconnect.tech
-
----
-
 <div align="center">
   <picture>
      <img src="https://github.com/rocket-connect/mcpconnect/blob/main/apps/ui/public/social-preview.png?raw=true" width="90%" alt="MCP Connect Interface Overview" />
   </picture>
-  <p>Built by <a href="https://mcp.rconnect.tech" target="_blank" rel="noopener noreferrer">mcp.rconnect.tech</a> - Advancing professional AI development tools. </p>
+  <p>Built by <a href="https://rconnect.tech" target="_blank" rel="noopener noreferrer">rconnect.tech</a> - Advancing professional AI development tools. </p>
 </div>
