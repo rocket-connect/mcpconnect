@@ -74,18 +74,3 @@ export const ChatConversationSchema = z.object({
 });
 
 export type ChatConversation = z.infer<typeof ChatConversationSchema>;
-
-/**
- * Schema for chat session
- */
-export const ChatSessionSchema = z.object({
-  id: z.string(),
-  userId: z.string().optional(),
-  conversations: z.array(ChatConversationSchema),
-  activeConversationId: z.string().optional(),
-  settings: z.record(z.string(), z.unknown()).optional(),
-  createdAt: z.date(),
-  lastActivity: z.date(),
-});
-
-export type ChatSession = z.infer<typeof ChatSessionSchema>;

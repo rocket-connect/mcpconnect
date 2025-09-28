@@ -5,7 +5,6 @@ export {
   type ChatMessageComponentProps,
 } from "./ChatMessageComponent";
 export { ChatInput, type ChatInputProps } from "./ChatInput";
-export { ChatHeader, type ChatHeaderProps } from "./ChatHeader";
 export {
   StreamingMessage,
   type StreamingMessageProps,

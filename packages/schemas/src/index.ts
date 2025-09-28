@@ -30,13 +30,9 @@ export {
 export {
   ChatMessageSchema,
   ChatConversationSchema,
-  ChatSessionSchema,
   type ChatMessage,
   type ChatConversation,
-  type ChatSession,
 } from "./chat";
-
-export { ServerOptionsSchema, type ServerOptions } from "./server";
 
 export {
   ThemeSchema,
@@ -48,7 +44,5 @@ export {
 } from "./theme";
 
 export { MCPCapabilitiesSchema, type MCPCapabilities } from "./mcp-protocol";
-
-export { UILayoutModeSchema, type UILayoutMode } from "./ui";
 
 export { z } from "zod";

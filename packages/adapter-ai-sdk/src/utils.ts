@@ -5,13 +5,8 @@ import {
   LLMTool,
   MCPToolDefinition,
 } from "@mcpconnect/base-adapters";
-import { Tool, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
-import {
-  ExtendedLLMMessage,
-  AIModelMessage,
-  LLMSettings,
-  AISDKConfig,
-} from "./types";
+import { Tool, ChatMessage } from "@mcpconnect/schemas";
+import { ExtendedLLMMessage, AIModelMessage } from "./types";
 
 export function generateId(): string {
   return `tool_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
@@ -341,31 +336,6 @@ export function jsonSchemaPropertyToZod(propSchema: any): z.ZodTypeAny {
   }
 }
 
-export function needsReinit(
-  config: AISDKConfig,
-  settings: LLMSettings
-): boolean {
-  return (
-    config.apiKey !== settings.apiKey ||
-    config.model !== settings.model ||
-    config.baseUrl !== settings.baseUrl
-  );
-}
-
-export function updateConfigWithSettings(
-  config: AISDKConfig,
-  settings: LLMSettings
-): AISDKConfig {
-  return {
-    ...config,
-    apiKey: settings.apiKey,
-    model: settings.model,
-    baseUrl: settings.baseUrl,
-    temperature: settings.temperature,
-    maxTokens: settings.maxTokens,
-  };
-}
-
 export function createThinkingMessage(): ChatMessage {
   return {
     id: Math.random().toString(36).substring(2, 15),
@@ -439,25 +409,6 @@ export function formatToolResultForLLM(
     content: JSON.stringify(formattedResult),
     toolCallId,
     name: toolName,
-  };
-}
-
-export function createBaseToolExecution(
-  toolName: string,
-  toolArgs: Record<string, any>
-): Pick<ToolExecution, "id" | "tool" | "status" | "timestamp" | "request"> {
-  const executionId = generateId();
-
-  return {
-    id: executionId,
-    tool: toolName,
-    status: "pending",
-    timestamp: new Date().toLocaleTimeString(),
-    request: {
-      tool: toolName,
-      arguments: toolArgs,
-      timestamp: new Date().toISOString(),
-    },
   };
 }
 
