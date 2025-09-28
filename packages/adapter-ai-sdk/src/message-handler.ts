@@ -3,8 +3,8 @@ import { ChatContext, ChatResponse, ExtendedLLMMessage } from "./types";
 import {
   conversationToLLMMessages,
   toolsToLLMFormat,
-  createAssistantMessage,
   formatToolResultForLLM,
+  generateId,
 } from "./utils";
 import { executeToolWithMCP } from "./tool-executor";
 import { AISDKAdapter } from "./ai-sdk-adapter";
@@ -91,9 +91,14 @@ export async function sendMessage(
     }
   }
 
-  const assistantMessage = createAssistantMessage(
-    response.content || "Task completed."
-  );
+  const assistantMessage = {
+    id: generateId(),
+    message: response.content || "", // Use actual response content, empty if none
+    isUser: false,
+    timestamp: new Date(),
+    isExecuting: false,
+    isPartial: false,
+  };
 
   return {
     assistantMessage,

@@ -373,16 +373,18 @@ export function createThinkingMessage(): ChatMessage {
     isUser: false,
     timestamp: new Date(),
     isExecuting: true,
+    isPartial: true,
   };
 }
 
 export function createAssistantMessage(content: string): ChatMessage {
   return {
     id: generateId(),
-    message: content || "Task completed.",
+    message: content || "", // Don't provide default text
     isUser: false,
     timestamp: new Date(),
     isExecuting: false,
+    isPartial: false,
   };
 }
 

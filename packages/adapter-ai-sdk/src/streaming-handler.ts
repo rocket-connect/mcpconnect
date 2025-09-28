@@ -11,7 +11,6 @@ import {
   generateId,
   conversationToLLMMessages,
   toolsToLLMFormat,
-  createAssistantMessage,
 } from "./utils";
 import { executeToolWithMCP } from "./tool-executor";
 import { AISDKAdapter } from "./ai-sdk-adapter";
@@ -242,8 +241,14 @@ export async function* sendMessageStream(
           messageOrder: ++messageOrderCounter,
         };
         hasEmittedPartialMessage = true;
+      } else if (iteration === 1 && !hasToolCalls) {
+        // First iteration without tools - stream the response directly as tokens
+        for (const char of iterationContent) {
+          yield { type: "token", delta: char };
+        }
+        finalContent = iterationContent; // Store for final message creation
       } else if (iteration > 1 && !hasToolCalls) {
-        // FIXED: Final iteration without tools - this is the summary/conclusion
+        // Final iteration without tools - this is the summary/conclusion
         // Stream the final answer directly without accumulating
         for (const char of iterationContent) {
           yield { type: "token", delta: char };
@@ -315,15 +320,28 @@ export async function* sendMessageStream(
 
       // Create a separate message for the final answer if there is one
       if (finalContent && finalContent.trim()) {
-        finalAssistantMessage = createAssistantMessage(finalContent);
-        finalAssistantMessage.messageOrder = ++messageOrderCounter;
+        finalAssistantMessage = {
+          id: generateId(),
+          message: finalContent,
+          isUser: false,
+          timestamp: new Date(),
+          isExecuting: false,
+          messageOrder: ++messageOrderCounter,
+          isPartial: false,
+        };
       }
     } else {
-      // Create normal message for non-tool responses
-      assistantMessage = createAssistantMessage(
-        finalContent || explanationContent
-      );
-      assistantMessage.messageOrder = ++messageOrderCounter;
+      // Create normal message for non-tool responses - use actual content from LLM
+      const messageContent = finalContent || explanationContent;
+      assistantMessage = {
+        id: generateId(),
+        message: messageContent || "", // Use actual LLM response, no fallback message
+        isUser: false,
+        timestamp: new Date(),
+        isExecuting: false,
+        messageOrder: ++messageOrderCounter,
+        isPartial: false,
+      };
     }
 
     yield {
