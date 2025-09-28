@@ -248,4 +248,9 @@ MIT License - see [LICENSE](LICENSE) file for complete terms.
 
 ---
 
-Built by [rconnect.tech](https://rconnect.tech) - Advancing professional AI development tools.
+<div align="center">
+  <picture>
+     <img src="https://github.com/rocket-connect/mcpconnect/blob/main/apps/ui/public/social-preview.png?raw=true" width="90%" alt="MCP Connect Interface Overview" />
+  </picture>
+  <p>Built by <a href="https://mcp.rconnect.tech" target="_blank" rel="noopener noreferrer">mcp.rconnect.tech</a> - Advancing professional AI development tools. </p>
+</div>
