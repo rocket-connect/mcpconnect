@@ -86,20 +86,6 @@ npm install -g @mcpconnect/cli
 mcpconnect
 ```
 
-### Programmatic Integration
-
-```javascript
-import { startServer } from "@mcpconnect/server";
-
-const { url } = await startServer({
-  port: 3001,
-  host: "localhost",
-  cors: true,
-});
-
-console.log(`MCP Connect available at ${url}`);
-```
-
 ## Technical Architecture
 
 MCP Connect is built as a modular TypeScript monorepo optimized for developer productivity. The core packages include the command-line interface for zero-config setup, an Express-based development server with integrated UI, a React frontend application with TypeScript, and a comprehensive library of reusable UI components.
@@ -199,8 +185,8 @@ We welcome contributions to MCP Connect development:
 ```bash
 git clone https://github.com/rocket-connect/mcpconnect.git
 cd mcpconnect
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 ### Contribution Guidelines
