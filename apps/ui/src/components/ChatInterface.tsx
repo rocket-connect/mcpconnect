@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { useParams } from "react-router-dom";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
 import { ModelService, LLMSettings } from "../services/modelService";
@@ -28,6 +28,61 @@ import { useChatConversationManager } from "../hooks/useChatConversationManager"
 interface ChatInterfaceProps {
   expandedToolCall?: boolean;
 }
+
+// Update the preserveMessageOrder function in ChatInterface.tsx
+
+const preserveMessageOrder = (
+  messages: ChatMessageType[]
+): ChatMessageType[] => {
+  if (!messages || messages.length === 0) return [];
+
+  // First, filter out any truly empty messages
+  const validMessages = messages.filter(msg => {
+    // Keep messages that have content OR are tool execution messages
+    return (
+      (msg.message && msg.message.trim()) ||
+      msg.toolExecution ||
+      msg.executingTool ||
+      msg.isExecuting
+    );
+  });
+
+  // Sort by messageOrder if available, then by timestamp, then by array index
+  const sortedMessages = validMessages.sort((a, b) => {
+    // Primary sort: messageOrder
+    if (a.messageOrder !== undefined && b.messageOrder !== undefined) {
+      return a.messageOrder - b.messageOrder;
+    }
+
+    // Secondary sort: timestamp
+    if (a.timestamp && b.timestamp) {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      if (timeA !== timeB) {
+        return timeA - timeB;
+      }
+    }
+
+    // Tertiary sort: array index (preserve original order if no other sorting available)
+    const indexA = validMessages.indexOf(a);
+    const indexB = validMessages.indexOf(b);
+    return indexA - indexB;
+  });
+
+  // Assign proper message orders if missing (for backward compatibility)
+  sortedMessages.forEach((msg, index) => {
+    if (msg.messageOrder === undefined) {
+      msg.messageOrder = index;
+    }
+
+    // Ensure partial flag is properly set
+    if (msg.isPartial === undefined) {
+      msg.isPartial = false;
+    }
+  });
+
+  return sortedMessages;
+};
 
 export const ChatInterface = (_args: ChatInterfaceProps) => {
   const { connectionId, chatId } = useParams();
@@ -73,20 +128,30 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         )
       : (conversations[connectionId || ""] || [])[0];
 
-  const currentMessages = currentConversation?.messages || [];
+  // In the component, replace the current messages loading with:
+  const currentMessages = useMemo(
+    () => preserveMessageOrder(currentConversation?.messages || []),
+    [currentConversation?.messages]
+  );
 
   // Initialize hooks
   const { getWarnings, confirmLongConversation, confirmManyTools } =
     useChatConversationWarnings();
 
-  // Update conversation messages function
+  // IMPORTANT: When saving messages, preserve order
   const updateConversationMessages = useCallback(
     async (messages: ChatMessageType[]) => {
       if (!connectionId || !currentConversation) return;
 
+      // Ensure message order is preserved before saving
+      const orderedMessages = messages.map((msg, index) => ({
+        ...msg,
+        messageOrder: msg.messageOrder ?? index,
+      }));
+
       const updatedConversation = {
         ...currentConversation,
-        messages,
+        messages: orderedMessages,
         updatedAt: new Date(),
       };
 
@@ -315,6 +380,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         isUser: true,
         timestamp: new Date(),
         isExecuting: false,
+        isPartial: false,
       };
 
       const messagesWithUser = [...currentMessages, userMessage];
@@ -408,6 +474,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         isUser: false,
         timestamp: new Date(),
         isExecuting: false,
+        isPartial: false,
       };
 
       resetStreamingState();

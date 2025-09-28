@@ -11,7 +11,13 @@ export const ChatMessageSchema = z.object({
   executingTool: z.string().optional(),
   timestamp: z.date().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  isPartial: z.boolean().optional(), // Flag for messages that are part of a tool-calling sequence
+
+  // Add proper partial message support
+  isPartial: z.boolean().optional().default(false),
+  messageOrder: z.number().optional(), // Explicit order index
+  partialMessageId: z.string().optional(), // Links to complete message
+  relatedPartialId: z.string().optional(), // For complete messages linking back
+
   toolExecution: z
     .object({
       toolName: z.string(),
@@ -26,7 +32,7 @@ export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 // Extended ChatMessage interface with isPartial support (for backward compatibility)
 export interface ExtendedChatMessage extends ChatMessage {
-  isPartial?: boolean; // Flag for messages that are part of a tool-calling sequence
+  isPartial: boolean; // Flag for messages that are part of a tool-calling sequence
 }
 
 // Type guard to check if a message is partial

@@ -1,3 +1,4 @@
+// apps/ui/src/contexts/InspectorProvider.tsx
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { NetworkInspector } from "@mcpconnect/components";
 import { useStorage } from "./StorageContext";
@@ -178,16 +179,70 @@ export function InspectorUI() {
   let executionsToShow = connectionExecutions;
 
   if (currentChat && chatId) {
-    const toolMessageIds = currentChat.messages
-      .filter(msg => Boolean(msg.executingTool) || Boolean(msg.toolExecution))
-      .map(msg => msg.id)
-      .filter(Boolean) as string[];
+    // ENHANCED: Extract tool executions from chat messages with proper ordering
+    const toolMessages = currentChat.messages
+      .filter(
+        msg =>
+          Boolean(msg.executingTool) ||
+          Boolean(msg.toolExecution) ||
+          Boolean(msg.isExecuting)
+      )
+      .sort((a, b) => {
+        // Sort by messageOrder if available, otherwise by timestamp
+        if (a.messageOrder !== undefined && b.messageOrder !== undefined) {
+          return a.messageOrder - b.messageOrder;
+        }
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timeA - timeB;
+      });
 
-    const chatSpecificExecutions = connectionExecutions.filter(execution =>
-      toolMessageIds.includes(execution.id)
-    );
+    // Convert chat messages to tool executions for inspector
+    const chatBasedExecutions = toolMessages.map(msg => {
+      const toolName =
+        msg.executingTool || msg.toolExecution?.toolName || "unknown";
+      const messageId = msg.id || Date.now().toString();
 
-    executionsToShow = chatSpecificExecutions;
+      return {
+        id: messageId,
+        tool: toolName,
+        status: msg.isExecuting
+          ? "pending"
+          : msg.toolExecution?.status || "success",
+        duration: 0,
+        timestamp: msg.timestamp
+          ? new Date(msg.timestamp).toLocaleTimeString()
+          : new Date().toLocaleTimeString(),
+        request: {
+          tool: toolName,
+          arguments: msg.metadata?.arguments || {},
+          timestamp: msg.timestamp
+            ? new Date(msg.timestamp).toISOString()
+            : new Date().toISOString(),
+        },
+        ...(msg.toolExecution?.result
+          ? {
+              response: {
+                success: true,
+                result: msg.toolExecution.result,
+                timestamp: msg.timestamp
+                  ? new Date(msg.timestamp).toISOString()
+                  : new Date().toISOString(),
+              },
+            }
+          : {}),
+        ...(msg.toolExecution?.error && {
+          error: msg.toolExecution.error,
+        }),
+      };
+    });
+
+    // Use chat-based executions if we have them, otherwise fall back to stored executions
+    // @ts-ignore
+    executionsToShow =
+      chatBasedExecutions.length > 0
+        ? chatBasedExecutions
+        : connectionExecutions;
   }
 
   const handleToolCallClick = (toolCallId: string) => {

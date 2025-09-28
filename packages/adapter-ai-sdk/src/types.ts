@@ -61,8 +61,11 @@ export interface StreamingChatResponse {
   toolExecution?: ToolExecution;
   assistantMessage?: ChatMessage;
   toolExecutionMessages?: ChatMessage[];
+  finalAssistantMessage?: ChatMessage; // NEW: Separate final response message
   error?: string;
   hasToolCalls?: boolean; // Indicates more content will follow after tools
+  partialMessageId?: string; // NEW: ID for partial message tracking
+  messageOrder?: number; // NEW: Explicit message order
 }
 
 export interface ToolExecutionResult {

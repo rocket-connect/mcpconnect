@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/tool-executor.ts
 import { Connection, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
 import { ToolExecutionResult } from "./types";
 import { generateId } from "./utils";
@@ -33,6 +32,15 @@ export async function executeToolWithMCP(
           error: systemResult.error,
         },
         isExecuting: false,
+        // Enhanced metadata for inspector tracking
+        metadata: {
+          arguments: toolArgs,
+          executionId,
+          toolType: "system",
+          startTime,
+          endTime: Date.now(),
+        },
+        isPartial: false,
       };
 
       return {
@@ -93,6 +101,17 @@ export async function executeToolWithMCP(
         error: mcpResult.error,
       },
       isExecuting: false,
+      // Enhanced metadata for inspector tracking
+      metadata: {
+        arguments: toolArgs,
+        executionId,
+        toolType: "mcp",
+        connectionId: connection.id,
+        startTime,
+        endTime,
+        duration,
+      },
+      isPartial: false,
     };
 
     const toolExecution: ToolExecution = {
@@ -141,6 +160,18 @@ export async function executeToolWithMCP(
         error: errorMessage,
       },
       isExecuting: false,
+      // Enhanced metadata for inspector tracking
+      metadata: {
+        arguments: toolArgs,
+        executionId,
+        toolType: connection ? "mcp" : "system",
+        connectionId: connection?.id,
+        startTime,
+        endTime,
+        duration,
+        error: errorMessage,
+      },
+      isPartial: false,
     };
 
     const errorExecution: ToolExecution = {

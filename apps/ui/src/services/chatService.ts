@@ -29,8 +29,11 @@ export interface SSEEvent {
     toolExecution?: ToolExecution;
     assistantMessage?: ChatMessage;
     toolExecutionMessages?: ChatMessage[];
+    finalAssistantMessage?: ChatMessage; // NEW: Separate final response message
     error?: string;
     hasToolCalls?: boolean; // NEW: indicates more content will follow after tools
+    partialMessageId?: string; // NEW: ID for partial message tracking
+    messageOrder?: number; // NEW: Message order for preservation
   };
 }
 
@@ -183,6 +186,8 @@ export class ChatService {
           data: {
             content: streamEvent.content,
             hasToolCalls: streamEvent.hasToolCalls,
+            partialMessageId: streamEvent.partialMessageId,
+            messageOrder: streamEvent.messageOrder,
           },
         });
         break;
@@ -192,6 +197,7 @@ export class ChatService {
           type: "tool_start",
           data: {
             toolName: streamEvent.toolName,
+            messageOrder: streamEvent.messageOrder,
           },
         });
         break;
@@ -203,6 +209,7 @@ export class ChatService {
             toolName: streamEvent.toolName,
             toolResult: streamEvent.toolResult,
             toolExecution: streamEvent.toolExecution,
+            messageOrder: streamEvent.messageOrder,
           },
         });
         break;
@@ -213,6 +220,7 @@ export class ChatService {
           data: {
             assistantMessage: streamEvent.assistantMessage,
             toolExecutionMessages: streamEvent.toolExecutionMessages,
+            finalAssistantMessage: streamEvent.finalAssistantMessage, // NEW: Include final response
           },
         });
         break;

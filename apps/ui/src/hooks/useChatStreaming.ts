@@ -1,3 +1,4 @@
+// apps/ui/src/hooks/useChatStreaming.ts
 import { useState, useRef, useCallback } from "react";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { SSEEvent } from "../services/chatService";
@@ -99,40 +100,22 @@ export const useChatStreaming = (
 
         case "assistant_partial":
           if (event.data?.content) {
+            // Clear token streaming when partial message arrives
             setCurrentStreamingContent("");
             streamingMessageRef.current = "";
 
-            const partialMessageId = nanoid();
-            const explanationMessage: ChatMessageType = {
-              id: partialMessageId,
-              message: event.data.content,
-              isUser: false,
-              timestamp: new Date(),
-              isPartial: event.data.hasToolCalls,
-              isExecuting: false,
-            };
+            const partialMessageId = event.data.partialMessageId || nanoid();
 
+            // Store the context but DON'T save the message yet
+            // We'll let the message_complete event handle saving all messages in order
             setStreamingContext({
               hasPartialMessage: true,
               partialMessageId: partialMessageId,
               toolExecutionMessageIds: [],
             });
 
-            const currentConversationId = connectionIdRef.current;
-            const currentChatId = chatIdRef.current;
-            const currentConversations = conversationsRef.current;
-
-            if (currentConversationId && currentChatId) {
-              const latestConversations =
-                currentConversations[currentConversationId] || [];
-              const latestConversation = latestConversations.find(
-                (conv: any) => conv.id === currentChatId
-              );
-              const latestMessages = latestConversation?.messages || [];
-
-              const updatedMessages = [...latestMessages, explanationMessage];
-              await updateConversationMessages(updatedMessages);
-            }
+            // Show the content to the user immediately for better UX
+            setCurrentStreamingContent(event.data.content);
           }
           break;
 
@@ -143,9 +126,11 @@ export const useChatStreaming = (
               id: toolMessageId,
               message: "",
               isUser: false,
+              isPartial: false,
               isExecuting: true,
               executingTool: event.data.toolName,
               timestamp: new Date(),
+              messageOrder: event.data.messageOrder,
             };
 
             setStreamingContext(prev => ({
@@ -163,6 +148,7 @@ export const useChatStreaming = (
 
         case "tool_end":
           if (event.data?.toolName) {
+            // Update the tool message to show completion in the UI
             setStreamingToolMessages(prev =>
               prev.map(msg => {
                 if (
@@ -175,6 +161,7 @@ export const useChatStreaming = (
                   return {
                     ...msg,
                     isExecuting: false,
+                    messageOrder: event?.data?.messageOrder,
                     toolExecution: toolExecution
                       ? {
                           toolName,
@@ -192,6 +179,8 @@ export const useChatStreaming = (
               })
             );
             setStreamingStatus(`Completed ${event.data.toolName}`);
+
+            // Don't save individual tool messages here - let message_complete handle all saving
           }
           await refreshAll();
           break;
@@ -216,56 +205,24 @@ export const useChatStreaming = (
             const latestMessages = latestConversation?.messages || [];
 
             let finalMessages = [...latestMessages];
-            const finalAssistantMessage = event.data.assistantMessage;
 
+            // Add the assistant message
+            finalMessages.push(event.data.assistantMessage);
+
+            // Add any tool execution messages
             if (
               event.data.toolExecutionMessages &&
               event.data.toolExecutionMessages.length > 0
             ) {
-              finalMessages = [
-                ...finalMessages,
-                ...event.data.toolExecutionMessages,
-              ];
+              finalMessages.push(...event.data.toolExecutionMessages);
             }
 
-            if (streamingContext.hasPartialMessage) {
-              const partialIndex = finalMessages.findIndex(
-                msg => msg.id === streamingContext.partialMessageId
-              );
-
-              if (partialIndex !== -1) {
-                finalMessages[partialIndex] = {
-                  ...finalMessages[partialIndex],
-                  isPartial: false,
-                };
-
-                const partialContent =
-                  finalMessages[partialIndex].message || "";
-                const fullContent = finalAssistantMessage.message || "";
-
-                if (fullContent.length > partialContent.length + 10) {
-                  const additionalContent = fullContent
-                    .substring(partialContent.length)
-                    .trim();
-
-                  if (additionalContent) {
-                    const additionalMessage: ChatMessageType = {
-                      id: nanoid(),
-                      message: additionalContent,
-                      isUser: false,
-                      timestamp: new Date(),
-                      isExecuting: false,
-                    };
-                    finalMessages.push(additionalMessage);
-                  }
-                }
-              }
-            } else {
-              if (finalAssistantMessage.message?.trim()) {
-                finalMessages.push(finalAssistantMessage);
-              }
+            // NEW: Add the final assistant message if present
+            if (event.data.finalAssistantMessage) {
+              finalMessages.push(event.data.finalAssistantMessage);
             }
 
+            // Clear streaming state
             setStreamingToolMessages([]);
             setStreamingContext({
               hasPartialMessage: false,
@@ -293,6 +250,7 @@ export const useChatStreaming = (
             isUser: false,
             timestamp: new Date(),
             isExecuting: false,
+            isPartial: false,
           };
 
           const currentConversationId = connectionIdRef.current;
@@ -321,7 +279,7 @@ export const useChatStreaming = (
         }
       }
     },
-    [refreshAll, updateConversationMessages, streamingContext]
+    [refreshAll, updateConversationMessages]
   );
 
   const streamingState: StreamingState = {

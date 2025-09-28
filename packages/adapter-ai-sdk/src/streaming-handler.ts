@@ -163,22 +163,21 @@ export async function* sendMessageStream(
   conversationHistory: ChatMessage[] = []
 ): AsyncIterable<StreamingChatResponse> {
   const { tools, connection } = context;
-
   const llmMessages = [
     ...conversationToLLMMessages(conversationHistory),
-    {
-      role: "user" as const,
-      content: userMessage,
-    },
+    { role: "user" as const, content: userMessage },
   ];
 
   const llmTools = toolsToLLMFormat(tools);
-  let fullContent = "";
+  let explanationContent = ""; // Content before tool execution
+  let finalContent = ""; // Content after tool execution (the real answer)
   const allToolExecutionMessages: ChatMessage[] = [];
   const currentMessages = [...llmMessages];
-
   const maxIterations = 5;
   let iteration = 0;
+  let messageOrderCounter = conversationHistory.length;
+  let hasEmittedPartialMessage = false;
+  let partialMessageId: string | null = null;
 
   try {
     while (iteration < maxIterations) {
@@ -187,192 +186,157 @@ export async function* sendMessageStream(
       let iterationContent = "";
       const toolCalls: LLMToolCall[] = [];
       let hasToolCalls = false;
-      let streamError: Error | null = null;
 
-      try {
-        for await (const chunk of adapter.stream(currentMessages, {
-          tools: llmTools,
-        })) {
-          if (chunk.error) {
-            streamError = new Error(chunk.error);
-            break;
-          }
+      // Collect the complete response first
+      for await (const chunk of adapter.stream(currentMessages, {
+        tools: llmTools,
+      })) {
+        if (chunk.delta?.content) {
+          iterationContent += chunk.delta.content;
+        }
 
-          if (chunk.delta?.content) {
-            iterationContent += chunk.delta.content;
-          }
-
-          if (chunk.delta?.toolCalls) {
-            hasToolCalls = true;
-            for (const tc of chunk.delta.toolCalls) {
-              if (tc.function?.name && tc.function?.arguments) {
-                const existingCallIndex = toolCalls.findIndex(
-                  call => call.id === tc.id
-                );
-
-                if (existingCallIndex >= 0) {
-                  toolCalls[existingCallIndex] = {
-                    id: tc.id || generateId(),
-                    type: "function",
-                    function: {
-                      name: tc.function.name,
-                      arguments: tc.function.arguments,
-                    },
-                  };
-                } else {
-                  toolCalls.push({
-                    id: tc.id || generateId(),
-                    type: "function",
-                    function: {
-                      name: tc.function.name,
-                      arguments: tc.function.arguments,
-                    },
-                  });
-                }
+        if (chunk.delta?.toolCalls) {
+          hasToolCalls = true;
+          for (const tc of chunk.delta.toolCalls) {
+            if (tc.function?.name && tc.function?.arguments) {
+              const existingCallIndex = toolCalls.findIndex(
+                call => call.id === tc.id
+              );
+              if (existingCallIndex >= 0) {
+                toolCalls[existingCallIndex] = {
+                  id: tc.id || generateId(),
+                  type: "function",
+                  function: {
+                    name: tc.function.name,
+                    arguments: tc.function.arguments,
+                  },
+                };
+              } else {
+                toolCalls.push({
+                  id: tc.id || generateId(),
+                  type: "function",
+                  function: {
+                    name: tc.function.name,
+                    arguments: tc.function.arguments,
+                  },
+                });
               }
             }
           }
-
-          if (chunk.finishReason) {
-            break;
-          }
         }
-      } catch (error) {
-        streamError = error instanceof Error ? error : new Error(String(error));
+
+        if (chunk.finishReason) break;
       }
 
-      if (streamError) {
-        console.error(
-          `[Tool Chain] Stream error in iteration ${iteration}:`,
-          streamError
-        );
+      // Handle content based on whether we're before or after tool execution
+      if (iteration === 1 && hasToolCalls && !hasEmittedPartialMessage) {
+        // First iteration with tools - extract only the explanatory part
+        explanationContent = iterationContent;
+        partialMessageId = generateId();
+
         yield {
-          type: "error",
-          error: streamError.message,
+          type: "assistant_partial",
+          content: explanationContent,
+          hasToolCalls: true,
+          partialMessageId,
+          messageOrder: ++messageOrderCounter,
         };
-        return;
+        hasEmittedPartialMessage = true;
+      } else if (iteration > 1 && !hasToolCalls) {
+        // FIXED: Final iteration without tools - this is the summary/conclusion
+        // Stream the final answer directly without accumulating
+        for (const char of iterationContent) {
+          yield { type: "token", delta: char };
+        }
+        finalContent = iterationContent; // Store for final message creation
       }
 
-      if (iterationContent.trim()) {
-        if (hasToolCalls) {
+      // Execute tools if any
+      if (toolCalls.length > 0) {
+        currentMessages.push({
+          role: "assistant",
+          content: iterationContent || "",
+          toolCalls: toolCalls,
+        });
+
+        for (const toolCall of toolCalls) {
           yield {
-            type: "assistant_partial",
-            content: iterationContent,
-            hasToolCalls: true,
+            type: "tool_start",
+            toolName: toolCall.function.name,
+            messageOrder: ++messageOrderCounter,
           };
-          fullContent += iterationContent;
-        } else {
-          for (const char of iterationContent) {
-            yield {
-              type: "token",
-              delta: char,
-            };
-          }
-          fullContent += iterationContent;
+
+          const toolResult = await executeToolWithMCP(
+            connection,
+            toolCall.function.name,
+            JSON.parse(toolCall.function.arguments)
+          );
+
+          toolResult.chatMessage.messageOrder = messageOrderCounter;
+          allToolExecutionMessages.push(toolResult.chatMessage);
+
+          currentMessages.push({
+            role: "tool" as const,
+            content: JSON.stringify(
+              toolResult.result || { status: "executed" }
+            ),
+            toolCallId: toolCall.id,
+            name: toolCall.function.name,
+          });
+
+          yield {
+            type: "tool_end",
+            toolName: toolCall.function.name,
+            toolResult: toolResult.result,
+            toolExecution: toolResult.toolExecution,
+            messageOrder: messageOrderCounter,
+          };
         }
-      }
-
-      if (toolCalls.length === 0) {
-        break;
-      }
-
-      currentMessages.push({
-        role: "assistant",
-        content: iterationContent || "",
-        toolCalls: toolCalls,
-      });
-
-      for (const toolCall of toolCalls) {
-        yield {
-          type: "tool_start",
-          toolName: toolCall.function.name,
-        };
-
-        const toolResult = await executeToolWithMCP(
-          connection,
-          toolCall.function.name,
-          JSON.parse(toolCall.function.arguments)
-        );
-
-        allToolExecutionMessages.push(toolResult.chatMessage);
-
-        if (AISDKAdapter.storageAdapter) {
-          try {
-            await AISDKAdapter.storageAdapter.addToolExecution(
-              connection.id,
-              toolResult.toolExecution
-            );
-          } catch (error) {
-            console.warn("Failed to store tool execution:", error);
-          }
-        }
-
-        const toolMessage = {
-          role: "tool" as const,
-          content: toolResult.error
-            ? JSON.stringify({ error: toolResult.error })
-            : JSON.stringify(toolResult.result || { status: "executed" }),
-          toolCallId: toolCall.id,
-          name: toolCall.function.name,
-        };
-
-        currentMessages.push(toolMessage);
-
-        yield {
-          type: "tool_end",
-          toolName: toolCall.function.name,
-          toolResult: toolResult.result,
-          toolExecution: toolResult.toolExecution,
-        };
+      } else {
+        break; // No more tools to execute
       }
     }
 
-    if (allToolExecutionMessages.length > 0) {
-      try {
-        let finalIterationContent = "";
+    // Create the final message structure
+    let assistantMessage: ChatMessage;
+    let finalAssistantMessage: ChatMessage | undefined;
 
-        for await (const chunk of adapter.stream(currentMessages)) {
-          if (chunk.error) {
-            break;
-          }
+    if (hasEmittedPartialMessage && partialMessageId) {
+      // Keep the partial message as the explanation only
+      assistantMessage = {
+        id: partialMessageId,
+        message: explanationContent, // Only the explanation
+        isUser: false,
+        timestamp: new Date(),
+        isExecuting: false,
+        messageOrder: messageOrderCounter - allToolExecutionMessages.length,
+        isPartial: false,
+      };
 
-          if (chunk.delta?.content) {
-            finalIterationContent += chunk.delta.content;
-            yield {
-              type: "token",
-              delta: chunk.delta.content,
-            };
-          }
-
-          if (chunk.delta?.toolCalls) {
-            console.warn("[Final iteration] Unexpected tool calls detected");
-            break;
-          }
-
-          if (chunk.finishReason === "stop") {
-            break;
-          }
-        }
-
-        fullContent += finalIterationContent;
-      } catch (error) {
-        console.error("[Final iteration] Error:", error);
+      // Create a separate message for the final answer if there is one
+      if (finalContent && finalContent.trim()) {
+        finalAssistantMessage = createAssistantMessage(finalContent);
+        finalAssistantMessage.messageOrder = ++messageOrderCounter;
       }
+    } else {
+      // Create normal message for non-tool responses
+      assistantMessage = createAssistantMessage(
+        finalContent || explanationContent
+      );
+      assistantMessage.messageOrder = ++messageOrderCounter;
     }
-
-    const assistantMessage = createAssistantMessage(fullContent);
 
     yield {
       type: "message_complete",
       assistantMessage,
       toolExecutionMessages: allToolExecutionMessages,
+      finalAssistantMessage, // Separate final response message
     };
   } catch (error) {
     console.error("Stream error:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
     yield {
       type: "error",
-      error: errorMessage,
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }
