@@ -347,17 +347,6 @@ export function createThinkingMessage(): ChatMessage {
   };
 }
 
-export function createAssistantMessage(content: string): ChatMessage {
-  return {
-    id: generateId(),
-    message: content || "", // Don't provide default text
-    isUser: false,
-    timestamp: new Date(),
-    isExecuting: false,
-    isPartial: false,
-  };
-}
-
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     if (error.message.includes("401")) {

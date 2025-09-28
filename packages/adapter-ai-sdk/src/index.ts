@@ -9,7 +9,6 @@ export type {
   LLMSettings,
   ModelOption,
   ExtendedLLMMessage,
-  ToolResultForLLM,
   AIModel,
   AIModelMessage,
 } from "./types";
@@ -38,7 +37,6 @@ export {
   convertToAIMessages,
   convertToAITools,
   createThinkingMessage,
-  createAssistantMessage,
   getErrorMessage,
   validateChatContext,
   formatToolResultForLLM,

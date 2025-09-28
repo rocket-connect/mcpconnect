@@ -97,11 +97,4 @@ export type AIModelMessage =
   | SystemModelMessage
   | ToolModelMessage;
 
-export interface ToolResultForLLM {
-  toolCallId: string;
-  result: any;
-  rawResult: any;
-  error?: string;
-}
-
 export type AIModel = LanguageModel;

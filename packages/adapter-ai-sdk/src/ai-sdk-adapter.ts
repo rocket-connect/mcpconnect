@@ -9,7 +9,7 @@ import {
   AdapterStatus,
   StorageAdapter,
 } from "@mcpconnect/base-adapters";
-import { ChatMessage, ToolExecution } from "@mcpconnect/schemas";
+import { ChatMessage } from "@mcpconnect/schemas";
 import { generateText } from "ai";
 import {
   AISDKConfig,
@@ -270,20 +270,4 @@ export class AISDKAdapter extends LLMAdapter {
   static createThinkingMessage = createThinkingMessage;
   static validateChatContext = validateChatContext;
   static getErrorMessage = getErrorMessage;
-
-  static async storeToolExecution(
-    connectionId: string,
-    execution: ToolExecution
-  ): Promise<void> {
-    if (!this.storageAdapter) {
-      console.warn("No storage adapter configured for AISDKAdapter");
-      return;
-    }
-
-    try {
-      await this.storageAdapter.addToolExecution(connectionId, execution);
-    } catch (error) {
-      console.error("Failed to store tool execution:", error);
-    }
-  }
 }

@@ -1,4 +1,3 @@
-export { ChatMessage, type ChatMessageProps } from "./ChatMessage";
 export { ChatTabs, type ChatTabsProps } from "./ChatTabs";
 export {
   ChatMessageComponent,

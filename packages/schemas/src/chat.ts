@@ -35,24 +35,6 @@ export interface ExtendedChatMessage extends ChatMessage {
   isPartial: boolean; // Flag for messages that are part of a tool-calling sequence
 }
 
-// Type guard to check if a message is partial
-export function isPartialMessage(
-  message: ChatMessage
-): message is ChatMessage & { isPartial: true } {
-  return message.isPartial === true;
-}
-
-// Helper to convert regular ChatMessage to ExtendedChatMessage
-export function extendChatMessage(
-  message: ChatMessage,
-  isPartial = false
-): ExtendedChatMessage {
-  return {
-    ...message,
-    isPartial,
-  };
-}
-
 /**
  * Schema for chat conversation
  */

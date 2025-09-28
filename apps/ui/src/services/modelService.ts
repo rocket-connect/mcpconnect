@@ -118,23 +118,6 @@ export class ModelService {
   }
 
   /**
-   * Clear saved settings using the storage adapter
-   */
-  static async clearSettings(): Promise<void> {
-    if (!this.adapter) {
-      console.warn("No storage adapter configured for ModelService");
-      return;
-    }
-
-    try {
-      await this.adapter.clearLLMSettings();
-    } catch (error) {
-      console.error("Failed to clear LLM settings:", error);
-      throw error;
-    }
-  }
-
-  /**
    * Get placeholder text for API key input - delegates to AISDKAdapter
    */
   static getApiKeyPlaceholder(_provider?: ModelProvider): string {

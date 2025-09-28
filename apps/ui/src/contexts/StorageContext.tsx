@@ -36,7 +36,6 @@ interface StorageContextType {
   ) => Promise<void>;
   refreshConversations: () => Promise<void>;
   refreshAll: () => Promise<void>;
-  forceRefresh: () => Promise<void>;
   addConnection: (connection: Connection) => Promise<void>;
   updateConnection: (connection: Connection) => Promise<void>;
   deleteConnection: (connectionId: string) => Promise<void>;
@@ -467,19 +466,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     }
   }, [adapter, loadAllDisabledTools]);
 
-  const forceRefresh = useCallback(async () => {
-    setConnections([]);
-    setTools({});
-    setSystemTools([]);
-    setResources({});
-    setConversations({});
-    setToolExecutions({});
-    setDisabledTools({});
-    setDisabledSystemTools(new Set());
-
-    await refreshAll();
-  }, [refreshAll]);
-
   const updateConnections = useCallback(
     async (newConnections: Connection[]) => {
       try {
@@ -800,7 +786,6 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     updateConversations,
     refreshConversations,
     refreshAll,
-    forceRefresh,
     addConnection,
     updateConnection,
     deleteConnection,
