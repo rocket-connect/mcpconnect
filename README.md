@@ -14,6 +14,14 @@ Professional browser-based development environment for Model Context Protocol (M
 
 MCP Connect is a comprehensive development workbench that bridges the gap between MCP servers and AI language models. It transforms MCP development from a command-line experience into a visual, interactive workflow that accelerates debugging and reduces integration complexity.
 
+<div align="center">
+  <picture>
+    <source srcset="./docs/mcpconnect-home-ui-dark.png" media="(prefers-color-scheme: dark)">
+    <img src="./docs/mcpconnect-home-ui-light.png" width="90%" alt="MCP Connect Home Interface" />
+  </picture>
+  <p><em>Clean, intuitive interface for MCP development and testing</em></p>
+</div>
+
 ### Core Value Proposition
 
 **For MCP Developers**: Eliminate the trial-and-error cycle of MCP development with visual debugging, real-time protocol inspection, and integrated tool testing.
@@ -28,6 +36,14 @@ MCP Connect is a comprehensive development workbench that bridges the gap betwee
 
 MCP Connect provides native support for HTTP, WebSocket, and Server-Sent Events protocols, enabling developers to work with any MCP server regardless of transport implementation. Real-time protocol message monitoring captures every request and response with visual formatting, making it simple to understand complex protocol flows. The centralized connection management system handles multiple MCP server environments simultaneously, while automatic tool and resource enumeration discovers available capabilities without manual configuration.
 
+<div align="center">
+  <picture>
+    <source srcset="./docs/mcpconnect-add-connection-ui-dark.png" media="(prefers-color-scheme: dark)">
+    <img src="./docs/mcpconnect-add-connection-ui-light.png" width="90%" alt="MCP Server Connection Setup" />
+  </picture>
+  <p><em>Simple MCP server connection configuration with support for multiple protocols</em></p>
+</div>
+
 ### Visual Debugging Environment
 
 The interactive tool browser presents a sidebar-based interface for managing available tools with intuitive enable/disable controls. Detailed execution logs capture timing, parameters, and results for every tool invocation, providing the insights needed for performance optimization and error diagnosis. Complete conversation history tracking maintains timelines of tool interactions within chat contexts, and comprehensive export capabilities allow conversations to be saved in multiple formats for documentation and team collaboration.
@@ -36,9 +52,25 @@ The interactive tool browser presents a sidebar-based interface for managing ava
 
 Flexible AI provider support accommodates both Anthropic Claude and OpenAI models with fully configurable parameters for temperature, token limits, and model selection. Real-time streaming responses provide immediate feedback while visualizing tool execution progress, creating a natural development workflow. Intelligent conversation context management optimizes token usage while maintaining conversational coherence, and dynamic tool state management enables or disables tools based on conversation requirements and performance considerations.
 
+<div align="center">
+  <picture>
+    <source srcset="./docs/mcpconnect-add-llm-ui-dark.png" media="(prefers-color-scheme: dark)">
+    <img src="./docs/mcpconnect-add-llm-ui-light.png" width="90%" alt="AI Provider Configuration" />
+  </picture>
+  <p><em>Flexible AI provider setup with support for multiple models and custom parameters</em></p>
+</div>
+
 ### Developer Experience
 
 Zero-configuration startup through the npx command eliminates setup friction and gets developers testing immediately. Local browser storage ensures all conversation data and configurations remain private with no external dependencies or data transmission. TypeScript-native implementation provides complete type safety with comprehensive schema definitions for all MCP protocol elements, while the included React component library enables rapid development of custom MCP-enabled applications.
+
+<div align="center">
+  <picture>
+    <source srcset="./docs/mcpconnect-add-svg-ui-dark.png" media="(prefers-color-scheme: dark)">
+    <img src="./docs/mcpconnect-add-svg-ui-light.png" width="90%" alt="SVG Generation Tool" />
+  </picture>
+  <p><em>Built-in SVG generation capabilities for dynamic visualizations</em></p>
+</div>
 
 ## Feature Matrix
 
