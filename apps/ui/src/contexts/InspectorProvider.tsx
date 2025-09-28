@@ -1,8 +1,9 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 // apps/ui/src/contexts/InspectorProvider.tsx
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { NetworkInspector } from "@mcpconnect/components";
 import { useStorage } from "./StorageContext";
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useMemo } from "react";
 
 interface InspectorContextType {
   selectedToolCall: string | null;
@@ -54,12 +55,23 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
       if (toolsIndex !== -1 && urlParts[toolsIndex + 1]) {
         manualToolId = urlParts[toolsIndex + 1];
       }
+    } else {
+      // Check for direct tool path (/connections/:id/tools/:toolId)
+      const directToolsIndex = urlParts.findIndex(part => part === "tools");
+      if (directToolsIndex !== -1 && urlParts[directToolsIndex + 1]) {
+        manualToolId = urlParts[directToolsIndex + 1];
+      }
     }
   }
 
   const finalConnectionId = connectionId || manualConnectionId;
   const finalChatId = chatId || manualChatId;
   const finalToolId = toolId || manualToolId;
+
+  // Determine the current view type
+  const isToolDetailView =
+    location.pathname.includes("/tools/") &&
+    !location.pathname.includes("/chat/");
 
   useEffect(() => {
     if (finalToolId) {
@@ -75,7 +87,12 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
       setSelectedToolCall(toolCallId);
       setExpandedToolCall(toolCallId);
 
-      if (finalConnectionId && finalChatId) {
+      // Different navigation based on current view
+      if (isToolDetailView && finalConnectionId) {
+        // Stay on tool detail view - just update selection
+        // Don't navigate, just expand in place
+      } else if (finalConnectionId && finalChatId) {
+        // Navigate to chat with tool expanded
         navigate(
           `/connections/${finalConnectionId}/chat/${finalChatId}/tools/${toolCallId}`
         );
@@ -84,7 +101,12 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
       if (expandedToolCall === toolCallId) {
         setExpandedToolCall(null);
 
-        if (finalConnectionId && finalChatId) {
+        // Different navigation based on current view
+        if (isToolDetailView && finalConnectionId) {
+          // Stay on tool detail page when collapsing - don't navigate away
+          // Just collapse the selection
+        } else if (finalConnectionId && finalChatId) {
+          // Just remove the tool from chat URL
           navigate(`/connections/${finalConnectionId}/chat/${finalChatId}`);
         }
       }
@@ -109,24 +131,69 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
 export function InspectorUI() {
   const params = useParams();
   const location = useLocation();
-  const { connections, conversations, toolExecutions } = useStorage();
-  const { selectedToolCall, syncToolCallState } = useInspector();
+  const { connections, conversations, toolExecutions, adapter } = useStorage();
+  const {
+    selectedToolCall,
+    setSelectedToolCall,
+    setExpandedToolCall,
+    syncToolCallState,
+  } = useInspector();
 
   const urlParts = location.pathname.split("/");
   const connectionsIndex = urlParts.findIndex(part => part === "connections");
   let manualConnectionId = "";
   let manualChatId = "";
+  let manualToolId = "";
 
   if (connectionsIndex !== -1 && urlParts[connectionsIndex + 1]) {
     manualConnectionId = urlParts[connectionsIndex + 1];
+
     const chatIndex = urlParts.findIndex(part => part === "chat");
     if (chatIndex !== -1 && urlParts[chatIndex + 1]) {
       manualChatId = urlParts[chatIndex + 1];
+    }
+
+    const toolsIndex = urlParts.findIndex(part => part === "tools");
+    if (toolsIndex !== -1 && urlParts[toolsIndex + 1]) {
+      manualToolId = urlParts[toolsIndex + 1];
     }
   }
 
   const connectionId = params.connectionId || manualConnectionId || "";
   const chatId = params.chatId || manualChatId || "";
+  const toolId = params.toolId || manualToolId || "";
+
+  // Determine view type
+  const isToolDetailView =
+    location.pathname.includes("/tools/") &&
+    !location.pathname.includes("/chat/");
+  const isChatView = location.pathname.includes("/chat/");
+
+  // Load manual executions for tool detail view
+  const [manualExecutions, setManualExecutions] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (isToolDetailView && connectionId && toolId) {
+      const loadManualExecutions = async () => {
+        try {
+          const stored = await adapter.get(
+            `manual-executions-${connectionId}-${toolId}`
+          );
+          if (stored?.value && Array.isArray(stored.value)) {
+            setManualExecutions(stored.value);
+          } else {
+            setManualExecutions([]);
+          }
+        } catch (error) {
+          console.error("Failed to load manual executions:", error);
+          setManualExecutions([]);
+        }
+      };
+      loadManualExecutions();
+    } else {
+      setManualExecutions([]);
+    }
+  }, [adapter, connectionId, toolId, isToolDetailView]);
 
   const chatHasToolCalls = (chatId: string, connectionId: string): boolean => {
     if (!chatId || !connectionId) return false;
@@ -178,7 +245,7 @@ export function InspectorUI() {
 
   let executionsToShow = connectionExecutions;
 
-  if (currentChat && chatId) {
+  if (currentChat && chatId && isChatView) {
     // ENHANCED: Extract tool executions from chat messages with proper ordering
     const toolMessages = currentChat.messages
       .filter(
@@ -197,7 +264,7 @@ export function InspectorUI() {
         return timeA - timeB;
       });
 
-    // Convert chat messages to tool executions for inspector
+    // Convert chat messages to tool executions for inspector - CHAT CONTEXT ONLY
     const chatBasedExecutions = toolMessages.map(msg => {
       const toolName =
         msg.executingTool || msg.toolExecution?.toolName || "unknown";
@@ -234,34 +301,82 @@ export function InspectorUI() {
         ...(msg.toolExecution?.error && {
           error: msg.toolExecution.error,
         }),
+        // Mark as chat execution
+        context: "chat",
       };
     });
 
-    // Use chat-based executions if we have them, otherwise fall back to stored executions
+    // For chat view: ONLY show chat-based executions
     // @ts-ignore
-    executionsToShow =
-      chatBasedExecutions.length > 0
-        ? chatBasedExecutions
-        : connectionExecutions;
+    executionsToShow = chatBasedExecutions;
+  } else if (isToolDetailView) {
+    // For tool detail view: ONLY show manual executions for this specific tool
+    executionsToShow = manualExecutions.map(exec => ({
+      ...exec,
+      context: "manual",
+    }));
   }
 
   const handleToolCallClick = (toolCallId: string) => {
-    syncToolCallState(toolCallId, true);
+    // For tool detail view, just update the selection without navigation
+    if (isToolDetailView) {
+      setSelectedToolCall(toolCallId);
+      setExpandedToolCall(toolCallId);
+    } else {
+      // For chat view, use normal navigation
+      syncToolCallState(toolCallId, true);
+    }
   };
+
+  // Prepare props for NetworkInspector based on view type
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const inspectorProps = useMemo(() => {
+    if (isToolDetailView) {
+      return {
+        executions: executionsToShow, // Only manual executions for this tool
+        connectionId,
+        connectionName: currentConnection?.name || "Unknown Connection",
+        chatId: "",
+        chatTitle: `Tool: ${toolId}`,
+        onToolCallClick: handleToolCallClick,
+        selectedExecution: selectedToolCall,
+        hasAnyConnections,
+        chatHasToolCalls: false,
+        manualExecutions: executionsToShow, // Same as executions for manual context
+        isManualContext: true,
+      };
+    } else {
+      return {
+        executions: executionsToShow, // Only chat executions
+        connectionId,
+        connectionName: currentConnection?.name || "Unknown Connection",
+        chatId,
+        chatTitle: currentChat?.title || "No Chat Selected",
+        onToolCallClick: handleToolCallClick,
+        selectedExecution: selectedToolCall,
+        hasAnyConnections,
+        chatHasToolCalls: currentChatHasToolCalls,
+        manualExecutions: [], // No manual executions in chat context
+        isManualContext: false,
+      };
+    }
+  }, [
+    isToolDetailView,
+    executionsToShow,
+    connectionId,
+    currentConnection?.name,
+    toolId,
+    chatId,
+    currentChat?.title,
+    selectedToolCall,
+    hasAnyConnections,
+    currentChatHasToolCalls,
+    handleToolCallClick,
+  ]);
 
   return (
     <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors h-full">
-      <NetworkInspector
-        executions={executionsToShow}
-        connectionId={connectionId}
-        connectionName={currentConnection?.name || "Unknown Connection"}
-        chatId={chatId}
-        chatTitle={currentChat?.title || "No Chat Selected"}
-        onToolCallClick={handleToolCallClick}
-        selectedExecution={selectedToolCall}
-        hasAnyConnections={hasAnyConnections}
-        chatHasToolCalls={currentChatHasToolCalls}
-      />
+      <NetworkInspector {...inspectorProps} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { useInspector } from "../contexts/InspectorProvider";
@@ -86,6 +86,7 @@ const preserveMessageOrder = (
 
 export const ChatInterface = (_args: ChatInterfaceProps) => {
   const { connectionId, chatId } = useParams();
+  const navigate = useNavigate();
   const {
     connections,
     systemTools,
@@ -196,6 +197,40 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     clearAllChatsWithCleanup,
     refreshAll,
     currentConnection
+  );
+
+  // Tool navigation handler
+  const handleToolNavigate = useCallback(
+    (toolId: string, args?: Record<string, any>) => {
+      if (!connectionId) return;
+
+      // Create URL with encoded parameters
+      const searchParams = new URLSearchParams();
+
+      if (args && Object.keys(args).length > 0) {
+        // Encode each argument as a URL parameter
+        Object.entries(args).forEach(([key, value]) => {
+          try {
+            // JSON stringify and encode the value to preserve type information
+            const encodedValue = encodeURIComponent(JSON.stringify(value));
+            searchParams.set(key, encodedValue);
+          } catch (error) {
+            // Fallback to string if JSON stringify fails
+            console.warn(`Failed to encode argument ${key}:`, error);
+            searchParams.set(key, encodeURIComponent(String(value)));
+          }
+        });
+      }
+
+      // Navigate with or without query parameters
+      const baseUrl = `/connections/${connectionId}/tools/${toolId}`;
+      const finalUrl = searchParams.toString()
+        ? `${baseUrl}?${searchParams.toString()}`
+        : baseUrl;
+
+      navigate(finalUrl);
+    },
+    [connectionId, navigate]
   );
 
   // Update streaming refs
@@ -617,6 +652,7 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                             msg.id || `msg-${index}`
                           )}
                           onToolCallExpand={handleToolCallExpand}
+                          onToolNavigate={handleToolNavigate}
                           isToolEnabled={(toolName: string) => {
                             if (
                               systemTools.some(tool => tool.name === toolName)

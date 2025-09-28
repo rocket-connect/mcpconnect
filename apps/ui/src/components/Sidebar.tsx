@@ -99,6 +99,13 @@ export const Sidebar = ({ connections }: SidebarProps) => {
     navigate(`/connections/${connection.id}/chat/${firstChatId}`);
   };
 
+  // Tool navigation handler
+  const handleToolNavigate = (toolId: string) => {
+    if (currentConnectionId) {
+      navigate(`/connections/${currentConnectionId}/tools/${toolId}`);
+    }
+  };
+
   // Check if this is a first-time user
   const isFirstTime = connections.length === 0;
 
@@ -446,9 +453,9 @@ export const Sidebar = ({ connections }: SidebarProps) => {
               </div>
             )}
 
-            {/* Tools List - Compact */}
+            {/* Tools List - Updated with new ToolCard */}
             <div
-              className={`space-y-2 ${isFirstTime ? "opacity-60" : ""} min-w-0 overflow-hidden`}
+              className={`space-y-3 ${isFirstTime ? "opacity-60" : ""} min-w-0 overflow-hidden`}
             >
               {filteredTools.length === 0 ? (
                 <div className="text-center py-4 text-xs text-gray-500 dark:text-gray-400">
@@ -479,7 +486,9 @@ export const Sidebar = ({ connections }: SidebarProps) => {
                       key={`${tool.id}-${idx}`}
                       tool={tool}
                       enabled={enabled}
-                      onClick={() => toggleTool(tool.id)}
+                      onToggle={() => toggleTool(tool.id)}
+                      onNavigate={handleToolNavigate}
+                      connectionId={currentConnectionId}
                       isDemoMode={isFirstTime}
                     />
                   );
