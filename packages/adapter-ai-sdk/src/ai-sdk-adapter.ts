@@ -1,54 +1,49 @@
-/* eslint-disable no-case-declarations */
 import {
   LLMAdapter,
   LLMConfig,
   LLMMessage,
   LLMResponse,
   LLMStreamResponse,
-  LLMTool,
-  LLMToolCall,
   LLMCapabilities,
   AdapterError,
   AdapterStatus,
   StorageAdapter,
 } from "@mcpconnect/base-adapters";
-import { Connection, ChatMessage, ToolExecution } from "@mcpconnect/schemas";
-import { MCPService } from "./mcp-service";
-import { AnthropicProvider } from "./providers/anthropic";
-import { generateText, streamText } from "ai";
+import { ChatMessage, ToolExecution } from "@mcpconnect/schemas";
+import { generateText } from "ai";
 import {
   AISDKConfig,
   AISDKConfigSchema,
   ChatContext,
   ChatResponse,
   StreamingChatResponse,
-  ToolExecutionResult,
   LLMSettings,
   ModelOption,
-  ExtendedLLMMessage,
   AIModel,
 } from "./types";
 import {
-  generateId,
   convertMCPToolToTool,
   convertToAIMessages,
   convertToAITools,
-  needsReinit,
-  updateConfigWithSettings,
   createThinkingMessage,
-  createAssistantMessage,
   getErrorMessage,
   validateChatContext,
-  formatToolResultForLLM,
-  conversationToLLMMessages,
-  toolsToLLMFormat,
 } from "./utils";
-import { SystemToolsService } from "./system-tools";
+import { AnthropicProvider } from "./providers/anthropic";
+import {
+  initializeAIModel,
+  needsReinit,
+  updateConfigWithSettings,
+} from "./model-manager";
+import { getCapabilities } from "./capabilities-handler";
+import { handleCompletion } from "./completion-handler";
+import { handleStream, sendMessageStream } from "./streaming-handler";
+import { sendMessage } from "./message-handler";
 
 export class AISDKAdapter extends LLMAdapter {
-  protected config: AISDKConfig;
-  private static storageAdapter: StorageAdapter | null = null;
-  private aiModel: AIModel | null = null;
+  public config: AISDKConfig;
+  public static storageAdapter: StorageAdapter | null = null;
+  public aiModel: AIModel | null = null;
 
   constructor(config: AISDKConfig) {
     const parsedConfig = AISDKConfigSchema.parse(config);
@@ -57,27 +52,8 @@ export class AISDKAdapter extends LLMAdapter {
     this.initializeAIModel();
   }
 
-  private initializeAIModel() {
-    try {
-      switch (this.config.provider) {
-        case "anthropic": {
-          const anthropicProvider = AnthropicProvider.createProviderWithCors(
-            this.config.apiKey!,
-            this.config.baseUrl
-          );
-          this.aiModel = anthropicProvider(this.config.model);
-          break;
-        }
-        default:
-          throw new AdapterError(
-            `Unsupported provider: ${this.config.provider}`,
-            "UNSUPPORTED_PROVIDER"
-          );
-      }
-    } catch (error) {
-      console.error("Failed to initialize AI model:", error);
-      this.aiModel = null;
-    }
+  initializeAIModel() {
+    this.aiModel = initializeAIModel(this.config);
   }
 
   static setStorageAdapter(adapter: StorageAdapter) {
@@ -85,30 +61,7 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   async getCapabilities(): Promise<LLMCapabilities> {
-    const baseCapabilities: LLMCapabilities = {
-      streaming: true,
-      tools: true,
-      systemMessages: true,
-      multiModal: false,
-      maxContextLength: 4096,
-      supportedModalities: ["text"],
-    };
-
-    switch (this.config.provider) {
-      case "anthropic":
-        return {
-          ...baseCapabilities,
-          maxContextLength: 200000,
-          multiModal: true,
-          supportedModalities: ["text", "image"],
-          costPerToken: {
-            input: 0.000008,
-            output: 0.000024,
-          },
-        };
-      default:
-        return baseCapabilities;
-    }
+    return getCapabilities(this.config);
   }
 
   async initialize(): Promise<void> {
@@ -167,45 +120,16 @@ export class AISDKAdapter extends LLMAdapter {
     this.status = AdapterStatus.PROCESSING;
 
     try {
-      const aiMessages = convertToAIMessages(messages);
-      const aiTools = convertToAITools(options?.tools || this.config.tools);
-
-      const result = await generateText({
-        model: this.aiModel,
-        messages: aiMessages,
-        ...(Object.keys(aiTools).length > 0 && { tools: aiTools }),
-        maxOutputTokens: options?.maxTokens || this.config.maxTokens,
+      const result = await handleCompletion(this.aiModel, messages, {
+        ...options,
+        model: this.config.model,
+        tools: options?.tools || this.config.tools,
+        maxTokens: options?.maxTokens || this.config.maxTokens,
         temperature: options?.temperature || this.config.temperature,
       });
 
       this.status = AdapterStatus.CONNECTED;
-
-      const toolCalls: LLMToolCall[] =
-        result.toolCalls?.map(tc => ({
-          id: tc.toolCallId,
-          type: "function",
-          function: {
-            name: tc.toolName,
-            arguments: JSON.stringify(tc.input),
-          },
-        })) || [];
-
-      return {
-        id: `ai-sdk-${Date.now()}`,
-        content: result.text,
-        finishReason:
-          result.finishReason === "tool-calls" ? "tool_calls" : "stop",
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-        model: this.config.model,
-        timestamp: new Date(),
-        usage: {
-          promptTokens: result.usage.inputTokens || 0,
-          completionTokens: result.usage.outputTokens || 0,
-          totalTokens:
-            result.usage.totalTokens ||
-            (result.usage.inputTokens || 0) + (result.usage.outputTokens || 0),
-        },
-      };
+      return result;
     } catch (error) {
       this.status = AdapterStatus.ERROR;
       this.handleError(error, "complete");
@@ -231,149 +155,24 @@ export class AISDKAdapter extends LLMAdapter {
       const aiMessages = convertToAIMessages(messages);
       const aiTools = convertToAITools(options?.tools || this.config.tools);
 
-      const result = streamText({
-        model: this.aiModel,
-        messages: aiMessages,
-        ...(Object.keys(aiTools).length > 0 && { tools: aiTools }),
-        maxOutputTokens: options?.maxTokens || this.config.maxTokens,
-        temperature: options?.temperature || this.config.temperature,
-      });
-
-      let hasGeneratedContent = false;
-      const currentId = `ai-sdk-stream-${Date.now()}`;
-      const accumulatedToolCalls: any[] = [];
-
-      try {
-        for await (const delta of result.textStream) {
-          hasGeneratedContent = true;
-          yield {
-            id: currentId,
-            delta: {
-              content: delta,
-            },
-            model: this.config.model,
-          };
-        }
-
-        for await (const chunk of result.fullStream) {
-          if (chunk.type === "tool-call") {
-            hasGeneratedContent = true;
-
-            const toolCall = {
-              id: chunk.toolCallId,
-              type: "function" as const,
-              function: {
-                name: chunk.toolName,
-                arguments: JSON.stringify(chunk.input),
-              },
-            };
-
-            accumulatedToolCalls.push(toolCall);
-
-            yield {
-              id: currentId,
-              delta: {
-                toolCalls: [
-                  {
-                    index: accumulatedToolCalls.length - 1,
-                    id: chunk.toolCallId,
-                    type: "function",
-                    function: {
-                      name: chunk.toolName,
-                      arguments: JSON.stringify(chunk.input),
-                    },
-                  },
-                ],
-              },
-              model: this.config.model,
-            };
-          }
-        }
-
-        const finalResult = await result.finishReason;
-        const usage = await result.usage;
-
-        yield {
-          id: currentId,
-          delta: {},
-          finishReason: finalResult === "tool-calls" ? "tool_calls" : "stop",
+      for await (const chunk of handleStream(
+        this.aiModel,
+        aiMessages,
+        aiTools,
+        {
+          maxTokens: options?.maxTokens || this.config.maxTokens,
+          temperature: options?.temperature || this.config.temperature,
           model: this.config.model,
-          usage: {
-            promptTokens: usage.inputTokens || 0,
-            completionTokens: usage.outputTokens || 0,
-            totalTokens:
-              usage.totalTokens ||
-              (usage.inputTokens || 0) + (usage.outputTokens || 0),
-          },
-        };
-
-        this.status = AdapterStatus.CONNECTED;
-      } catch (streamError) {
-        console.error("Stream error details:", streamError);
-
-        // Parse API errors from the stream
-        let errorMessage = "Stream error occurred";
-        let errorType = "STREAM_ERROR";
-
-        if (streamError instanceof Error) {
-          errorMessage = streamError.message;
-
-          // Check for specific Anthropic API errors
-          if (errorMessage.includes("overloaded")) {
-            errorMessage =
-              "Your LLM is experiencing high demand. Please try again in a moment.";
-            errorType = "OVERLOADED_ERROR";
-          } else if (errorMessage.includes("rate_limit")) {
-            errorMessage =
-              "Rate limit exceeded. Please wait before sending another message.";
-            errorType = "RATE_LIMIT_ERROR";
-          } else if (errorMessage.includes("invalid_request")) {
-            errorMessage =
-              "Invalid request. Please check your message and try again.";
-            errorType = "INVALID_REQUEST_ERROR";
-          } else if (errorMessage.includes("authentication")) {
-            errorMessage =
-              "Authentication failed. Please check your API key in settings.";
-            errorType = "AUTH_ERROR";
-          } else if (errorMessage.includes("permission")) {
-            errorMessage =
-              "Permission denied. Please check your API key permissions.";
-            errorType = "PERMISSION_ERROR";
-          } else if (errorMessage.includes("not_found")) {
-            errorMessage =
-              "Model not found. Please check your model configuration.";
-            errorType = "MODEL_NOT_FOUND_ERROR";
-          }
         }
-
-        // Yield error response if no content was generated
-        if (!hasGeneratedContent) {
-          yield {
-            id: currentId,
-            delta: {
-              content: "", // Empty content for error case
-            },
-            finishReason: "error",
-            model: this.config.model,
-            error: errorMessage,
-            usage: {
-              promptTokens: 0,
-              completionTokens: 0,
-              totalTokens: 0,
-            },
-          };
-        }
-
-        // Always throw the error to be handled upstream
-        throw new AdapterError(errorMessage, errorType, {
-          originalError: streamError,
-        });
+      )) {
+        yield chunk;
       }
+
+      this.status = AdapterStatus.CONNECTED;
     } catch (error) {
       this.status = AdapterStatus.ERROR;
       console.error("Stream setup error:", error);
 
-      // Handle setup/initialization errors
       let errorMessage = "Failed to start conversation";
       let errorType = "STREAM_SETUP_ERROR";
 
@@ -407,377 +206,19 @@ export class AISDKAdapter extends LLMAdapter {
     context: ChatContext,
     conversationHistory: ChatMessage[] = []
   ): AsyncIterable<StreamingChatResponse> {
-    const { tools, llmSettings, connection } = context;
-
     // Update configuration and reinitialize if needed
-    if (needsReinit(this.config, llmSettings)) {
-      this.config = updateConfigWithSettings(this.config, llmSettings);
+    if (needsReinit(this.config, context.llmSettings)) {
+      this.config = updateConfigWithSettings(this.config, context.llmSettings);
       this.initializeAIModel();
     }
 
-    // Start with conversation history + new user message
-    const llmMessages: LLMMessage[] = [
-      ...conversationToLLMMessages(conversationHistory),
-      {
-        role: "user",
-        content: userMessage,
-      },
-    ];
-
-    // Convert tools to LLM format
-    const llmTools: LLMTool[] = toolsToLLMFormat(tools);
-    this.config.tools = llmTools;
-
-    let fullContent = "";
-    const allToolExecutionMessages: ChatMessage[] = [];
-    const currentMessages = [...llmMessages];
-
-    // Continue until no more tool calls are needed
-    const maxIterations = 5; // Prevent infinite loops
-    let iteration = 0;
-
-    try {
-      while (iteration < maxIterations) {
-        iteration++;
-
-        const toolCalls: LLMToolCall[] = [];
-        let iterationContent = "";
-        let streamError: Error | null = null;
-
-        // Stream the LLM response with proper error handling
-        try {
-          for await (const chunk of this.stream(currentMessages)) {
-            // Handle error in stream chunk
-            if (chunk.error) {
-              streamError = new Error(chunk.error);
-              break;
-            }
-
-            if (chunk.delta?.content) {
-              iterationContent += chunk.delta.content;
-              yield {
-                type: "token",
-                delta: chunk.delta.content,
-              };
-            }
-
-            // Accumulate tool calls
-            if (chunk.delta?.toolCalls) {
-              for (const tc of chunk.delta.toolCalls) {
-                if (tc.function?.name && tc.function?.arguments) {
-                  const existingCallIndex = toolCalls.findIndex(
-                    call => call.id === tc.id
-                  );
-
-                  if (existingCallIndex >= 0) {
-                    toolCalls[existingCallIndex] = {
-                      id: tc.id || generateId(),
-                      type: "function",
-                      function: {
-                        name: tc.function.name,
-                        arguments: tc.function.arguments,
-                      },
-                    };
-                  } else {
-                    toolCalls.push({
-                      id: tc.id || generateId(),
-                      type: "function",
-                      function: {
-                        name: tc.function.name,
-                        arguments: tc.function.arguments,
-                      },
-                    });
-                  }
-                }
-              }
-            }
-
-            // Check if we've finished with tool calls
-            if (
-              chunk.finishReason === "tool_calls" ||
-              (chunk.finishReason && toolCalls.length > 0)
-            ) {
-              break;
-            }
-
-            // If we get a stop reason without tool calls, we're done
-            if (chunk.finishReason === "stop" && toolCalls.length === 0) {
-              fullContent += iterationContent;
-              // Send the complete message
-              const assistantMessage = createAssistantMessage(fullContent);
-              yield {
-                type: "message_complete",
-                assistantMessage,
-                toolExecutionMessages: allToolExecutionMessages,
-              };
-              return;
-            }
-
-            // Handle error finish reason
-            if (chunk.finishReason === "error") {
-              streamError = new Error(chunk.error || "Stream ended with error");
-              break;
-            }
-          }
-        } catch (error) {
-          streamError =
-            error instanceof Error ? error : new Error(String(error));
-        }
-
-        // If we encountered a stream error, handle it
-        if (streamError) {
-          console.error(
-            `[Tool Chain] Stream error in iteration ${iteration}:`,
-            streamError
-          );
-          yield {
-            type: "error",
-            error: streamError.message,
-          };
-          return;
-        }
-
-        fullContent += iterationContent;
-
-        // If no tool calls in this iteration, we're done
-        if (toolCalls.length === 0) {
-          break;
-        }
-
-        currentMessages.push({
-          role: "assistant",
-          content: iterationContent || "",
-          toolCalls: toolCalls,
-        });
-
-        // Execute each tool and add results to conversation
-        for (const toolCall of toolCalls) {
-          yield {
-            type: "tool_start",
-            toolName: toolCall.function.name,
-          };
-
-          // Execute via MCP
-          const toolResult = await this.executeToolWithMCPStreaming(
-            connection,
-            toolCall.function.name,
-            JSON.parse(toolCall.function.arguments)
-          );
-
-          allToolExecutionMessages.push(toolResult.chatMessage);
-
-          // Store execution for persistence
-          if (AISDKAdapter.storageAdapter) {
-            try {
-              await AISDKAdapter.storageAdapter.addToolExecution(
-                connection.id,
-                toolResult.toolExecution
-              );
-            } catch (error) {
-              console.warn("Failed to store tool execution:", error);
-            }
-          }
-
-          // Add tool result to conversation immediately
-          const toolMessage = {
-            role: "tool" as const,
-            content: toolResult.error
-              ? JSON.stringify({ error: toolResult.error })
-              : JSON.stringify(toolResult.result || { status: "executed" }),
-            toolCallId: toolCall.id,
-            name: toolCall.function.name,
-          };
-
-          currentMessages.push(toolMessage);
-
-          yield {
-            type: "tool_end",
-            toolName: toolCall.function.name,
-            toolResult: toolResult.result,
-            toolExecution: toolResult.toolExecution,
-          };
-        }
-      }
-
-      const assistantMessage = createAssistantMessage(fullContent);
-      yield {
-        type: "message_complete",
-        assistantMessage,
-        toolExecutionMessages: allToolExecutionMessages,
-      };
-    } catch (error) {
-      console.error("Stream error:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      yield {
-        type: "error",
-        error: errorMessage,
-      };
-    }
-  }
-
-  /**
-   * Execute tool via MCP with proper result handling
-   */
-  private async executeToolWithMCPStreaming(
-    connection: Connection,
-    toolName: string,
-    toolArgs: Record<string, any>
-  ): Promise<ToolExecutionResult> {
-    const executionId = generateId();
-    const startTime = Date.now();
-
-    try {
-      // Check if it's a system tool first
-      if (SystemToolsService.isSystemTool(toolName)) {
-        const systemResult = await SystemToolsService.executeSystemTool(
-          toolName,
-          toolArgs
-        );
-
-        const chatMessage: ChatMessage = {
-          id: executionId,
-          isUser: false,
-          executingTool: toolName,
-          timestamp: new Date(),
-          toolExecution: {
-            toolName,
-            status: systemResult.success ? "success" : "error",
-            result: systemResult.result,
-            error: systemResult.error,
-          },
-          isExecuting: false,
-        };
-
-        return {
-          success: systemResult.success,
-          result: systemResult.result,
-          error: systemResult.error,
-          toolExecution: systemResult.execution,
-          chatMessage,
-        };
-      }
-
-      // Otherwise, execute via MCP
-      const mcpResult = await MCPService.executeTool(
-        connection,
-        toolName,
-        toolArgs
-      );
-
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-
-      // Extract the actual data from MCP response structure
-      let cleanResult = mcpResult.result;
-
-      // Handle MCP content array structure
-      if (
-        cleanResult &&
-        // @ts-ignore
-        cleanResult.content &&
-        // @ts-ignore
-        Array.isArray(cleanResult.content)
-      ) {
-        // @ts-ignore
-        const textContent = cleanResult.content
-          .filter((item: any) => item.type === "text")
-          .map((item: any) => item.text)
-          .join("\n");
-
-        if (textContent) {
-          try {
-            // Parse the JSON string to get the actual campaign data
-            cleanResult = JSON.parse(textContent);
-          } catch {
-            cleanResult = textContent;
-          }
-        }
-      }
-
-      const chatMessage: ChatMessage = {
-        id: executionId,
-        isUser: false,
-        executingTool: toolName,
-        timestamp: new Date(),
-        toolExecution: {
-          toolName,
-          status: mcpResult.success ? "success" : "error",
-          result: cleanResult,
-          error: mcpResult.error,
-        },
-        isExecuting: false,
-      };
-
-      const toolExecution: ToolExecution = {
-        id: executionId,
-        tool: toolName,
-        status: mcpResult.success ? "success" : "error",
-        duration,
-        timestamp: new Date().toLocaleTimeString(),
-        request: {
-          tool: toolName,
-          arguments: toolArgs,
-          timestamp: new Date().toISOString(),
-        },
-        response: mcpResult.success
-          ? {
-              success: true,
-              result: cleanResult,
-              timestamp: new Date().toISOString(),
-            }
-          : undefined,
-        error: mcpResult.error,
-      };
-
-      return {
-        success: mcpResult.success,
-        result: cleanResult,
-        error: mcpResult.error,
-        toolExecution,
-        chatMessage,
-      };
-    } catch (error) {
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-
-      console.error(`[Tool Execution] Failed:`, error);
-
-      const chatMessage: ChatMessage = {
-        id: executionId,
-        isUser: false,
-        executingTool: toolName,
-        timestamp: new Date(),
-        toolExecution: {
-          toolName,
-          status: "error",
-          error: errorMessage,
-        },
-        isExecuting: false,
-      };
-
-      const errorExecution: ToolExecution = {
-        id: executionId,
-        tool: toolName,
-        status: "error",
-        duration,
-        timestamp: new Date().toLocaleTimeString(),
-        request: {
-          tool: toolName,
-          arguments: toolArgs,
-          timestamp: new Date().toISOString(),
-        },
-        error: errorMessage,
-      };
-
-      return {
-        success: false,
-        error: errorMessage,
-        toolExecution: errorExecution,
-        chatMessage,
-      };
+    for await (const response of sendMessageStream(
+      this,
+      userMessage,
+      context,
+      conversationHistory
+    )) {
+      yield response;
     }
   }
 
@@ -789,90 +230,7 @@ export class AISDKAdapter extends LLMAdapter {
     context: ChatContext,
     conversationHistory: ChatMessage[] = []
   ): Promise<ChatResponse> {
-    const { tools, llmSettings } = context;
-
-    if (needsReinit(this.config, llmSettings)) {
-      this.config = updateConfigWithSettings(this.config, llmSettings);
-      this.initializeAIModel();
-    }
-
-    const llmMessages: LLMMessage[] =
-      conversationToLLMMessages(conversationHistory);
-
-    llmMessages.push({
-      role: "user",
-      content: userMessage,
-    });
-
-    const llmTools: LLMTool[] = toolsToLLMFormat(tools);
-
-    this.config.tools = llmTools;
-
-    const response = await this.complete(llmMessages);
-    const toolExecutionMessages: ChatMessage[] = [];
-    const toolResults: Array<{ toolCallId: string; result: any }> = [];
-
-    if (response.toolCalls && response.toolCalls.length > 0) {
-      for (const toolCall of response.toolCalls) {
-        const toolResult = await this.executeToolWithMCPStreaming(
-          context.connection,
-          toolCall.function.name,
-          JSON.parse(toolCall.function.arguments)
-        );
-
-        toolExecutionMessages.push(toolResult.chatMessage);
-        toolResults.push({
-          toolCallId: toolCall.id,
-          result: toolResult.result || { status: "executed" },
-        });
-
-        if (AISDKAdapter.storageAdapter) {
-          try {
-            await AISDKAdapter.storageAdapter.addToolExecution(
-              context.connection.id,
-              toolResult.toolExecution
-            );
-          } catch (error) {
-            console.warn("Failed to store tool execution:", error);
-          }
-        }
-      }
-
-      // Add tool results to conversation for final summary
-      const followUpMessages: ExtendedLLMMessage[] = [
-        {
-          role: "user",
-          content: userMessage,
-        },
-        {
-          role: "assistant",
-          content: response.content || "",
-          toolCalls: response.toolCalls,
-        },
-        // Include tool results so LLM can summarize
-        ...response.toolCalls.map((tc, index) => {
-          const result = toolResults[index];
-          return formatToolResultForLLM(tc.id, result.result, tc.function.name);
-        }),
-      ];
-
-      try {
-        const finalResponse = await this.complete(followUpMessages);
-        response.content = finalResponse.content;
-      } catch (error) {
-        console.error("Error in final completion:", error);
-        response.content = `I executed ${response.toolCalls.length} tool(s): ${response.toolCalls.map(tc => tc.function.name).join(", ")}. The operation completed.`;
-      }
-    }
-
-    const assistantMessage = createAssistantMessage(
-      response.content || "Task completed."
-    );
-
-    return {
-      assistantMessage,
-      toolExecutionMessages,
-    };
+    return sendMessage(this, userMessage, context, conversationHistory);
   }
 
   // Static helper methods

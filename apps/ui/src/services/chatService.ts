@@ -11,7 +11,7 @@ import { StorageAdapter } from "@mcpconnect/base-adapters";
 // Re-export types for compatibility
 export type { ChatContext, ChatResponse, LLMSettings };
 
-// SSE Event interface for streaming (simplified)
+// SSE Event interface for streaming with new assistant_partial event
 export interface SSEEvent {
   type:
     | "thinking"
@@ -19,15 +19,18 @@ export interface SSEEvent {
     | "tool_start"
     | "tool_end"
     | "message_complete"
-    | "error";
+    | "error"
+    | "assistant_partial"; // NEW: for assistant explanation before tools
   data?: {
     delta?: string;
+    content?: string; // For partial messages
     toolName?: string;
     toolResult?: any;
     toolExecution?: ToolExecution;
     assistantMessage?: ChatMessage;
     toolExecutionMessages?: ChatMessage[];
     error?: string;
+    hasToolCalls?: boolean; // NEW: indicates more content will follow after tools
   };
 }
 
@@ -169,6 +172,17 @@ export class ChatService {
           type: "token",
           data: {
             delta: streamEvent.delta,
+          },
+        });
+        break;
+
+      case "assistant_partial":
+        // NEW: Handle assistant's explanation before tool execution
+        await onEvent({
+          type: "assistant_partial",
+          data: {
+            content: streamEvent.content,
+            hasToolCalls: streamEvent.hasToolCalls,
           },
         });
         break;

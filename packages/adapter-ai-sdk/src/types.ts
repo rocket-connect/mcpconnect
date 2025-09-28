@@ -1,3 +1,4 @@
+// packages/adapter-ai-sdk/src/types.ts
 import {
   LLMConfigSchema,
   LLMMessage,
@@ -46,7 +47,13 @@ export interface ChatResponse {
 }
 
 export interface StreamingChatResponse {
-  type: "token" | "tool_start" | "tool_end" | "message_complete" | "error";
+  type:
+    | "token"
+    | "tool_start"
+    | "tool_end"
+    | "message_complete"
+    | "error"
+    | "assistant_partial";
   content?: string;
   delta?: string;
   toolName?: string;
@@ -55,6 +62,7 @@ export interface StreamingChatResponse {
   assistantMessage?: ChatMessage;
   toolExecutionMessages?: ChatMessage[];
   error?: string;
+  hasToolCalls?: boolean; // Indicates more content will follow after tools
 }
 
 export interface ToolExecutionResult {
