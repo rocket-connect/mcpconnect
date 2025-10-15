@@ -144,11 +144,41 @@ export function createServer(options: ServerOptions = {}): {
     })
   );
 
+  // Helper function to check if request is for a static asset
+  function isAssetRequest(reqPath: string): boolean {
+    const assetExtensions = [
+      ".js",
+      ".mjs",
+      ".css",
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".gif",
+      ".svg",
+      ".ico",
+      ".webp",
+      ".woff",
+      ".woff2",
+      ".ttf",
+      ".eot",
+      ".json",
+      ".xml",
+      ".txt",
+      ".pdf",
+      ".zip",
+      ".map",
+    ];
+
+    return assetExtensions.some(ext => reqPath.toLowerCase().endsWith(ext));
+  }
+
+  // CRITICAL: Static file serving with proper fallback handling
   app.use(
     express.static(uiBuildPath, {
-      maxAge: "1y", // Cache static assets for 1 year
+      maxAge: "1y",
       etag: true,
       lastModified: true,
+      fallthrough: true, // IMPORTANT: Allow requests to continue if file not found
       setHeaders: (res, filePath) => {
         const ext = path.extname(filePath).toLowerCase();
 
@@ -165,7 +195,7 @@ export function createServer(options: ServerOptions = {}): {
             break;
           case ".html":
             res.setHeader("Content-Type", "text/html; charset=utf-8");
-            res.setHeader("Cache-Control", "no-cache"); // Don't cache HTML
+            res.setHeader("Cache-Control", "no-cache");
             break;
           case ".json":
             res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -218,49 +248,29 @@ export function createServer(options: ServerOptions = {}): {
     })
   );
 
-  function isAssetRequest(reqPath: string): boolean {
-    const assetExtensions = [
-      ".js",
-      ".mjs",
-      ".css",
-      ".png",
-      ".jpg",
-      ".jpeg",
-      ".gif",
-      ".svg",
-      ".ico",
-      ".webp",
-      ".woff",
-      ".woff2",
-      ".ttf",
-      ".eot",
-      ".json",
-      ".xml",
-      ".txt",
-      ".pdf",
-      ".zip",
-      ".map",
-    ];
-
-    return assetExtensions.some(ext => reqPath.toLowerCase().endsWith(ext));
-  }
-
+  // CRITICAL: Catch-all route for SPA client-side routing
+  // This MUST come after static middleware and handle ALL non-API routes
   app.get("*", (req, res) => {
     const reqPath = req.path;
 
+    // Don't serve index.html for API routes
     if (reqPath.startsWith("/api/") || reqPath.startsWith("/health")) {
       return res.status(404).json({ error: "API endpoint not found" });
     }
 
+    // If it's a request for a specific asset that wasn't found, return 404
     if (isAssetRequest(reqPath)) {
-      return res.status(404).json({ error: "Asset not found" });
+      return res.status(404).send("Asset not found");
     }
 
+    // For all other routes (client-side routes), serve index.html
     const indexPath = path.join(uiBuildPath, "index.html");
+
+    // Use sendFile with proper error handling
     res.sendFile(indexPath, err => {
       if (err) {
         console.error("Error serving index.html:", err);
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).send("Internal server error");
       }
     });
   });
@@ -279,6 +289,9 @@ export function startServer(
       console.log(`MCPConnect server running on ${url}`);
       console.log(`UI available at ${url}`);
       console.log(`Static files served from: ${findUiBuildPath()}`);
+      console.log(
+        `Server configured for SPA routing - all routes will serve index.html`
+      );
       resolve({ port, host, url });
     });
 
