@@ -1,3 +1,5 @@
+// src/mcp-service.ts - Updated with URL normalization
+
 /* eslint-disable no-constant-condition */
 /* eslint-disable no-async-promise-executor */
 import {
@@ -20,6 +22,7 @@ import {
   isAbortError,
 } from "@ai-sdk/provider-utils";
 import { AdapterError, AdapterStatus } from "@mcpconnect/base-adapters";
+import { normalizeUrl, normalizeUrlWithPath } from "./utils";
 
 export class MCPService extends MCPAdapter {
   private static instance: MCPService | null = null;
@@ -49,7 +52,7 @@ export class MCPService extends MCPAdapter {
       provider: "mcp",
       protocolVersion: "2025-06-18",
       debug: false,
-      timeout: 60000, // Increased timeout for large responses
+      timeout: 60000,
       retries: 3,
       clientInfo: {
         name: "MCPConnect",
@@ -79,7 +82,7 @@ export class MCPService extends MCPAdapter {
   private prepareHeaders(connection: Connection): Record<string, string> {
     const baseHeaders: Record<string, string> = {
       "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream", // Add this line
+      Accept: "application/json, text/event-stream",
     };
 
     const connectionHeaders = connection.headers || {};
@@ -125,14 +128,12 @@ export class MCPService extends MCPAdapter {
     abortSignal?: AbortSignal
   ): Promise<any> {
     return new Promise(async (resolve, reject) => {
-      // Increased timeout for large responses like tool lists
       const timeoutMs = connection.timeout || 60000;
       const timeout = setTimeout(() => {
         this.cleanupPendingRequest(request.id as string);
         reject(new AdapterError("SSE request timeout", "REQUEST_TIMEOUT"));
       }, timeoutMs);
 
-      // Store the pending request for cleanup
       this.pendingRequests.set(request.id as string, {
         resolve,
         reject,
@@ -140,17 +141,18 @@ export class MCPService extends MCPAdapter {
       });
 
       try {
-        // Get or establish session
-        let sessionId = this.sessionCache.get(connection.url);
+        // Normalize URL and get or establish session
+        const normalizedUrl = normalizeUrl(connection.url);
+        let sessionId = this.sessionCache.get(normalizedUrl);
 
         if (!sessionId) {
           sessionId = await this.establishSSESession(connection, abortSignal);
-          this.sessionCache.set(connection.url, sessionId);
+          this.sessionCache.set(normalizedUrl, sessionId);
         }
 
-        // Send request to /message endpoint
-        const messageUrl = connection.url.replace(
-          /\/sse\/?$/,
+        // Build message URL with normalized base URL
+        const messageUrl = normalizeUrlWithPath(
+          normalizedUrl.replace(/\/sse\/?$/, ""),
           `/message?sessionId=${sessionId}`
         );
 
@@ -167,8 +169,8 @@ export class MCPService extends MCPAdapter {
 
           // Handle session expiry
           if (response.status === 400 || response.status === 404) {
-            this.sessionCache.delete(connection.url);
-            this.connectionCache.delete(connection.url);
+            this.sessionCache.delete(normalizedUrl);
+            this.connectionCache.delete(normalizedUrl);
 
             // Retry with fresh session
             try {
@@ -176,12 +178,13 @@ export class MCPService extends MCPAdapter {
                 connection,
                 abortSignal
               );
-              this.sessionCache.set(connection.url, sessionId);
+              this.sessionCache.set(normalizedUrl, sessionId);
 
-              const retryUrl = connection.url.replace(
-                /\/sse\/?$/,
+              const retryUrl = normalizeUrlWithPath(
+                normalizedUrl.replace(/\/sse\/?$/, ""),
                 `/message?sessionId=${sessionId}`
               );
+
               const retryResponse = await fetchFn(retryUrl, {
                 method: "POST",
                 headers: this.prepareHeaders(connection),
@@ -229,8 +232,9 @@ export class MCPService extends MCPAdapter {
       }, connection.timeout || 30000);
 
       try {
+        const normalizedUrl = normalizeUrl(connection.url);
         const fetchFn = this.fetch || fetch;
-        const response = await fetchFn(connection.url, {
+        const response = await fetchFn(normalizedUrl, {
           method: "GET",
           headers: this.prepareSSEHeaders(connection),
           signal: abortSignal,
@@ -271,13 +275,11 @@ export class MCPService extends MCPAdapter {
               const trimmed = line.trim();
               if (!trimmed) continue;
 
-              // Skip ping messages and other non-SSE formatted messages
               if (trimmed.includes("ping -") || trimmed.includes("pong -")) {
                 console.log(`[MCP SSE] Received ping/pong: ${trimmed}`);
                 continue;
               }
 
-              // Handle session establishment
               if (!sessionEstablished) {
                 if (trimmed.startsWith("event: endpoint")) {
                   continue;
@@ -295,13 +297,11 @@ export class MCPService extends MCPAdapter {
                     sessionEstablished = true;
                     resolve(sessionId);
 
-                    // Continue listening for responses in the background
                     this.startSSEListener(reader, decoder, buffer);
                     return;
                   }
                 }
 
-                // Alternative: Look for sessionId in any format within the data
                 if (trimmed.includes("sessionId")) {
                   const sessionMatch = trimmed.match(
                     /sessionId[=:]\s*([a-zA-Z0-9\-_]+)/
@@ -341,9 +341,6 @@ export class MCPService extends MCPAdapter {
     });
   }
 
-  /**
-   * Enhanced SSE listener with better ping/pong handling
-   */
   private async startSSEListener(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     decoder: TextDecoder,
@@ -370,7 +367,6 @@ export class MCPService extends MCPAdapter {
           const trimmed = line.trim();
           if (!trimmed) continue;
 
-          // Skip ping/pong messages
           if (trimmed.includes("ping -") || trimmed.includes("pong -")) {
             console.log(`[MCP SSE] Received keep-alive: ${trimmed}`);
             continue;
@@ -380,7 +376,6 @@ export class MCPService extends MCPAdapter {
             continue;
           }
 
-          // Handle message events
           if (trimmed.startsWith("event: message")) {
             isInJsonMessage = true;
             currentMessage = "";
@@ -388,34 +383,28 @@ export class MCPService extends MCPAdapter {
             continue;
           }
 
-          // Handle data lines
           if (trimmed.startsWith("data:")) {
             const data = trimmed.substring(5).trim();
             if (!data) continue;
 
-            // Skip non-JSON data in SSE context
             if (data.includes("ping -") || data.includes("pong -")) {
               continue;
             }
 
             if (isInJsonMessage) {
-              // Accumulate JSON data
               currentMessage += data;
 
-              // Count braces to detect complete JSON
               for (const char of data) {
                 if (char === "{") braceCount++;
                 if (char === "}") braceCount--;
               }
 
-              // If braces are balanced, we have a complete message
               if (braceCount === 0 && currentMessage.includes('"jsonrpc"')) {
                 this.handleCompleteSSEMessage(currentMessage);
                 currentMessage = "";
                 isInJsonMessage = false;
               }
             } else {
-              // Try to parse as standalone JSON
               this.tryParseAndHandleMessage(data);
             }
           }
@@ -465,11 +454,7 @@ export class MCPService extends MCPAdapter {
     }
   }
 
-  /**
-   * Fallback message parsing for standalone JSON
-   */
   private tryParseAndHandleMessage(data: string): void {
-    // Skip non-JSON messages like ping/pong or other server messages
     if (!data.trim().startsWith("{") && !data.trim().startsWith("[")) {
       console.log(
         `[MCP SSE] Ignoring non-JSON message: ${data.substring(0, 100)}...`
@@ -483,16 +468,12 @@ export class MCPService extends MCPAdapter {
         this.handleCompleteSSEMessage(data);
       }
     } catch (parseError) {
-      // Log for debugging but don't throw - this is expected for non-JSON messages
       console.log(
         `[MCP SSE] Ignoring non-JSON data: ${data.substring(0, 100)}...`
       );
     }
   }
 
-  /**
-   * Clean up pending requests
-   */
   private cleanupPendingRequest(requestId: string): void {
     const pendingRequest = this.pendingRequests.get(requestId);
     if (pendingRequest) {
@@ -501,9 +482,6 @@ export class MCPService extends MCPAdapter {
     }
   }
 
-  /**
-   * Send a JSON-RPC 2.0 request with improved routing logic
-   */
   private async sendMCPRequest(
     connection: Connection,
     method: string,
@@ -518,51 +496,67 @@ export class MCPService extends MCPAdapter {
     };
 
     try {
-      // First, try the explicitly configured connection type
-      if (connection.connectionType) {
-        switch (connection.connectionType) {
+      // Normalize URL before processing
+      const normalizedConnection = {
+        ...connection,
+        url: normalizeUrl(connection.url),
+      };
+
+      if (normalizedConnection.connectionType) {
+        switch (normalizedConnection.connectionType) {
           case "sse":
-            return this.sendSSERequest(connection, request, abortSignal);
+            return this.sendSSERequest(
+              normalizedConnection,
+              request,
+              abortSignal
+            );
           case "http":
-            return this.sendHTTPRequest(connection, request, abortSignal);
+            return this.sendHTTPRequest(
+              normalizedConnection,
+              request,
+              abortSignal
+            );
           case "websocket":
-            return this.sendWebSocketRequest(connection, request);
+            return this.sendWebSocketRequest(normalizedConnection, request);
         }
       }
 
-      // Auto-detect based on URL and initial response
-      const url = new URL(connection.url);
+      const url = new URL(normalizedConnection.url);
 
-      // Try HTTP first since it's most common
       if (url.protocol === "http:" || url.protocol === "https:") {
         try {
-          return await this.sendHTTPRequest(connection, request, abortSignal);
+          return await this.sendHTTPRequest(
+            normalizedConnection,
+            request,
+            abortSignal
+          );
         } catch (error) {
           console.log(
             "[MCP] HTTP request failed, trying other methods:",
             error
           );
 
-          // If HTTP fails and the URL suggests SSE, try SSE mode
           if (
             url.pathname.includes("/sse") ||
-            connection.url.includes("/sse")
+            normalizedConnection.url.includes("/sse")
           ) {
             console.log("[MCP] Trying SSE mode based on URL pattern");
-            return this.sendSSERequest(connection, request, abortSignal);
+            return this.sendSSERequest(
+              normalizedConnection,
+              request,
+              abortSignal
+            );
           }
 
           throw error;
         }
       }
 
-      // WebSocket URLs
       if (url.protocol === "ws:" || url.protocol === "wss:") {
-        return this.sendWebSocketRequest(connection, request);
+        return this.sendWebSocketRequest(normalizedConnection, request);
       }
 
-      // Default fallback
-      return this.sendHTTPRequest(connection, request, abortSignal);
+      return this.sendHTTPRequest(normalizedConnection, request, abortSignal);
     } catch (error) {
       console.error(`[MCP] Request failed for ${method}:`, error);
       throw error;
@@ -589,7 +583,6 @@ export class MCPService extends MCPAdapter {
         continue;
       }
 
-      // Continue accumulating data if we're in a data section
       if (inDataSection && trimmed && !trimmed.startsWith("event:")) {
         jsonData += trimmed;
       }
@@ -630,8 +623,9 @@ export class MCPService extends MCPAdapter {
     abortSignal?: AbortSignal
   ): Promise<any> {
     try {
+      const normalizedUrl = normalizeUrl(connection.url);
       const fetchFn = this.fetch || fetch;
-      const response = await fetchFn(connection.url, {
+      const response = await fetchFn(normalizedUrl, {
         method: "POST",
         headers: this.prepareHeaders(connection),
         body: JSON.stringify(request),
@@ -659,7 +653,6 @@ export class MCPService extends MCPAdapter {
         return this.parseSSEResponse(responseText);
       }
 
-      // Handle regular JSON responses
       if (
         responseText.trim().startsWith("{") ||
         responseText.trim().startsWith("[")
@@ -686,7 +679,6 @@ export class MCPService extends MCPAdapter {
         }
       }
 
-      // If it's a ping response, treat it as a successful connection test
       if (responseText.includes("ping") || responseText.includes("pong")) {
         return {
           protocolVersion: "2025-06-18",
@@ -713,7 +705,8 @@ export class MCPService extends MCPAdapter {
     request: MCPMessage
   ): Promise<any> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(connection.url);
+      const normalizedUrl = normalizeUrl(connection.url);
+      const ws = new WebSocket(normalizedUrl);
       const timeout = setTimeout(() => {
         ws.close();
         reject(
@@ -789,13 +782,16 @@ export class MCPService extends MCPAdapter {
 
   async testConnection(connection: Connection): Promise<boolean> {
     const maxRetries = 3;
-    const retryDelay = 1000; // 1 second
+    const retryDelay = 1000;
+    const normalizedConnection = {
+      ...connection,
+      url: normalizeUrl(connection.url),
+    };
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Clear any existing session data
-        this.sessionCache.delete(connection.url);
-        this.connectionCache.delete(connection.url);
+        this.sessionCache.delete(normalizedConnection.url);
+        this.connectionCache.delete(normalizedConnection.url);
 
         const abortController = new AbortController();
         const timeout = setTimeout(() => {
@@ -804,7 +800,7 @@ export class MCPService extends MCPAdapter {
 
         try {
           const result = await this.sendMCPRequest(
-            connection,
+            normalizedConnection,
             "initialize",
             {
               protocolVersion: "2025-06-18",
@@ -821,7 +817,7 @@ export class MCPService extends MCPAdapter {
           clearTimeout(timeout);
 
           if (result && result.protocolVersion && result.serverInfo) {
-            this.connectionCache.set(connection.url, {
+            this.connectionCache.set(normalizedConnection.url, {
               isConnected: true,
               lastUsed: Date.now(),
             });
@@ -836,7 +832,6 @@ export class MCPService extends MCPAdapter {
             console.log(`[MCP] Test attempt ${attempt} failed:`, error);
           }
 
-          // If not the last attempt, wait before retrying
           if (attempt < maxRetries) {
             console.log(
               `[MCP] Retrying in ${retryDelay}ms... (${attempt}/${maxRetries})`
@@ -862,18 +857,21 @@ export class MCPService extends MCPAdapter {
   ): Promise<MCPConnectionResult> {
     const maxRetries = connection.retryAttempts || 2;
     let lastError: Error | undefined;
+    const normalizedConnection = {
+      ...connection,
+      url: normalizeUrl(connection.url),
+    };
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const abortController = new AbortController();
         const timeout = setTimeout(() => {
           abortController.abort();
-        }, connection.timeout || 60000); // Increased timeout
+        }, connection.timeout || 60000);
 
         try {
-          // Step 1: Initialize
           const initResult = await this.sendMCPRequest(
-            connection,
+            normalizedConnection,
             "initialize",
             {
               protocolVersion: "2025-06-18",
@@ -904,7 +902,7 @@ export class MCPService extends MCPAdapter {
             try {
               console.log("[MCP] Requesting tools list...");
               const toolsResult = await this.sendMCPRequest(
-                connection,
+                normalizedConnection,
                 "tools/list",
                 { _meta: { progressToken: 2 } },
                 abortController.signal
@@ -916,12 +914,11 @@ export class MCPService extends MCPAdapter {
             }
           }
 
-          // Step 3: Get resources
           let mcpResources: MCPResourceDefinition[] = [];
           if (capabilities.resources) {
             try {
               const resourcesResult = await this.sendMCPRequest(
-                connection,
+                normalizedConnection,
                 "resources/list",
                 {},
                 abortController.signal
@@ -934,7 +931,6 @@ export class MCPService extends MCPAdapter {
 
           clearTimeout(timeout);
 
-          // Convert to internal format
           const tools: Tool[] = mcpTools.map(mcpTool =>
             this.convertMCPToolToTool(mcpTool)
           );
@@ -942,7 +938,7 @@ export class MCPService extends MCPAdapter {
             this.convertMCPResourceToResource(mcpResource)
           );
 
-          this.connectionCache.set(connection.url, {
+          this.connectionCache.set(normalizedConnection.url, {
             isConnected: true,
             lastUsed: Date.now(),
           });
@@ -961,8 +957,8 @@ export class MCPService extends MCPAdapter {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        this.sessionCache.delete(connection.url);
-        this.connectionCache.delete(connection.url);
+        this.sessionCache.delete(normalizedConnection.url);
+        this.connectionCache.delete(normalizedConnection.url);
 
         if (attempt < maxRetries) {
           const backoffMs = Math.min(1000 * Math.pow(2, attempt), 5000);
@@ -987,6 +983,10 @@ export class MCPService extends MCPAdapter {
   ): Promise<MCPToolExecutionResult> {
     const executionId = this.generateId();
     const startTime = Date.now();
+    const normalizedConnection = {
+      ...connection,
+      url: normalizeUrl(connection.url),
+    };
 
     const baseExecution: ToolExecution = {
       id: executionId,
@@ -1013,7 +1013,7 @@ export class MCPService extends MCPAdapter {
 
         try {
           const result = await this.sendMCPRequest(
-            connection,
+            normalizedConnection,
             "tools/call",
             {
               name: toolName,
@@ -1057,8 +1057,8 @@ export class MCPService extends MCPAdapter {
           lastError.message.includes("session") ||
           lastError.message.includes("404")
         ) {
-          this.sessionCache.delete(connection.url);
-          this.connectionCache.delete(connection.url);
+          this.sessionCache.delete(normalizedConnection.url);
+          this.connectionCache.delete(normalizedConnection.url);
         }
 
         if (attempt < maxRetries) {
@@ -1089,7 +1089,7 @@ export class MCPService extends MCPAdapter {
     };
   }
 
-  // Static convenience methods remain the same...
+  // Static convenience methods
   static async testConnection(
     connection: Connection,
     fetch?: FetchFunction
@@ -1121,7 +1121,7 @@ export class MCPService extends MCPAdapter {
   }
 
   static formatConnectionUrl(url: string): string {
-    return MCPAdapter.formatConnectionUrl(url);
+    return normalizeUrl(MCPAdapter.formatConnectionUrl(url));
   }
 
   static getConnectionStatus(connection: Connection) {
@@ -1129,6 +1129,9 @@ export class MCPService extends MCPAdapter {
   }
 
   static createConnection(connectionData: Omit<Connection, "id">): Connection {
-    return MCPAdapter.createConnection(connectionData);
+    return MCPAdapter.createConnection({
+      ...connectionData,
+      url: normalizeUrl(connectionData.url),
+    });
   }
 }

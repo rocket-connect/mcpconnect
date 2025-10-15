@@ -42,6 +42,8 @@ export {
   formatToolResultForLLM,
   conversationToLLMMessages,
   toolsToLLMFormat,
+  normalizeUrl,
+  normalizeUrlWithPath,
 } from "./utils";
 
 // Re-export base adapter types for compatibility

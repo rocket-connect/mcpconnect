@@ -449,3 +449,39 @@ export function toolsToLLMFormat(tools: Tool[]): LLMTool[] {
     };
   });
 }
+
+export function normalizeUrl(url: string): string {
+  if (!url || typeof url !== "string") {
+    return url;
+  }
+
+  // Trim whitespace
+  const normalized = url.trim();
+
+  // Handle protocol separately to preserve ://
+  const protocolMatch = normalized.match(/^(https?):\/\//i);
+  let protocol = "";
+  let rest = normalized;
+
+  if (protocolMatch) {
+    protocol = protocolMatch[0];
+    rest = normalized.substring(protocol.length);
+  }
+
+  // Remove duplicate slashes in the rest of the URL
+  rest = rest.replace(/\/{2,}/g, "/");
+
+  // Remove trailing slash (but keep it if it's the only character after domain)
+  if (rest.length > 1 && rest.endsWith("/")) {
+    rest = rest.slice(0, -1);
+  }
+
+  return protocol + rest;
+}
+
+export function normalizeUrlWithPath(baseUrl: string, path: string): string {
+  const normalized = normalizeUrl(baseUrl);
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  return normalized + cleanPath;
+}
