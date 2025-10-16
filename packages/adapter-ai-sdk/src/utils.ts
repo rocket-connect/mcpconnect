@@ -456,41 +456,14 @@ export function normalizeUrl(url: string): string {
   }
 
   // Trim whitespace
-  const normalized = url.trim();
+  let normalized = url.trim();
 
-  // CRITICAL: Never change http to https or vice versa
-  // Extract and preserve the exact protocol (http:// or https://)
-  let protocol = "";
-  let rest = normalized;
-
-  if (normalized.startsWith("http://")) {
-    protocol = "http://";
-    rest = normalized.substring(7); // Remove "http://"
-  } else if (normalized.startsWith("https://")) {
-    protocol = "https://";
-    rest = normalized.substring(8); // Remove "https://"
-  } else if (normalized.startsWith("ws://")) {
-    protocol = "ws://";
-    rest = normalized.substring(5); // Remove "ws://"
-  } else if (normalized.startsWith("wss://")) {
-    protocol = "wss://";
-    rest = normalized.substring(6); // Remove "wss://"
+  // Only normalize trailing slashes - don't touch anything else
+  // Remove trailing slashes (one or more)
+  while (normalized.endsWith("/")) {
+    normalized = normalized.slice(0, -1);
   }
 
-  // Only process the rest if we found a protocol
-  if (protocol) {
-    // Remove duplicate slashes in the rest of the URL (but not in protocol)
-    rest = rest.replace(/\/{2,}/g, "/");
-
-    // Remove trailing slash (but keep it if it's the only character after domain)
-    if (rest.length > 1 && rest.endsWith("/")) {
-      rest = rest.slice(0, -1);
-    }
-
-    return protocol + rest;
-  }
-
-  // If no recognized protocol, return as-is
   return normalized;
 }
 
