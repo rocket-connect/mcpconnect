@@ -449,3 +449,27 @@ export function toolsToLLMFormat(tools: Tool[]): LLMTool[] {
     };
   });
 }
+
+export function normalizeUrl(url: string): string {
+  if (!url || typeof url !== "string") {
+    return url;
+  }
+
+  // Trim whitespace
+  let normalized = url.trim();
+
+  // Only normalize trailing slashes - don't touch anything else
+  // Remove trailing slashes (one or more)
+  while (normalized.endsWith("/")) {
+    normalized = normalized.slice(0, -1);
+  }
+
+  return normalized;
+}
+
+export function normalizeUrlWithPath(baseUrl: string, path: string): string {
+  const normalized = normalizeUrl(baseUrl);
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  return normalized + cleanPath;
+}

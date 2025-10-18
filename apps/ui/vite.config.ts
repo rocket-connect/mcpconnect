@@ -1,4 +1,3 @@
-// apps/ui/vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
@@ -15,12 +14,11 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    sourcemap: false, // Disable sourcemaps for production
+    sourcemap: false,
     minify: "terser",
     cssMinify: true,
     rollupOptions: {
       output: {
-        // Split vendor code into separate chunks for better caching
         manualChunks: {
           "react-vendor": ["react", "react-dom"],
           "router-vendor": ["react-router-dom"],
@@ -33,7 +31,6 @@ export default defineConfig({
           "mcp-components": ["@mcpconnect/components"],
           utils: ["nanoid", "clsx"],
         },
-        // Optimize asset naming for better caching
         chunkFileNames: "js/[name]-[hash].js",
         entryFileNames: "js/[name]-[hash].js",
         assetFileNames: assetInfo => {
@@ -54,27 +51,23 @@ export default defineConfig({
         },
       },
     },
-    // Terser compression options
     terserOptions: {
       compress: {
-        drop_console: true, // Remove console.log in production
+        drop_console: true,
         drop_debugger: true,
-        pure_funcs: ["console.log", "console.info"], // Remove specific console methods
-        passes: 2, // Run compression twice for better results
+        pure_funcs: ["console.log", "console.info"],
+        passes: 2,
       },
       mangle: {
-        safari10: true, // Fix Safari 10 issues
+        safari10: true,
       },
       format: {
-        comments: false, // Remove all comments
+        comments: false,
       },
     },
-    // Optimize chunk size warning
     chunkSizeWarningLimit: 1000,
-    // Improve tree shaking
     cssCodeSplit: true,
-    // Enable build optimizations
-    reportCompressedSize: false, // Faster builds
+    reportCompressedSize: false,
     emptyOutDir: true,
   },
   server: {
@@ -86,8 +79,8 @@ export default defineConfig({
     port: 3000,
     host: true,
   },
-  base: "./",
-  // Optimize dependencies pre-bundling
+  // CRITICAL FIX: Use absolute path for assets in production
+  base: "/",
   optimizeDeps: {
     include: [
       "react",
