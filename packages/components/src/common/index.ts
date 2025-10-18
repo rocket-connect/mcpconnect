@@ -21,3 +21,4 @@ export {
   isSvgContent,
   extractSvgTitle,
 } from "./SvgDisplay";
+export { JsonCodeBlock } from "./JsonCodeBlock";

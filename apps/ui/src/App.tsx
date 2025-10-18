@@ -6,7 +6,13 @@ import {
   useParams,
 } from "react-router-dom";
 import { MCPLayout } from "@mcpconnect/components";
-import { Header, Sidebar, ChatInterface, ConnectionView } from "./components";
+import {
+  Header,
+  Sidebar,
+  ChatInterface,
+  ConnectionView,
+  ToolDetailPage,
+} from "./components";
 import { useStorage } from "./contexts/StorageContext";
 import { InspectorProvider, InspectorUI } from "./contexts/InspectorProvider";
 
@@ -85,56 +91,52 @@ function AppContent() {
   };
 
   return (
-    <Routes>
-      {/* Main app routes with layout - Lower priority */}
-      <Route
-        path="/*"
-        element={
-          <InspectorProvider>
-            <MCPLayout
-              header={<Header />}
-              sidebar={
-                <Sidebar connections={connections} resources={resources} />
-              }
-              inspector={<InspectorUI />}
-            >
-              <Routes>
-                <Route
-                  path="/connections"
-                  element={<ConnectionView connections={connections} />}
-                />
+    <InspectorProvider>
+      <MCPLayout
+        header={<Header />}
+        sidebar={<Sidebar connections={connections} resources={resources} />}
+        inspector={<InspectorUI />}
+      >
+        <Routes>
+          {/* Connections overview */}
+          <Route
+            path="/connections"
+            element={<ConnectionView connections={connections} />}
+          />
 
-                <Route
-                  path="/connections/:connectionId"
-                  element={<ConnectionChatRedirect />}
-                />
+          {/* Connection redirects */}
+          <Route
+            path="/connections/:connectionId"
+            element={<ConnectionChatRedirect />}
+          />
 
-                <Route
-                  path="/connections/:connectionId/chat"
-                  element={<ConnectionChatRedirect />}
-                />
+          <Route
+            path="/connections/:connectionId/chat"
+            element={<ConnectionChatRedirect />}
+          />
 
-                <Route
-                  path="/connections/:connectionId/chat/:chatId"
-                  element={<ChatInterface />}
-                />
+          {/* Chat interface */}
+          <Route
+            path="/connections/:connectionId/chat/:chatId"
+            element={<ChatInterface />}
+          />
 
-                <Route
-                  path="/connections/:connectionId/chat/:chatId/tools/:toolId"
-                  element={<ChatInterface expandedToolCall={true} />}
-                />
+          <Route
+            path="/connections/:connectionId/chat/:chatId/tools/:toolId"
+            element={<ChatInterface expandedToolCall={true} />}
+          />
 
-                {/* Catch-all for main app routes */}
-                <Route
-                  path="*"
-                  element={<Navigate to="/connections" replace />}
-                />
-              </Routes>
-            </MCPLayout>
-          </InspectorProvider>
-        }
-      />
-    </Routes>
+          {/* Tool detail page - now uses the same layout */}
+          <Route
+            path="/connections/:connectionId/tools/:toolId"
+            element={<ToolDetailPage />}
+          />
+
+          {/* Catch-all for main app routes */}
+          <Route path="*" element={<Navigate to="/connections" replace />} />
+        </Routes>
+      </MCPLayout>
+    </InspectorProvider>
   );
 }
 

@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ToolExecution } from "@mcpconnect/schemas";
 import { JsonCodeBlock, parseTimestampToNumber } from "../common/JsonCodeBlock";
-import { InspectorHeader } from "./InspectorHeader";
 import { ExecutionSearchBar } from "./ExecutionSearchBar";
 import { ExecutionTableHeader } from "./ExecutionTableHeader";
 import { ExecutionEmptyState } from "./ExecutionEmptyState";
@@ -23,6 +22,8 @@ export interface NetworkInspectorProps {
   className?: string;
   hasAnyConnections?: boolean;
   chatHasToolCalls?: boolean;
+  manualExecutions?: ToolExecution[]; // Manual executions from tool detail page
+  isManualContext?: boolean; // Flag to indicate manual execution context
 }
 
 export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
@@ -33,6 +34,8 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   className = "",
   hasAnyConnections = false,
   chatHasToolCalls = false,
+  manualExecutions = [],
+  isManualContext = false,
 }) => {
   const [internalSelectedExecution, setInternalSelectedExecution] = useState<
     string | null
@@ -55,11 +58,27 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     if (showDemoData) {
       return demoExecutions;
     }
-    if (!chatHasToolCalls) {
+
+    // For manual context, combine manual executions with chat executions
+    if (isManualContext) {
+      // Combine manual executions with regular executions, prioritizing manual ones
+      const combined = [...manualExecutions, ...executions];
+      return combined;
+    }
+
+    if (!chatHasToolCalls && manualExecutions.length === 0) {
       return [];
     }
+
     return executions;
-  }, [showDemoData, demoExecutions, chatHasToolCalls, executions]);
+  }, [
+    showDemoData,
+    demoExecutions,
+    chatHasToolCalls,
+    executions,
+    isManualContext,
+    manualExecutions,
+  ]);
 
   // Auto-select most recent execution when new ones arrive or in demo mode
   useEffect(() => {
@@ -203,6 +222,14 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       };
     }
 
+    if (isManualContext) {
+      return {
+        title: "No executions yet",
+        subtitle:
+          "Tool executions from manual execution and chat will appear here",
+      };
+    }
+
     if (!chatHasToolCalls) {
       return {
         title: "No tool executions yet",
@@ -218,18 +245,111 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
 
   const emptyState = getEmptyStateMessage();
 
+  // Custom header title for manual context
+  const getHeaderTitle = () => {
+    if (isManualContext) {
+      return `Request Inspector`;
+    }
+    return "Request Inspector";
+  };
+
+  // Check if we have any manual executions to show badges
+  const hasManualExecutions = manualExecutions.length > 0;
+  const manualExecutionCount = manualExecutions.length;
+  const chatExecutionCount = executions.length;
+
   return (
     <div
       className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex flex-col h-full ${className} ${showDemoData ? "opacity-75" : ""}`}
       data-inspector="true"
     >
       {/* Header */}
-      <InspectorHeader
-        showDemoData={showDemoData}
-        filteredExecutionsCount={filteredExecutions.length}
-        totalExecutionsCount={displayExecutions.length}
-        searchQuery={searchQuery}
-      />
+      <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between bg-white dark:bg-gray-900">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 text-gray-600 dark:text-gray-400">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"
+              />
+            </svg>
+          </div>
+          <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+            {getHeaderTitle()}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {showDemoData && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+              <div className="w-3 h-3 text-blue-600 dark:text-blue-400">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                Demo
+              </span>
+            </div>
+          )}
+          {isManualContext && hasManualExecutions && (
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 px-2 py-1 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+                <div className="w-3 h-3 text-green-600 dark:text-green-400">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                </div>
+                <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                  Manual ({manualExecutionCount})
+                </span>
+              </div>
+              {chatExecutionCount > 0 && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                  <div className="w-3 h-3 text-blue-600 dark:text-blue-400">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.955 8.955 0 01-4.126-.98L3 21l1.98-5.874A8.955 8.955 0 013 12c0-4.418 3.582-8 8-8s8 3.582 8 8z"
+                      />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                    Chat ({chatExecutionCount})
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            {filteredExecutions.length} of {displayExecutions.length} requests
+            {searchQuery &&
+              filteredExecutions.length !== displayExecutions.length && (
+                <span className="ml-1 text-blue-600 dark:text-blue-400">
+                  (filtered)
+                </span>
+              )}
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-col flex-1 min-h-0">
         {/* Tool Execution List */}
