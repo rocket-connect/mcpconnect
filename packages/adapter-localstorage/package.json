@@ -1,6 +1,6 @@
 {
   "name": "@mcpconnect/adapter-localstorage",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "LocalStorage adapter for MCPConnect - browser-based storage implementation",
   "keywords": [
     "mcp",

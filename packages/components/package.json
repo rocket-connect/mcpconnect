@@ -1,6 +1,6 @@
 {
   "name": "@mcpconnect/components",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "React components for building MCPConnect interfaces",
   "keywords": [
     "mcp",
