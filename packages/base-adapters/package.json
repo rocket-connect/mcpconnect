@@ -1,6 +1,6 @@
 {
   "name": "@mcpconnect/base-adapters",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Base adapter interfaces and types for MCPConnect - LLM and storage abstractions",
   "keywords": [
     "mcp",
