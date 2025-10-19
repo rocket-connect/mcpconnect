@@ -1,6 +1,6 @@
 {
   "name": "@mcpconnect/ui",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "MCPConnect web interface - React app for debugging MCP integrations",
   "keywords": [
     "mcp",

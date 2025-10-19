@@ -1,6 +1,6 @@
 {
   "name": "@mcpconnect/schemas",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Zod schemas and TypeScript types for MCPConnect - ensuring type safety across the ecosystem",
   "keywords": [
     "mcp",
