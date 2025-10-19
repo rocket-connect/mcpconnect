@@ -276,7 +276,6 @@ export class MCPService extends MCPAdapter {
               if (!trimmed) continue;
 
               if (trimmed.includes("ping -") || trimmed.includes("pong -")) {
-                console.log(`[MCP SSE] Received ping/pong: ${trimmed}`);
                 continue;
               }
 
@@ -368,7 +367,6 @@ export class MCPService extends MCPAdapter {
           if (!trimmed) continue;
 
           if (trimmed.includes("ping -") || trimmed.includes("pong -")) {
-            console.log(`[MCP SSE] Received keep-alive: ${trimmed}`);
             continue;
           }
 

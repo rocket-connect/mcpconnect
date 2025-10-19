@@ -10,6 +10,35 @@ export interface RequestDetailsPanelProps {
   emptyStateSubtitle: string;
 }
 
+// Helper to format duration
+const formatDuration = (execution?: ToolExecution): string => {
+  if (!execution) return "—";
+
+  // First try direct duration field
+  if (execution.duration !== undefined) {
+    return execution.duration < 1000
+      ? `${execution.duration}ms`
+      : `${(execution.duration / 1000).toFixed(2)}s`;
+  }
+
+  // Try to calculate from timestamps
+  if (execution.request?.timestamp && execution.response?.timestamp) {
+    try {
+      const startTime = new Date(execution.request.timestamp).getTime();
+      const endTime = new Date(execution.response.timestamp).getTime();
+      const duration = endTime - startTime;
+
+      return duration < 1000
+        ? `${duration}ms`
+        : `${(duration / 1000).toFixed(2)}s`;
+    } catch {
+      return "—";
+    }
+  }
+
+  return "—";
+};
+
 export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   selected,
   showDemoData,
@@ -40,13 +69,6 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
       default:
         return "text-gray-600 dark:text-gray-400";
     }
-  };
-
-  const formatDuration = (duration?: number) => {
-    if (!duration) return "—";
-    return duration < 1000
-      ? `${duration}ms`
-      : `${(duration / 1000).toFixed(2)}s`;
   };
 
   if (!selected) {
@@ -96,7 +118,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
             {formatTimestamp(selected.timestamp || selected.request?.timestamp)}{" "}
-            • {formatDuration(selected.duration)}
+            • {formatDuration(selected)}
           </div>
         </div>
       </div>
@@ -116,7 +138,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                 Duration:
               </span>
               <span className="text-gray-900 dark:text-gray-100">
-                {formatDuration(selected.duration)}
+                {formatDuration(selected)}
               </span>
             </div>
             <div className="flex justify-between">
@@ -135,6 +157,30 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                 )}
               </span>
             </div>
+
+            {/* Show start time if available */}
+            {selected.request?.timestamp && (
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">
+                  Started:
+                </span>
+                <span className="text-gray-900 dark:text-gray-100">
+                  {formatTimestamp(selected.request.timestamp)}
+                </span>
+              </div>
+            )}
+
+            {/* Show end time if available */}
+            {selected.response?.timestamp && (
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">
+                  Completed:
+                </span>
+                <span className="text-gray-900 dark:text-gray-100">
+                  {formatTimestamp(selected.response.timestamp)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

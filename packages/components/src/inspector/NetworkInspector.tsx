@@ -22,8 +22,10 @@ export interface NetworkInspectorProps {
   className?: string;
   hasAnyConnections?: boolean;
   chatHasToolCalls?: boolean;
-  manualExecutions?: ToolExecution[]; // Manual executions from tool detail page
-  isManualContext?: boolean; // Flag to indicate manual execution context
+  manualExecutions?: ToolExecution[];
+  isManualContext?: boolean;
+  onDeleteExecution?: (executionId: string) => void;
+  hiddenExecutions?: Set<string>;
 }
 
 export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
@@ -36,12 +38,18 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   chatHasToolCalls = false,
   manualExecutions = [],
   isManualContext = false,
+  onDeleteExecution,
+  hiddenExecutions = new Set(),
 }) => {
   const [internalSelectedExecution, setInternalSelectedExecution] = useState<
     string | null
   >(null);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState<
+    "tool" | "status" | "time" | "duration"
+  >("time");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const selectedExecution =
     externalSelectedExecution !== undefined
@@ -59,11 +67,9 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       return demoExecutions;
     }
 
-    // For manual context, combine manual executions with chat executions
     if (isManualContext) {
-      // Combine manual executions with regular executions, prioritizing manual ones
-      const combined = [...manualExecutions, ...executions];
-      return combined;
+      // ✅ ONLY show manual executions in manual context
+      return manualExecutions;
     }
 
     if (!chatHasToolCalls && manualExecutions.length === 0) {
@@ -74,18 +80,22 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   }, [
     showDemoData,
     demoExecutions,
-    chatHasToolCalls,
-    executions,
     isManualContext,
     manualExecutions,
+    chatHasToolCalls,
+    executions,
   ]);
 
-  // Auto-select most recent execution when new ones arrive or in demo mode
+  // Filter out hidden executions
+  const visibleExecutions = useMemo(() => {
+    return displayExecutions.filter(exec => !hiddenExecutions.has(exec.id));
+  }, [displayExecutions, hiddenExecutions]);
+
   useEffect(() => {
     if (showDemoData && !selectedExecution && demoExecutions.length > 0) {
       setInternalSelectedExecution(demoExecutions[0].id);
-    } else if (displayExecutions.length > prevExecutionsRef.current.length) {
-      const newExecutions = displayExecutions.slice(
+    } else if (visibleExecutions.length > prevExecutionsRef.current.length) {
+      const newExecutions = visibleExecutions.slice(
         prevExecutionsRef.current.length
       );
       const mostRecentExecution = newExecutions[newExecutions.length - 1];
@@ -95,9 +105,9 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       }
     }
 
-    prevExecutionsRef.current = displayExecutions;
+    prevExecutionsRef.current = visibleExecutions;
   }, [
-    displayExecutions,
+    visibleExecutions,
     externalSelectedExecution,
     showDemoData,
     demoExecutions,
@@ -162,15 +172,34 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     }
   };
 
-  const selected = displayExecutions.find(e => e.id === selectedExecution);
+  const handleDeleteExecution = (executionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (showDemoData) return;
+
+    const confirmed = confirm(
+      "Are you sure you want to hide this request? It will no longer appear in the inspector."
+    );
+
+    if (confirmed && onDeleteExecution) {
+      onDeleteExecution(executionId);
+
+      // If the deleted execution was selected, clear selection
+      if (selectedExecution === executionId) {
+        setInternalSelectedExecution(null);
+      }
+    }
+  };
+
+  const selected = visibleExecutions.find(e => e.id === selectedExecution);
 
   const filteredExecutions = useMemo(() => {
     if (!searchQuery.trim()) {
-      return displayExecutions;
+      return visibleExecutions;
     }
 
     const query = searchQuery.toLowerCase();
-    return displayExecutions.filter(execution => {
+    return visibleExecutions.filter(execution => {
       const toolName = (execution.tool || "").toLowerCase();
       const status = execution.status.toLowerCase();
       const timestamp = (execution.timestamp || "").toLowerCase();
@@ -186,19 +215,42 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
         (execution.error && execution.error.toLowerCase().includes(query))
       );
     });
-  }, [displayExecutions, searchQuery]);
+  }, [visibleExecutions, searchQuery]);
 
   const sortedExecutions = useMemo(() => {
-    return [...filteredExecutions].sort((a, b) => {
-      const aTime = parseTimestampToNumber(
-        a.request?.timestamp || a.timestamp || Date.now()
-      );
-      const bTime = parseTimestampToNumber(
-        b.request?.timestamp || b.timestamp || Date.now()
-      );
-      return bTime - aTime;
+    const sorted = [...filteredExecutions].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case "tool":
+          comparison = (a.tool || "").localeCompare(b.tool || "");
+          break;
+        case "status":
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case "time": {
+          const aTime = parseTimestampToNumber(
+            a.request?.timestamp || a.timestamp || Date.now()
+          );
+          const bTime = parseTimestampToNumber(
+            b.request?.timestamp || b.timestamp || Date.now()
+          );
+          comparison = aTime - bTime;
+          break;
+        }
+        case "duration": {
+          const aDuration = a.duration || 0;
+          const bDuration = b.duration || 0;
+          comparison = aDuration - bDuration;
+          break;
+        }
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [filteredExecutions]);
+
+    return sorted;
+  }, [filteredExecutions, sortField, sortDirection]);
 
   const getEmptyStateMessage = () => {
     if (showDemoData) {
@@ -245,18 +297,12 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
 
   const emptyState = getEmptyStateMessage();
 
-  // Custom header title for manual context
   const getHeaderTitle = () => {
     if (isManualContext) {
       return `Request Inspector`;
     }
     return "Request Inspector";
   };
-
-  // Check if we have any manual executions to show badges
-  const hasManualExecutions = manualExecutions.length > 0;
-  const manualExecutionCount = manualExecutions.length;
-  const chatExecutionCount = executions.length;
 
   return (
     <div
@@ -297,52 +343,10 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
               </span>
             </div>
           )}
-          {isManualContext && hasManualExecutions && (
-            <div className="flex items-center gap-1">
-              <div className="flex items-center gap-1 px-2 py-1 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
-                <div className="w-3 h-3 text-green-600 dark:text-green-400">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
-                </div>
-                <span className="text-xs font-medium text-green-700 dark:text-green-300">
-                  Manual ({manualExecutionCount})
-                </span>
-              </div>
-              {chatExecutionCount > 0 && (
-                <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                  <div className="w-3 h-3 text-blue-600 dark:text-blue-400">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.955 8.955 0 01-4.126-.98L3 21l1.98-5.874A8.955 8.955 0 013 12c0-4.418 3.582-8 8-8s8 3.582 8 8z"
-                      />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                    Chat ({chatExecutionCount})
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            {filteredExecutions.length} of {displayExecutions.length} requests
+            {filteredExecutions.length} of {visibleExecutions.length} requests
             {searchQuery &&
-              filteredExecutions.length !== displayExecutions.length && (
+              filteredExecutions.length !== visibleExecutions.length && (
                 <span className="ml-1 text-blue-600 dark:text-blue-400">
                   (filtered)
                 </span>
@@ -352,10 +356,11 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       </div>
 
       <div className="flex flex-col flex-1 min-h-0">
-        {/* Tool Execution List */}
-        <div className="h-1/3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 flex flex-col">
-          {/* Search Bar */}
-          {displayExecutions.length > 0 && (
+        {/* Tool Execution List - Dynamic height based on selection */}
+        <div
+          className={`border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 flex flex-col ${selected ? "h-1/2" : "flex-1"}`}
+        >
+          {visibleExecutions.length > 0 && (
             <ExecutionSearchBar
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
@@ -363,15 +368,26 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
             />
           )}
 
-          {/* Table Header */}
-          {displayExecutions.length > 0 && <ExecutionTableHeader />}
+          {visibleExecutions.length > 0 && (
+            <ExecutionTableHeader
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={field => {
+                if (sortField === field) {
+                  setSortDirection(prev => (prev === "asc" ? "desc" : "asc"));
+                } else {
+                  setSortField(field);
+                  setSortDirection("desc");
+                }
+              }}
+            />
+          )}
 
-          {/* Table Body */}
           <div className="overflow-y-auto flex-1">
             {sortedExecutions.length === 0 ? (
               <ExecutionEmptyState
                 searchQuery={searchQuery}
-                displayExecutionsLength={displayExecutions.length}
+                displayExecutionsLength={visibleExecutions.length}
                 showDemoData={showDemoData}
                 emptyStateSubtitle={emptyState.subtitle}
                 onClearSearch={() => setSearchQuery("")}
@@ -386,17 +402,19 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   isSelected={selectedExecution === execution.id}
                   showDemoData={showDemoData}
                   onExecutionClick={handleExecutionClick}
+                  onDeleteExecution={handleDeleteExecution}
                 />
               ))
             )}
           </div>
         </div>
 
-        {/* Request Details Panel */}
-        <div className="h-2/3 overflow-hidden flex flex-col bg-white dark:bg-gray-900">
+        {/* Request Details Panel - Compact when nothing selected */}
+        <div
+          className={`overflow-hidden flex flex-col bg-white dark:bg-gray-900 ${selected ? "h-1/2" : "h-12"}`}
+        >
           {selected ? (
             <div className="h-full flex flex-col">
-              {/* Details Header */}
               <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex-shrink-0 bg-white dark:bg-gray-900">
                 <RequestDetailsPanel
                   selected={selected}
@@ -406,9 +424,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                 />
               </div>
 
-              {/* Scrollable Details Content - More Compact */}
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                {/* Request Section - Inline Style */}
                 <ExpandableSection
                   id={`${selected.id}-request`}
                   title="Request"
@@ -439,7 +455,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   />
                 </ExpandableSection>
 
-                {/* Response/Error Section - Inline Style */}
                 {(selected.response || selected.error) && (
                   <ExpandableSection
                     id={`${selected.id}-response`}
@@ -491,12 +506,13 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
               </div>
             </div>
           ) : (
-            <RequestDetailsPanel
-              selected={selected}
-              showDemoData={showDemoData}
-              emptyStateTitle={emptyState.title}
-              emptyStateSubtitle={emptyState.subtitle}
-            />
+            <div className="h-full flex items-center justify-center px-4 py-2 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                {visibleExecutions.length > 0
+                  ? "Select a request above to view details"
+                  : emptyState.subtitle}
+              </p>
+            </div>
           )}
         </div>
       </div>

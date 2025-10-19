@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/streaming-handler.ts
 import { streamText } from "ai";
 import {
   LLMStreamResponse,

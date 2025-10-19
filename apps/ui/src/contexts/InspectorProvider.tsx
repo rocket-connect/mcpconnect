@@ -1,9 +1,14 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-// apps/ui/src/contexts/InspectorProvider.tsx
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { NetworkInspector } from "@mcpconnect/components";
 import { useStorage } from "./StorageContext";
-import { createContext, useContext, useState, useEffect, useMemo } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 
 interface InspectorContextType {
   selectedToolCall: string | null;
@@ -11,6 +16,9 @@ interface InspectorContextType {
   setSelectedToolCall: (id: string | null) => void;
   setExpandedToolCall: (id: string | null) => void;
   syncToolCallState: (toolCallId: string, isExpanded: boolean) => void;
+  refreshManualExecutions: () => Promise<void>;
+  manualExecutions: any[];
+  manualExecutionsVersion: number;
 }
 
 const InspectorContext = createContext<InspectorContextType | undefined>(
@@ -29,9 +37,12 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
   const params = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { adapter, tools, systemTools } = useStorage();
 
   const [selectedToolCall, setSelectedToolCall] = useState<string | null>(null);
   const [expandedToolCall, setExpandedToolCall] = useState<string | null>(null);
+  const [manualExecutionsVersion, setManualExecutionsVersion] = useState(0);
+  const [manualExecutions, setManualExecutions] = useState<any[]>([]);
 
   const connectionId = params.connectionId || "";
   const chatId = params.chatId || "";
@@ -56,7 +67,6 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
         manualToolId = urlParts[toolsIndex + 1];
       }
     } else {
-      // Check for direct tool path (/connections/:id/tools/:toolId)
       const directToolsIndex = urlParts.findIndex(part => part === "tools");
       if (directToolsIndex !== -1 && urlParts[directToolsIndex + 1]) {
         manualToolId = urlParts[directToolsIndex + 1];
@@ -68,10 +78,136 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
   const finalChatId = chatId || manualChatId;
   const finalToolId = toolId || manualToolId;
 
-  // Determine the current view type
   const isToolDetailView =
     location.pathname.includes("/tools/") &&
     !location.pathname.includes("/chat/");
+
+  // Helper function to resolve tool ID to tool name
+  const getToolNameFromId = useCallback(
+    (toolIdOrName: string, connId: string): string => {
+      // Check system tools first
+      const systemTool = systemTools.find(
+        t => t.id === toolIdOrName || t.name === toolIdOrName
+      );
+      if (systemTool) {
+        return systemTool.name;
+      }
+
+      // Check connection tools
+      const connectionTools = tools[connId] || [];
+      const tool = connectionTools.find(
+        t => t.id === toolIdOrName || t.name === toolIdOrName
+      );
+
+      if (tool) {
+        return tool.name;
+      }
+
+      return toolIdOrName;
+    },
+    [systemTools, tools]
+  );
+
+  // Load manual executions with proper tool name resolution
+  useEffect(() => {
+    const isOnToolPage =
+      location.pathname.includes("/tools/") &&
+      !location.pathname.includes("/chat/");
+
+    if (!isOnToolPage || !finalConnectionId || !finalToolId) {
+      if (!isOnToolPage) {
+        setManualExecutions([]);
+      }
+      return;
+    }
+
+    let mounted = true;
+
+    const loadManualExecutions = async () => {
+      if (!adapter) {
+        return;
+      }
+
+      try {
+        // Resolve the tool ID to its name for storage key consistency
+        const toolName = getToolNameFromId(finalToolId, finalConnectionId);
+
+        const stored = await adapter.get(
+          `manual-executions-${finalConnectionId}-${toolName}`
+        );
+
+        if (stored?.value && Array.isArray(stored.value) && mounted) {
+          const uniqueMap = new Map();
+          stored.value.forEach((exec: any) => {
+            const key = exec.id || `${exec.tool}-${exec.timestamp}`;
+            if (!uniqueMap.has(key)) {
+              uniqueMap.set(key, exec);
+            } else {
+              const existing = uniqueMap.get(key);
+              if (
+                (exec.response && !existing.response) ||
+                (exec.result && !existing.result)
+              ) {
+                uniqueMap.set(key, exec);
+              }
+            }
+          });
+          const uniqueExecutions = Array.from(uniqueMap.values());
+
+          uniqueExecutions.sort((a: any, b: any) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeB - timeA;
+          });
+
+          setManualExecutions(uniqueExecutions);
+
+          if (uniqueExecutions.length < stored.value.length) {
+            await adapter.set(
+              `manual-executions-${finalConnectionId}-${toolName}`,
+              uniqueExecutions,
+              {
+                type: "array",
+                tags: ["mcp", "manual-executions", finalConnectionId, toolName],
+                compress: true,
+                encrypt: false,
+              }
+            );
+          }
+        } else if (mounted) {
+          setManualExecutions([]);
+        }
+      } catch (error) {
+        console.error(
+          "[InspectorProvider] Failed to load manual executions:",
+          error
+        );
+        if (mounted) {
+          setManualExecutions([]);
+        }
+      }
+    };
+
+    // Load immediately on mount/change
+    loadManualExecutions();
+
+    // Poll for updates every 500ms
+    const pollInterval = setInterval(() => {
+      loadManualExecutions();
+    }, 500);
+
+    return () => {
+      mounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [
+    adapter,
+    finalConnectionId,
+    finalToolId,
+    location.pathname,
+    manualExecutionsVersion,
+    getToolNameFromId, // Add dependency
+  ]);
 
   useEffect(() => {
     if (finalToolId) {
@@ -87,12 +223,9 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
       setSelectedToolCall(toolCallId);
       setExpandedToolCall(toolCallId);
 
-      // Different navigation based on current view
       if (isToolDetailView && finalConnectionId) {
-        // Stay on tool detail view - just update selection
-        // Don't navigate, just expand in place
+        // Stay on tool detail view
       } else if (finalConnectionId && finalChatId) {
-        // Navigate to chat with tool expanded
         navigate(
           `/connections/${finalConnectionId}/chat/${finalChatId}/tools/${toolCallId}`
         );
@@ -101,17 +234,50 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
       if (expandedToolCall === toolCallId) {
         setExpandedToolCall(null);
 
-        // Different navigation based on current view
         if (isToolDetailView && finalConnectionId) {
-          // Stay on tool detail page when collapsing - don't navigate away
-          // Just collapse the selection
+          // Stay on tool detail page
         } else if (finalConnectionId && finalChatId) {
-          // Just remove the tool from chat URL
           navigate(`/connections/${finalConnectionId}/chat/${finalChatId}`);
         }
       }
     }
   };
+
+  const refreshManualExecutions = useCallback(async () => {
+    setManualExecutionsVersion(prev => prev + 1);
+
+    // Force immediate reload
+    if (adapter && finalConnectionId && finalToolId) {
+      try {
+        const toolName = getToolNameFromId(finalToolId, finalConnectionId);
+
+        const stored = await adapter.get(
+          `manual-executions-${finalConnectionId}-${toolName}`
+        );
+
+        if (stored?.value && Array.isArray(stored.value)) {
+          const uniqueMap = new Map();
+          stored.value.forEach((exec: any) => {
+            const key = exec.id || `${exec.tool}-${exec.timestamp}`;
+            if (!uniqueMap.has(key)) {
+              uniqueMap.set(key, exec);
+            }
+          });
+          const uniqueExecutions = Array.from(uniqueMap.values());
+
+          uniqueExecutions.sort((a: any, b: any) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeB - timeA;
+          });
+
+          setManualExecutions(uniqueExecutions);
+        }
+      } catch (error) {
+        console.error("[InspectorProvider] Immediate refresh failed:", error);
+      }
+    }
+  }, [adapter, finalConnectionId, finalToolId, getToolNameFromId]);
 
   const contextValue: InspectorContextType = {
     selectedToolCall,
@@ -119,6 +285,9 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
     setSelectedToolCall,
     setExpandedToolCall,
     syncToolCallState,
+    refreshManualExecutions,
+    manualExecutions,
+    manualExecutionsVersion,
   };
 
   return (
@@ -131,12 +300,19 @@ export function InspectorProvider({ children }: { children: React.ReactNode }) {
 export function InspectorUI() {
   const params = useParams();
   const location = useLocation();
-  const { connections, conversations, toolExecutions, adapter } = useStorage();
+  const {
+    connections,
+    conversations,
+    hideExecution,
+    hiddenExecutions,
+    getVisibleExecutions,
+  } = useStorage();
   const {
     selectedToolCall,
     setSelectedToolCall,
     setExpandedToolCall,
     syncToolCallState,
+    manualExecutions,
   } = useInspector();
 
   const urlParts = location.pathname.split("/");
@@ -163,39 +339,12 @@ export function InspectorUI() {
   const chatId = params.chatId || manualChatId || "";
   const toolId = params.toolId || manualToolId || "";
 
-  // Determine view type
   const isToolDetailView =
     location.pathname.includes("/tools/") &&
     !location.pathname.includes("/chat/");
   const isChatView = location.pathname.includes("/chat/");
 
-  // Load manual executions for tool detail view
-  const [manualExecutions, setManualExecutions] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (isToolDetailView && connectionId && toolId) {
-      const loadManualExecutions = async () => {
-        try {
-          const stored = await adapter.get(
-            `manual-executions-${connectionId}-${toolId}`
-          );
-          if (stored?.value && Array.isArray(stored.value)) {
-            setManualExecutions(stored.value);
-          } else {
-            setManualExecutions([]);
-          }
-        } catch (error) {
-          console.error("Failed to load manual executions:", error);
-          setManualExecutions([]);
-        }
-      };
-      loadManualExecutions();
-    } else {
-      setManualExecutions([]);
-    }
-  }, [adapter, connectionId, toolId, isToolDetailView]);
-
-  const chatHasToolCalls = (chatId: string, connectionId: string): boolean => {
+  const chatHasToolCalls = useMemo(() => {
     if (!chatId || !connectionId) return false;
 
     const connectionConversations = conversations[connectionId] || [];
@@ -211,10 +360,190 @@ export function InspectorUI() {
         Boolean(msg.toolExecution) ||
         Boolean(msg.isExecuting)
     );
+  }, [chatId, connectionId, conversations]);
+
+  const hasAnyConnections = useMemo(
+    () => connections.length > 0,
+    [connections]
+  );
+
+  const currentConnection = useMemo(
+    () => connections.find(conn => conn.id === connectionId) || null,
+    [connections, connectionId]
+  );
+
+  const currentConversations = useMemo(
+    () => conversations[connectionId] || [],
+    [conversations, connectionId]
+  );
+
+  const currentChat = useMemo(() => {
+    if (!chatId) return currentConversations[0];
+    return currentConversations.find(conv => conv.id === chatId);
+  }, [chatId, currentConversations]);
+
+  const currentHiddenExecutions = useMemo(() => {
+    return hiddenExecutions[connectionId] || new Set();
+  }, [hiddenExecutions, connectionId]);
+
+  const executionsToShow = useMemo(() => {
+    if (currentChat && chatId && isChatView) {
+      const toolMessages = currentChat.messages
+        .filter(
+          msg =>
+            Boolean(msg.executingTool) ||
+            Boolean(msg.toolExecution) ||
+            Boolean(msg.isExecuting)
+        )
+        .sort((a, b) => {
+          if (a.messageOrder !== undefined && b.messageOrder !== undefined) {
+            return a.messageOrder - b.messageOrder;
+          }
+          const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return timeA - timeB;
+        });
+
+      return toolMessages.map(msg => {
+        const toolName =
+          msg.executingTool || msg.toolExecution?.toolName || "unknown";
+        const messageId = msg.id || Date.now().toString();
+
+        const executionTime = msg.timestamp
+          ? new Date(msg.timestamp)
+          : new Date();
+
+        let duration = 0;
+        if (msg.toolExecution) {
+          if (msg.toolExecution.duration !== undefined) {
+            duration = msg.toolExecution.duration;
+          } else if (msg.toolExecution.startTime && msg.toolExecution.endTime) {
+            duration = msg.toolExecution.endTime - msg.toolExecution.startTime;
+          } else if (msg.toolExecution.timestamp && msg.timestamp) {
+            const startTime = new Date(msg.timestamp).getTime();
+            const endTime = new Date(msg.toolExecution.timestamp).getTime();
+            duration = Math.max(0, endTime - startTime);
+          }
+        }
+
+        return {
+          id: messageId,
+          tool: toolName,
+          status: msg.isExecuting
+            ? "pending"
+            : msg.toolExecution?.status || "success",
+          duration: duration,
+          timestamp: executionTime.toISOString(),
+          request: {
+            tool: toolName,
+            arguments: msg.metadata?.arguments || {},
+            timestamp: executionTime.toISOString(),
+          },
+          ...(msg.toolExecution?.result
+            ? {
+                response: {
+                  success: true,
+                  result: msg.toolExecution.result,
+                  timestamp:
+                    msg.toolExecution.timestamp || executionTime.toISOString(),
+                },
+              }
+            : {}),
+          ...(msg.toolExecution?.error && {
+            error: msg.toolExecution.error,
+          }),
+          context: "chat",
+        };
+      });
+    } else if (isToolDetailView) {
+      return manualExecutions.map(exec => ({
+        ...exec,
+        context: "manual",
+      }));
+    }
+
+    return getVisibleExecutions(connectionId || "");
+  }, [
+    currentChat,
+    chatId,
+    isChatView,
+    isToolDetailView,
+    manualExecutions,
+    connectionId,
+    getVisibleExecutions,
+  ]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleHideExecution = async (executionId: string) => {
+    if (!connectionId) return;
+
+    try {
+      await hideExecution(connectionId, executionId);
+
+      if (selectedToolCall === executionId) {
+        setSelectedToolCall(null);
+      }
+    } catch (error) {
+      console.error("Failed to hide execution:", error);
+    }
   };
 
-  const hasAnyConnections = connections.length > 0;
-  const currentChatHasToolCalls = chatHasToolCalls(chatId, connectionId);
+  const inspectorProps = useMemo(() => {
+    if (isToolDetailView) {
+      return {
+        executions: executionsToShow,
+        connectionId,
+        connectionName: currentConnection?.name || "Unknown Connection",
+        chatId: "",
+        chatTitle: `Tool: ${toolId}`,
+        onToolCallClick: (toolCallId: string) => {
+          setSelectedToolCall(toolCallId);
+          setExpandedToolCall(toolCallId);
+        },
+        selectedExecution: selectedToolCall,
+        hasAnyConnections,
+        chatHasToolCalls: false,
+        manualExecutions: executionsToShow,
+        isManualContext: true,
+        hiddenExecutions: currentHiddenExecutions,
+        onDeleteExecution: handleHideExecution,
+      };
+    } else {
+      return {
+        executions: executionsToShow,
+        connectionId,
+        connectionName: currentConnection?.name || "Unknown Connection",
+        chatId,
+        chatTitle: currentChat?.title || "No Chat Selected",
+        onToolCallClick: (toolCallId: string) => {
+          syncToolCallState(toolCallId, true);
+        },
+        selectedExecution: selectedToolCall,
+        hasAnyConnections,
+        chatHasToolCalls,
+        manualExecutions: [],
+        isManualContext: false,
+        hiddenExecutions: currentHiddenExecutions,
+        onDeleteExecution: handleHideExecution,
+      };
+    }
+  }, [
+    isToolDetailView,
+    executionsToShow,
+    connectionId,
+    currentConnection?.name,
+    toolId,
+    chatId,
+    currentChat?.title,
+    selectedToolCall,
+    hasAnyConnections,
+    chatHasToolCalls,
+    currentHiddenExecutions,
+    handleHideExecution,
+    setSelectedToolCall,
+    setExpandedToolCall,
+    syncToolCallState,
+  ]);
 
   if (!connectionId) {
     return (
@@ -228,151 +557,12 @@ export function InspectorUI() {
           onToolCallClick={() => {}}
           hasAnyConnections={hasAnyConnections}
           chatHasToolCalls={false}
+          hiddenExecutions={new Set()}
+          onDeleteExecution={() => {}}
         />
       </div>
     );
   }
-
-  // Get connection data by ID (not index)
-  const currentConnection =
-    connections.find(conn => conn.id === connectionId) || null;
-  const currentConversations = conversations[connectionId] || [];
-  const connectionExecutions = toolExecutions[connectionId] || [];
-
-  const currentChat = chatId
-    ? currentConversations.find(conv => conv.id === chatId)
-    : currentConversations[0];
-
-  let executionsToShow = connectionExecutions;
-
-  if (currentChat && chatId && isChatView) {
-    // ENHANCED: Extract tool executions from chat messages with proper ordering
-    const toolMessages = currentChat.messages
-      .filter(
-        msg =>
-          Boolean(msg.executingTool) ||
-          Boolean(msg.toolExecution) ||
-          Boolean(msg.isExecuting)
-      )
-      .sort((a, b) => {
-        // Sort by messageOrder if available, otherwise by timestamp
-        if (a.messageOrder !== undefined && b.messageOrder !== undefined) {
-          return a.messageOrder - b.messageOrder;
-        }
-        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return timeA - timeB;
-      });
-
-    // Convert chat messages to tool executions for inspector - CHAT CONTEXT ONLY
-    const chatBasedExecutions = toolMessages.map(msg => {
-      const toolName =
-        msg.executingTool || msg.toolExecution?.toolName || "unknown";
-      const messageId = msg.id || Date.now().toString();
-
-      return {
-        id: messageId,
-        tool: toolName,
-        status: msg.isExecuting
-          ? "pending"
-          : msg.toolExecution?.status || "success",
-        duration: 0,
-        timestamp: msg.timestamp
-          ? new Date(msg.timestamp).toLocaleTimeString()
-          : new Date().toLocaleTimeString(),
-        request: {
-          tool: toolName,
-          arguments: msg.metadata?.arguments || {},
-          timestamp: msg.timestamp
-            ? new Date(msg.timestamp).toISOString()
-            : new Date().toISOString(),
-        },
-        ...(msg.toolExecution?.result
-          ? {
-              response: {
-                success: true,
-                result: msg.toolExecution.result,
-                timestamp: msg.timestamp
-                  ? new Date(msg.timestamp).toISOString()
-                  : new Date().toISOString(),
-              },
-            }
-          : {}),
-        ...(msg.toolExecution?.error && {
-          error: msg.toolExecution.error,
-        }),
-        // Mark as chat execution
-        context: "chat",
-      };
-    });
-
-    // For chat view: ONLY show chat-based executions
-    // @ts-ignore
-    executionsToShow = chatBasedExecutions;
-  } else if (isToolDetailView) {
-    // For tool detail view: ONLY show manual executions for this specific tool
-    executionsToShow = manualExecutions.map(exec => ({
-      ...exec,
-      context: "manual",
-    }));
-  }
-
-  const handleToolCallClick = (toolCallId: string) => {
-    // For tool detail view, just update the selection without navigation
-    if (isToolDetailView) {
-      setSelectedToolCall(toolCallId);
-      setExpandedToolCall(toolCallId);
-    } else {
-      // For chat view, use normal navigation
-      syncToolCallState(toolCallId, true);
-    }
-  };
-
-  // Prepare props for NetworkInspector based on view type
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const inspectorProps = useMemo(() => {
-    if (isToolDetailView) {
-      return {
-        executions: executionsToShow, // Only manual executions for this tool
-        connectionId,
-        connectionName: currentConnection?.name || "Unknown Connection",
-        chatId: "",
-        chatTitle: `Tool: ${toolId}`,
-        onToolCallClick: handleToolCallClick,
-        selectedExecution: selectedToolCall,
-        hasAnyConnections,
-        chatHasToolCalls: false,
-        manualExecutions: executionsToShow, // Same as executions for manual context
-        isManualContext: true,
-      };
-    } else {
-      return {
-        executions: executionsToShow, // Only chat executions
-        connectionId,
-        connectionName: currentConnection?.name || "Unknown Connection",
-        chatId,
-        chatTitle: currentChat?.title || "No Chat Selected",
-        onToolCallClick: handleToolCallClick,
-        selectedExecution: selectedToolCall,
-        hasAnyConnections,
-        chatHasToolCalls: currentChatHasToolCalls,
-        manualExecutions: [], // No manual executions in chat context
-        isManualContext: false,
-      };
-    }
-  }, [
-    isToolDetailView,
-    executionsToShow,
-    connectionId,
-    currentConnection?.name,
-    toolId,
-    chatId,
-    currentChat?.title,
-    selectedToolCall,
-    hasAnyConnections,
-    currentChatHasToolCalls,
-    handleToolCallClick,
-  ]);
 
   return (
     <div className="p-4 bg-gray-50 dark:bg-gray-800 transition-colors h-full">

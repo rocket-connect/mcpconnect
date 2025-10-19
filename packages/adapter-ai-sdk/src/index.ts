@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/index.ts
 export { AISDKAdapter } from "./ai-sdk-adapter";
 export type {
   AISDKConfig,

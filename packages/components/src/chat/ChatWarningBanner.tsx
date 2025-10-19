@@ -1,4 +1,3 @@
-// packages/components/src/chat/ChatWarningBanner.tsx
 import React from "react";
 import { AlertTriangle, Wrench } from "lucide-react";
 

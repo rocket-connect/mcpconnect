@@ -1,4 +1,4 @@
-// packages/components/src/common/ToolCard.tsx
+/* eslint-disable jsx-a11y/no-static-element-interactions */
 import React from "react";
 import { Tool } from "@mcpconnect/schemas";
 import {
@@ -100,15 +100,36 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     }
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on action buttons or if demo mode
+    const target = e.target as HTMLElement;
+    if (
+      target.closest("button") ||
+      isDemoMode ||
+      !onNavigate ||
+      !connectionId
+    ) {
+      return;
+    }
+
+    onNavigate(tool.id || tool.name);
+  };
+
+  // Determine if card should be clickable
+  const isClickable = !isDemoMode && onNavigate && connectionId;
+
   return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events
     <div
+      onClick={handleCardClick}
       className={`p-3 border rounded-lg transition-all duration-200 ${
         enabled
           ? "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
           : "bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 opacity-60"
       } ${isDemoMode ? "cursor-default opacity-60" : ""} ${
         isSystemTool ? "ring-1 ring-indigo-200 dark:ring-indigo-800" : ""
-      }`}
+      } ${isClickable ? "cursor-pointer hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600" : ""}`}
+      title={isClickable ? "Click to open tool detail page" : undefined}
     >
       <div className="flex items-start gap-3">
         {/* Tool Icon */}

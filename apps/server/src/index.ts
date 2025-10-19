@@ -172,7 +172,6 @@ export function createServer(options: ServerOptions = {}): {
     return assetExtensions.some(ext => reqPath.toLowerCase().endsWith(ext));
   }
 
-  // CRITICAL: Static file serving with proper fallback handling
   app.use(
     express.static(uiBuildPath, {
       maxAge: "1y",
@@ -248,8 +247,6 @@ export function createServer(options: ServerOptions = {}): {
     })
   );
 
-  // CRITICAL: Catch-all route for SPA client-side routing
-  // This MUST come after static middleware and handle ALL non-API routes
   app.get("*", (req, res) => {
     const reqPath = req.path;
 

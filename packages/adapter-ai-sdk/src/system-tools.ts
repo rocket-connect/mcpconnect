@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/system-tools.ts
 import { Tool, ToolExecution } from "@mcpconnect/schemas";
 import { generateId } from "./utils";
 import {

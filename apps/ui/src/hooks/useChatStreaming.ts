@@ -1,4 +1,3 @@
-// apps/ui/src/hooks/useChatStreaming.ts
 import { useState, useRef, useCallback } from "react";
 import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { SSEEvent } from "../services/chatService";

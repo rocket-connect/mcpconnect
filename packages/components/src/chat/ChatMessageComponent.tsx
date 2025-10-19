@@ -1,4 +1,3 @@
-// packages/components/src/chat/ChatMessageComponent.tsx
 export { JsonCodeBlock } from "../common/JsonCodeBlock";
 export {
   SvgDisplay,
@@ -24,6 +23,30 @@ export interface ChatMessageComponentProps {
   isToolEnabled: (toolName: string) => boolean;
   onToolNavigate?: (toolId: string, args?: Record<string, any>) => void;
 }
+
+// Helper function to format execution duration
+const formatExecutionDuration = (
+  toolExecution?: ChatMessage["toolExecution"]
+): string => {
+  if (!toolExecution) return "—";
+
+  // First try to use the duration field if available
+  if (toolExecution.duration !== undefined) {
+    return toolExecution.duration < 1000
+      ? `${toolExecution.duration}ms`
+      : `${(toolExecution.duration / 1000).toFixed(2)}s`;
+  }
+
+  // Fallback: calculate from start/end time
+  if (toolExecution.startTime && toolExecution.endTime) {
+    const duration = toolExecution.endTime - toolExecution.startTime;
+    return duration < 1000
+      ? `${duration}ms`
+      : `${(duration / 1000).toFixed(2)}s`;
+  }
+
+  return "—";
+};
 
 export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
   message,
@@ -154,8 +177,12 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                           (now disabled)
                         </span>
                       )}
+                      {message.toolExecution?.duration !== undefined && (
+                        <span className="ml-2 text-gray-400">
+                          • {formatExecutionDuration(message.toolExecution)}
+                        </span>
+                      )}
                     </div>
-                    {/* DO NOT render tool result here - only in expanded details */}
                   </div>
                 ) : (
                   <div>{message.message}</div>
@@ -284,7 +311,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
 
               {/* Content */}
               <div className="p-4 bg-white dark:bg-gray-900 space-y-4">
-                {/* Metadata grid */}
+                {/* Enhanced metadata grid with timing */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
                     <span className="text-gray-500 dark:text-gray-400 font-medium">
@@ -295,7 +322,46 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                     </span>
                   </div>
 
-                  {message.timestamp && (
+                  {/* Duration display using timing data */}
+                  <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                    <span className="text-gray-500 dark:text-gray-400 font-medium">
+                      Duration:
+                    </span>
+                    <span className="font-mono text-gray-900 dark:text-gray-100 text-xs">
+                      {formatExecutionDuration(message.toolExecution)}
+                    </span>
+                  </div>
+
+                  {/* Start time */}
+                  {message.toolExecution?.startTime && (
+                    <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">
+                        Started:
+                      </span>
+                      <span className="text-gray-900 dark:text-gray-100 text-xs">
+                        {new Date(
+                          message.toolExecution.startTime
+                        ).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* End time */}
+                  {message.toolExecution?.endTime && (
+                    <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">
+                        Completed:
+                      </span>
+                      <span className="text-gray-900 dark:text-gray-100 text-xs">
+                        {new Date(
+                          message.toolExecution.endTime
+                        ).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Fallback to general timestamp if start/end not available */}
+                  {!message.toolExecution?.startTime && message.timestamp && (
                     <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
                       <span className="text-gray-500 dark:text-gray-400 font-medium">
                         Executed:
@@ -337,13 +403,21 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                           data={{
                             tool: toolName,
                             arguments: message.metadata?.arguments || {},
-                            timestamp: message.timestamp,
+                            timestamp: message.toolExecution.startTime
+                              ? new Date(
+                                  message.toolExecution.startTime
+                                ).toISOString()
+                              : message.timestamp,
                           }}
                           onCopy={() => {
                             const requestData = {
                               tool: toolName,
                               arguments: message.metadata?.arguments || {},
-                              timestamp: message.timestamp,
+                              timestamp: message.toolExecution?.startTime
+                                ? new Date(
+                                    message.toolExecution.startTime
+                                  ).toISOString()
+                                : message.timestamp,
                             };
                             copyToClipboard(
                               JSON.stringify(requestData, null, 2)
@@ -397,13 +471,23 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                               data={{
                                 success: true,
                                 result: message.toolExecution.result,
-                                timestamp: message.timestamp,
+                                timestamp: message.toolExecution.endTime
+                                  ? new Date(
+                                      message.toolExecution.endTime
+                                    ).toISOString()
+                                  : message.timestamp,
+                                duration: message.toolExecution.duration,
                               }}
                               onCopy={() => {
                                 const responseData = {
                                   success: true,
                                   result: message.toolExecution?.result,
-                                  timestamp: message.timestamp,
+                                  timestamp: message.toolExecution?.endTime
+                                    ? new Date(
+                                        message.toolExecution.endTime
+                                      ).toISOString()
+                                    : message.timestamp,
+                                  duration: message.toolExecution?.duration,
                                 };
                                 copyToClipboard(
                                   JSON.stringify(responseData, null, 2)
@@ -417,13 +501,23 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                             data={{
                               success: true,
                               result: message.toolExecution.result,
-                              timestamp: message.timestamp,
+                              timestamp: message.toolExecution.endTime
+                                ? new Date(
+                                    message.toolExecution.endTime
+                                  ).toISOString()
+                                : message.timestamp,
+                              duration: message.toolExecution.duration,
                             }}
                             onCopy={() => {
                               const responseData = {
                                 success: true,
                                 result: message.toolExecution?.result,
-                                timestamp: message.timestamp,
+                                timestamp: message.toolExecution?.endTime
+                                  ? new Date(
+                                      message.toolExecution.endTime
+                                    ).toISOString()
+                                  : message.timestamp,
+                                duration: message.toolExecution?.duration,
                               };
                               copyToClipboard(
                                 JSON.stringify(responseData, null, 2)
