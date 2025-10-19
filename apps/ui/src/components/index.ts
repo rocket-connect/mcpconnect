@@ -5,3 +5,5 @@ export { RconnectLogo } from "./RconnectLogo";
 export { ConnectionView } from "./ConnectionView";
 export { ConnectionModal } from "./ConnectionModal";
 export { SettingsModal } from "./SettingsModal";
+export { ToolDetailPage } from "./ToolDetailPage";
+export { ToolExecutionForm } from "./ToolExecutionForm";

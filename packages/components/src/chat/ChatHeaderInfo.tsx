@@ -1,4 +1,3 @@
-// packages/components/src/chat/ChatHeaderInfo.tsx
 import React from "react";
 import { Connection } from "@mcpconnect/schemas";
 

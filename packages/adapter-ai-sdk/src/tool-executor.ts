@@ -20,6 +20,9 @@ export async function executeToolWithMCP(
         toolArgs
       );
 
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
       const chatMessage: ChatMessage = {
         id: executionId,
         isUser: false,
@@ -30,15 +33,19 @@ export async function executeToolWithMCP(
           status: systemResult.success ? "success" : "error",
           result: systemResult.result,
           error: systemResult.error,
+          timestamp: new Date(),
+          startTime,
+          endTime,
+          duration,
         },
         isExecuting: false,
-        // Enhanced metadata for inspector tracking
         metadata: {
           arguments: toolArgs,
           executionId,
           toolType: "system",
           startTime,
-          endTime: Date.now(),
+          endTime,
+          duration,
         },
         isPartial: false,
       };
@@ -65,7 +72,6 @@ export async function executeToolWithMCP(
     // Extract the actual data from MCP response structure
     let cleanResult = mcpResult.result;
 
-    // Handle MCP content array structure
     if (
       cleanResult &&
       // @ts-ignore
@@ -81,7 +87,6 @@ export async function executeToolWithMCP(
 
       if (textContent) {
         try {
-          // Parse the JSON string to get the actual campaign data
           cleanResult = JSON.parse(textContent);
         } catch {
           cleanResult = textContent;
@@ -99,9 +104,12 @@ export async function executeToolWithMCP(
         status: mcpResult.success ? "success" : "error",
         result: cleanResult,
         error: mcpResult.error,
+        timestamp: new Date(),
+        startTime,
+        endTime,
+        duration,
       },
       isExecuting: false,
-      // Enhanced metadata for inspector tracking
       metadata: {
         arguments: toolArgs,
         executionId,
@@ -119,17 +127,17 @@ export async function executeToolWithMCP(
       tool: toolName,
       status: mcpResult.success ? "success" : "error",
       duration,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: new Date().toISOString(),
       request: {
         tool: toolName,
         arguments: toolArgs,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(startTime).toISOString(),
       },
       response: mcpResult.success
         ? {
             success: true,
             result: cleanResult,
-            timestamp: new Date().toISOString(),
+            timestamp: new Date(endTime).toISOString(),
           }
         : undefined,
       error: mcpResult.error,
@@ -158,9 +166,12 @@ export async function executeToolWithMCP(
         toolName,
         status: "error",
         error: errorMessage,
+        timestamp: new Date(),
+        startTime,
+        endTime,
+        duration,
       },
       isExecuting: false,
-      // Enhanced metadata for inspector tracking
       metadata: {
         arguments: toolArgs,
         executionId,
@@ -179,11 +190,11 @@ export async function executeToolWithMCP(
       tool: toolName,
       status: "error",
       duration,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: new Date().toISOString(),
       request: {
         tool: toolName,
         arguments: toolArgs,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(startTime).toISOString(),
       },
       error: errorMessage,
     };

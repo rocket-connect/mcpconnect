@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/model-manager.ts
 import { AdapterError } from "@mcpconnect/base-adapters";
 import { AnthropicProvider } from "./providers/anthropic";
 import { AISDKConfig, AIModel, LLMSettings } from "./types";

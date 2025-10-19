@@ -1,4 +1,3 @@
-// packages/components/src/common/index.ts
 export { Button, type ButtonProps } from "./Button";
 export { MCPLayout, type MCPLayoutProps } from "./MCPLayout";
 export { ApiWarning, type ApiWarningProps } from "./ApiWarning";
@@ -21,3 +20,4 @@ export {
   isSvgContent,
   extractSvgTitle,
 } from "./SvgDisplay";
+export { JsonCodeBlock } from "./JsonCodeBlock";

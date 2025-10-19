@@ -1,4 +1,3 @@
-// packages/components/src/chat/ChatMessageComponent.tsx
 export { JsonCodeBlock } from "../common/JsonCodeBlock";
 export {
   SvgDisplay,
@@ -6,7 +5,7 @@ export {
   extractSvgTitle,
 } from "../common/SvgDisplay";
 import React from "react";
-import { Loader } from "lucide-react";
+import { Loader, ExternalLink } from "lucide-react";
 import { ChatMessage } from "@mcpconnect/schemas";
 import { JsonCodeBlock } from "../common/JsonCodeBlock";
 import {
@@ -22,14 +21,41 @@ export interface ChatMessageComponentProps {
   isExpanded: boolean;
   onToolCallExpand: (messageId: string, toolName?: string) => void;
   isToolEnabled: (toolName: string) => boolean;
+  onToolNavigate?: (toolId: string, args?: Record<string, any>) => void;
 }
+
+// Helper function to format execution duration
+const formatExecutionDuration = (
+  toolExecution?: ChatMessage["toolExecution"]
+): string => {
+  if (!toolExecution) return "—";
+
+  // First try to use the duration field if available
+  if (toolExecution.duration !== undefined) {
+    return toolExecution.duration < 1000
+      ? `${toolExecution.duration}ms`
+      : `${(toolExecution.duration / 1000).toFixed(2)}s`;
+  }
+
+  // Fallback: calculate from start/end time
+  if (toolExecution.startTime && toolExecution.endTime) {
+    const duration = toolExecution.endTime - toolExecution.startTime;
+    return duration < 1000
+      ? `${duration}ms`
+      : `${(duration / 1000).toFixed(2)}s`;
+  }
+
+  return "—";
+};
 
 export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
   message,
   index,
+  connectionId,
   isExpanded,
   onToolCallExpand,
   isToolEnabled,
+  onToolNavigate,
 }) => {
   const messageId = message.id || `msg-${index}`;
   const hasToolExecution =
@@ -81,6 +107,17 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
 
     // Regular text content
     return <div className="leading-relaxed whitespace-pre-wrap">{content}</div>;
+  };
+
+  // Handle tool navigation with parameters
+  const handleToolNavigateClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!toolName || !onToolNavigate || !connectionId) return;
+
+    // Extract arguments from message metadata
+    const toolArguments = message.metadata?.arguments || {};
+
+    onToolNavigate(toolName, toolArguments);
   };
 
   return (
@@ -140,8 +177,12 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                           (now disabled)
                         </span>
                       )}
+                      {message.toolExecution?.duration !== undefined && (
+                        <span className="ml-2 text-gray-400">
+                          • {formatExecutionDuration(message.toolExecution)}
+                        </span>
+                      )}
                     </div>
-                    {/* DO NOT render tool result here - only in expanded details */}
                   </div>
                 ) : (
                   <div>{message.message}</div>
@@ -175,7 +216,7 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                     {isExpanded ? "Hide Details" : "Show Details"}
                   </button>
 
-                  {/* Tool name badge */}
+                  {/* Tool name badge with navigation link */}
                   <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs rounded-md border border-orange-200 dark:border-orange-800">
                     <svg
                       className="w-3 h-3"
@@ -196,7 +237,18 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                         d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                       />
                     </svg>
-                    {toolName}
+                    {toolName && onToolNavigate && connectionId ? (
+                      <button
+                        onClick={handleToolNavigateClick}
+                        className="flex items-center gap-1 hover:text-orange-800 dark:hover:text-orange-200 transition-colors"
+                        title="Open tool detail page with parameters"
+                      >
+                        <span>{toolName}</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </button>
+                    ) : (
+                      <span>{toolName}</span>
+                    )}
                     {toolWasDisabled && (
                       <span className="text-amber-600 dark:text-amber-400">
                         (disabled)
@@ -220,32 +272,46 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                   <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
                     Tool Execution Details
                   </h4>
-                  <div
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                      message.toolExecution?.status === "success"
-                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                        : message.toolExecution?.status === "error"
-                          ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                          : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                    }`}
-                  >
+                  <div className="flex items-center gap-2">
                     <div
-                      className={`w-2 h-2 rounded-full ${
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
                         message.toolExecution?.status === "success"
-                          ? "bg-green-500"
+                          ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
                           : message.toolExecution?.status === "error"
-                            ? "bg-red-500"
-                            : "bg-blue-500"
+                            ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                            : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                       }`}
-                    />
-                    {message.toolExecution?.status || "pending"}
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full ${
+                          message.toolExecution?.status === "success"
+                            ? "bg-green-500"
+                            : message.toolExecution?.status === "error"
+                              ? "bg-red-500"
+                              : "bg-blue-500"
+                        }`}
+                      />
+                      {message.toolExecution?.status || "pending"}
+                    </div>
+
+                    {/* Add "Open Tool" link in expanded view */}
+                    {toolName && onToolNavigate && connectionId && (
+                      <button
+                        onClick={handleToolNavigateClick}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                        title="Open tool detail page with parameters"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Open Tool
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Content */}
               <div className="p-4 bg-white dark:bg-gray-900 space-y-4">
-                {/* Metadata grid */}
+                {/* Enhanced metadata grid with timing */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
                     <span className="text-gray-500 dark:text-gray-400 font-medium">
@@ -256,7 +322,46 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                     </span>
                   </div>
 
-                  {message.timestamp && (
+                  {/* Duration display using timing data */}
+                  <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                    <span className="text-gray-500 dark:text-gray-400 font-medium">
+                      Duration:
+                    </span>
+                    <span className="font-mono text-gray-900 dark:text-gray-100 text-xs">
+                      {formatExecutionDuration(message.toolExecution)}
+                    </span>
+                  </div>
+
+                  {/* Start time */}
+                  {message.toolExecution?.startTime && (
+                    <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">
+                        Started:
+                      </span>
+                      <span className="text-gray-900 dark:text-gray-100 text-xs">
+                        {new Date(
+                          message.toolExecution.startTime
+                        ).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* End time */}
+                  {message.toolExecution?.endTime && (
+                    <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">
+                        Completed:
+                      </span>
+                      <span className="text-gray-900 dark:text-gray-100 text-xs">
+                        {new Date(
+                          message.toolExecution.endTime
+                        ).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Fallback to general timestamp if start/end not available */}
+                  {!message.toolExecution?.startTime && message.timestamp && (
                     <div className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-md">
                       <span className="text-gray-500 dark:text-gray-400 font-medium">
                         Executed:
@@ -298,13 +403,21 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                           data={{
                             tool: toolName,
                             arguments: message.metadata?.arguments || {},
-                            timestamp: message.timestamp,
+                            timestamp: message.toolExecution.startTime
+                              ? new Date(
+                                  message.toolExecution.startTime
+                                ).toISOString()
+                              : message.timestamp,
                           }}
                           onCopy={() => {
                             const requestData = {
                               tool: toolName,
                               arguments: message.metadata?.arguments || {},
-                              timestamp: message.timestamp,
+                              timestamp: message.toolExecution?.startTime
+                                ? new Date(
+                                    message.toolExecution.startTime
+                                  ).toISOString()
+                                : message.timestamp,
                             };
                             copyToClipboard(
                               JSON.stringify(requestData, null, 2)
@@ -358,13 +471,23 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                               data={{
                                 success: true,
                                 result: message.toolExecution.result,
-                                timestamp: message.timestamp,
+                                timestamp: message.toolExecution.endTime
+                                  ? new Date(
+                                      message.toolExecution.endTime
+                                    ).toISOString()
+                                  : message.timestamp,
+                                duration: message.toolExecution.duration,
                               }}
                               onCopy={() => {
                                 const responseData = {
                                   success: true,
                                   result: message.toolExecution?.result,
-                                  timestamp: message.timestamp,
+                                  timestamp: message.toolExecution?.endTime
+                                    ? new Date(
+                                        message.toolExecution.endTime
+                                      ).toISOString()
+                                    : message.timestamp,
+                                  duration: message.toolExecution?.duration,
                                 };
                                 copyToClipboard(
                                   JSON.stringify(responseData, null, 2)
@@ -378,13 +501,23 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
                             data={{
                               success: true,
                               result: message.toolExecution.result,
-                              timestamp: message.timestamp,
+                              timestamp: message.toolExecution.endTime
+                                ? new Date(
+                                    message.toolExecution.endTime
+                                  ).toISOString()
+                                : message.timestamp,
+                              duration: message.toolExecution.duration,
                             }}
                             onCopy={() => {
                               const responseData = {
                                 success: true,
                                 result: message.toolExecution?.result,
-                                timestamp: message.timestamp,
+                                timestamp: message.toolExecution?.endTime
+                                  ? new Date(
+                                      message.toolExecution.endTime
+                                    ).toISOString()
+                                  : message.timestamp,
+                                duration: message.toolExecution?.duration,
                               };
                               copyToClipboard(
                                 JSON.stringify(responseData, null, 2)

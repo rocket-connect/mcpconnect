@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ToolExecution } from "@mcpconnect/schemas";
 import { JsonCodeBlock, parseTimestampToNumber } from "../common/JsonCodeBlock";
-import { InspectorHeader } from "./InspectorHeader";
 import { ExecutionSearchBar } from "./ExecutionSearchBar";
 import { ExecutionTableHeader } from "./ExecutionTableHeader";
 import { ExecutionEmptyState } from "./ExecutionEmptyState";
@@ -23,6 +22,10 @@ export interface NetworkInspectorProps {
   className?: string;
   hasAnyConnections?: boolean;
   chatHasToolCalls?: boolean;
+  manualExecutions?: ToolExecution[];
+  isManualContext?: boolean;
+  onDeleteExecution?: (executionId: string) => void;
+  hiddenExecutions?: Set<string>;
 }
 
 export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
@@ -33,12 +36,20 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
   className = "",
   hasAnyConnections = false,
   chatHasToolCalls = false,
+  manualExecutions = [],
+  isManualContext = false,
+  onDeleteExecution,
+  hiddenExecutions = new Set(),
 }) => {
   const [internalSelectedExecution, setInternalSelectedExecution] = useState<
     string | null
   >(null);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState<
+    "tool" | "status" | "time" | "duration"
+  >("time");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const selectedExecution =
     externalSelectedExecution !== undefined
@@ -55,18 +66,36 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     if (showDemoData) {
       return demoExecutions;
     }
-    if (!chatHasToolCalls) {
+
+    if (isManualContext) {
+      // ✅ ONLY show manual executions in manual context
+      return manualExecutions;
+    }
+
+    if (!chatHasToolCalls && manualExecutions.length === 0) {
       return [];
     }
-    return executions;
-  }, [showDemoData, demoExecutions, chatHasToolCalls, executions]);
 
-  // Auto-select most recent execution when new ones arrive or in demo mode
+    return executions;
+  }, [
+    showDemoData,
+    demoExecutions,
+    isManualContext,
+    manualExecutions,
+    chatHasToolCalls,
+    executions,
+  ]);
+
+  // Filter out hidden executions
+  const visibleExecutions = useMemo(() => {
+    return displayExecutions.filter(exec => !hiddenExecutions.has(exec.id));
+  }, [displayExecutions, hiddenExecutions]);
+
   useEffect(() => {
     if (showDemoData && !selectedExecution && demoExecutions.length > 0) {
       setInternalSelectedExecution(demoExecutions[0].id);
-    } else if (displayExecutions.length > prevExecutionsRef.current.length) {
-      const newExecutions = displayExecutions.slice(
+    } else if (visibleExecutions.length > prevExecutionsRef.current.length) {
+      const newExecutions = visibleExecutions.slice(
         prevExecutionsRef.current.length
       );
       const mostRecentExecution = newExecutions[newExecutions.length - 1];
@@ -76,9 +105,9 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       }
     }
 
-    prevExecutionsRef.current = displayExecutions;
+    prevExecutionsRef.current = visibleExecutions;
   }, [
-    displayExecutions,
+    visibleExecutions,
     externalSelectedExecution,
     showDemoData,
     demoExecutions,
@@ -143,15 +172,34 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
     }
   };
 
-  const selected = displayExecutions.find(e => e.id === selectedExecution);
+  const handleDeleteExecution = (executionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (showDemoData) return;
+
+    const confirmed = confirm(
+      "Are you sure you want to hide this request? It will no longer appear in the inspector."
+    );
+
+    if (confirmed && onDeleteExecution) {
+      onDeleteExecution(executionId);
+
+      // If the deleted execution was selected, clear selection
+      if (selectedExecution === executionId) {
+        setInternalSelectedExecution(null);
+      }
+    }
+  };
+
+  const selected = visibleExecutions.find(e => e.id === selectedExecution);
 
   const filteredExecutions = useMemo(() => {
     if (!searchQuery.trim()) {
-      return displayExecutions;
+      return visibleExecutions;
     }
 
     const query = searchQuery.toLowerCase();
-    return displayExecutions.filter(execution => {
+    return visibleExecutions.filter(execution => {
       const toolName = (execution.tool || "").toLowerCase();
       const status = execution.status.toLowerCase();
       const timestamp = (execution.timestamp || "").toLowerCase();
@@ -167,19 +215,42 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
         (execution.error && execution.error.toLowerCase().includes(query))
       );
     });
-  }, [displayExecutions, searchQuery]);
+  }, [visibleExecutions, searchQuery]);
 
   const sortedExecutions = useMemo(() => {
-    return [...filteredExecutions].sort((a, b) => {
-      const aTime = parseTimestampToNumber(
-        a.request?.timestamp || a.timestamp || Date.now()
-      );
-      const bTime = parseTimestampToNumber(
-        b.request?.timestamp || b.timestamp || Date.now()
-      );
-      return bTime - aTime;
+    const sorted = [...filteredExecutions].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case "tool":
+          comparison = (a.tool || "").localeCompare(b.tool || "");
+          break;
+        case "status":
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case "time": {
+          const aTime = parseTimestampToNumber(
+            a.request?.timestamp || a.timestamp || Date.now()
+          );
+          const bTime = parseTimestampToNumber(
+            b.request?.timestamp || b.timestamp || Date.now()
+          );
+          comparison = aTime - bTime;
+          break;
+        }
+        case "duration": {
+          const aDuration = a.duration || 0;
+          const bDuration = b.duration || 0;
+          comparison = aDuration - bDuration;
+          break;
+        }
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [filteredExecutions]);
+
+    return sorted;
+  }, [filteredExecutions, sortField, sortDirection]);
 
   const getEmptyStateMessage = () => {
     if (showDemoData) {
@@ -203,6 +274,14 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
       };
     }
 
+    if (isManualContext) {
+      return {
+        title: "No executions yet",
+        subtitle:
+          "Tool executions from manual execution and chat will appear here",
+      };
+    }
+
     if (!chatHasToolCalls) {
       return {
         title: "No tool executions yet",
@@ -218,24 +297,70 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
 
   const emptyState = getEmptyStateMessage();
 
+  const getHeaderTitle = () => {
+    if (isManualContext) {
+      return `Request Inspector`;
+    }
+    return "Request Inspector";
+  };
+
   return (
     <div
       className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex flex-col h-full ${className} ${showDemoData ? "opacity-75" : ""}`}
       data-inspector="true"
     >
       {/* Header */}
-      <InspectorHeader
-        showDemoData={showDemoData}
-        filteredExecutionsCount={filteredExecutions.length}
-        totalExecutionsCount={displayExecutions.length}
-        searchQuery={searchQuery}
-      />
+      <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between bg-white dark:bg-gray-900">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 text-gray-600 dark:text-gray-400">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 7v10c0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4V7c0-2.21-1.79-4-4-4H8c-2.21 0-4 1.79-4 4z"
+              />
+            </svg>
+          </div>
+          <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+            {getHeaderTitle()}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {showDemoData && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+              <div className="w-3 h-3 text-blue-600 dark:text-blue-400">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                Demo
+              </span>
+            </div>
+          )}
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            {filteredExecutions.length} of {visibleExecutions.length} requests
+            {searchQuery &&
+              filteredExecutions.length !== visibleExecutions.length && (
+                <span className="ml-1 text-blue-600 dark:text-blue-400">
+                  (filtered)
+                </span>
+              )}
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-col flex-1 min-h-0">
-        {/* Tool Execution List */}
-        <div className="h-1/3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 flex flex-col">
-          {/* Search Bar */}
-          {displayExecutions.length > 0 && (
+        {/* Tool Execution List - Dynamic height based on selection */}
+        <div
+          className={`border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 flex flex-col ${selected ? "h-1/2" : "flex-1"}`}
+        >
+          {visibleExecutions.length > 0 && (
             <ExecutionSearchBar
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
@@ -243,15 +368,26 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
             />
           )}
 
-          {/* Table Header */}
-          {displayExecutions.length > 0 && <ExecutionTableHeader />}
+          {visibleExecutions.length > 0 && (
+            <ExecutionTableHeader
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={field => {
+                if (sortField === field) {
+                  setSortDirection(prev => (prev === "asc" ? "desc" : "asc"));
+                } else {
+                  setSortField(field);
+                  setSortDirection("desc");
+                }
+              }}
+            />
+          )}
 
-          {/* Table Body */}
           <div className="overflow-y-auto flex-1">
             {sortedExecutions.length === 0 ? (
               <ExecutionEmptyState
                 searchQuery={searchQuery}
-                displayExecutionsLength={displayExecutions.length}
+                displayExecutionsLength={visibleExecutions.length}
                 showDemoData={showDemoData}
                 emptyStateSubtitle={emptyState.subtitle}
                 onClearSearch={() => setSearchQuery("")}
@@ -266,17 +402,19 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   isSelected={selectedExecution === execution.id}
                   showDemoData={showDemoData}
                   onExecutionClick={handleExecutionClick}
+                  onDeleteExecution={handleDeleteExecution}
                 />
               ))
             )}
           </div>
         </div>
 
-        {/* Request Details Panel */}
-        <div className="h-2/3 overflow-hidden flex flex-col bg-white dark:bg-gray-900">
+        {/* Request Details Panel - Compact when nothing selected */}
+        <div
+          className={`overflow-hidden flex flex-col bg-white dark:bg-gray-900 ${selected ? "h-1/2" : "h-12"}`}
+        >
           {selected ? (
             <div className="h-full flex flex-col">
-              {/* Details Header */}
               <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex-shrink-0 bg-white dark:bg-gray-900">
                 <RequestDetailsPanel
                   selected={selected}
@@ -286,9 +424,7 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                 />
               </div>
 
-              {/* Scrollable Details Content - More Compact */}
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                {/* Request Section - Inline Style */}
                 <ExpandableSection
                   id={`${selected.id}-request`}
                   title="Request"
@@ -319,7 +455,6 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
                   />
                 </ExpandableSection>
 
-                {/* Response/Error Section - Inline Style */}
                 {(selected.response || selected.error) && (
                   <ExpandableSection
                     id={`${selected.id}-response`}
@@ -371,12 +506,13 @@ export const NetworkInspector: React.FC<NetworkInspectorProps> = ({
               </div>
             </div>
           ) : (
-            <RequestDetailsPanel
-              selected={selected}
-              showDemoData={showDemoData}
-              emptyStateTitle={emptyState.title}
-              emptyStateSubtitle={emptyState.subtitle}
-            />
+            <div className="h-full flex items-center justify-center px-4 py-2 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                {visibleExecutions.length > 0
+                  ? "Select a request above to view details"
+                  : emptyState.subtitle}
+              </p>
+            </div>
           )}
         </div>
       </div>

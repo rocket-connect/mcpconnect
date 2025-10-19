@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/types.ts
 import {
   LLMConfigSchema,
   LLMMessage,

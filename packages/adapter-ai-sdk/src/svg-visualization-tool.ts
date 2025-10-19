@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/svg-visualization-tool.ts
 import { z } from "zod";
 import { Tool } from "@mcpconnect/schemas";
 

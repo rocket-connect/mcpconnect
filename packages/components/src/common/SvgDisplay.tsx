@@ -1,4 +1,3 @@
-// packages/components/src/common/SvgDisplay.tsx
 import React, { useState } from "react";
 import {
   Download,

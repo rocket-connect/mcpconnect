@@ -1,4 +1,3 @@
-// apps/ui/src/utils/chatExport.ts
 import { ChatMessage, ChatConversation } from "@mcpconnect/schemas";
 
 export interface ChatExportOptions {

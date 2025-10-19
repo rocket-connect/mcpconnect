@@ -1,4 +1,3 @@
-// packages/adapter-ai-sdk/src/completion-handler.ts
 import { generateText } from "ai";
 import {
   LLMMessage,

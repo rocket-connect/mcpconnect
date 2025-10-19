@@ -1,22 +1,26 @@
 import { z } from "zod";
 
-/**
- * Schema for chat message
- */
+const flexibleDateSchema = z
+  .union([
+    z.date(),
+    z.string().transform(val => new Date(val)),
+    z.number().transform(val => new Date(val)),
+  ])
+  .optional();
+
 export const ChatMessageSchema = z.object({
   id: z.string().optional(),
   message: z.string().optional(),
   isUser: z.boolean().optional().default(false),
   isExecuting: z.boolean().optional().default(false),
   executingTool: z.string().optional(),
-  timestamp: z.date().optional(),
+  timestamp: flexibleDateSchema,
   metadata: z.record(z.string(), z.unknown()).optional(),
 
-  // Add proper partial message support
   isPartial: z.boolean().optional().default(false),
-  messageOrder: z.number().optional(), // Explicit order index
-  partialMessageId: z.string().optional(), // Links to complete message
-  relatedPartialId: z.string().optional(), // For complete messages linking back
+  messageOrder: z.number().optional(),
+  partialMessageId: z.string().optional(),
+  relatedPartialId: z.string().optional(),
 
   toolExecution: z
     .object({
@@ -24,26 +28,26 @@ export const ChatMessageSchema = z.object({
       status: z.enum(["pending", "success", "error"]),
       result: z.unknown().optional(),
       error: z.string().optional(),
+      timestamp: flexibleDateSchema,
+      startTime: z.number().optional(), // Unix timestamp in ms
+      endTime: z.number().optional(), // Unix timestamp in ms
+      duration: z.number().optional(), // Duration in ms
     })
     .optional(),
 });
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
-// Extended ChatMessage interface with isPartial support (for backward compatibility)
 export interface ExtendedChatMessage extends ChatMessage {
-  isPartial: boolean; // Flag for messages that are part of a tool-calling sequence
+  isPartial: boolean;
 }
 
-/**
- * Schema for chat conversation
- */
 export const ChatConversationSchema = z.object({
   id: z.string(),
   title: z.string().optional(),
   messages: z.array(ChatMessageSchema),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: flexibleDateSchema.transform(val => val || new Date()),
+  updatedAt: flexibleDateSchema.transform(val => val || new Date()),
   metadata: z.record(z.string(), z.unknown()).optional(),
   settings: z
     .object({
@@ -56,3 +60,41 @@ export const ChatConversationSchema = z.object({
 });
 
 export type ChatConversation = z.infer<typeof ChatConversationSchema>;
+
+// Helper functions remain the same
+export function normalizeTimestamp(
+  timestamp: Date | string | number | undefined
+): Date {
+  if (!timestamp) return new Date();
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp === "string") return new Date(timestamp);
+  if (typeof timestamp === "number") return new Date(timestamp);
+  return new Date();
+}
+
+export function timestampToISO(
+  timestamp: Date | string | number | undefined
+): string {
+  return normalizeTimestamp(timestamp).toISOString();
+}
+
+export function formatTimestampDisplay(
+  timestamp: Date | string | number | undefined
+): string {
+  const date = normalizeTimestamp(timestamp);
+  return date.toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+// New helper to format duration
+export function formatDuration(durationMs: number | undefined): string {
+  if (!durationMs) return "—";
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+  return `${(durationMs / 1000).toFixed(2)}s`;
+}

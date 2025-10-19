@@ -14,7 +14,7 @@ export const ConnectionSchema = z.object({
   id: z.string().min(1, "Connection ID is required"),
   name: z.string().min(1, "Connection name is required"),
   url: z.string().url("Must be a valid URL"),
-  connectionType: ConnectionTypeSchema.default("sse"), // Default to SSE
+  connectionType: ConnectionTypeSchema.default("sse"),
   isActive: z.boolean().optional().default(false),
   isConnected: z.boolean().optional().default(false),
   headers: z.record(z.string(), z.string()).optional().default({}),

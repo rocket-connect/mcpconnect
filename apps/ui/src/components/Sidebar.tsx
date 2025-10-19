@@ -1,4 +1,3 @@
-// apps/ui/src/components/Sidebar.tsx
 import { Connection, Resource } from "@mcpconnect/schemas";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { RconnectLogo } from "./RconnectLogo";
@@ -99,6 +98,13 @@ export const Sidebar = ({ connections }: SidebarProps) => {
     navigate(`/connections/${connection.id}/chat/${firstChatId}`);
   };
 
+  // Tool navigation handler
+  const handleToolNavigate = (toolId: string) => {
+    if (currentConnectionId) {
+      navigate(`/connections/${currentConnectionId}/tools/${toolId}`);
+    }
+  };
+
   // Check if this is a first-time user
   const isFirstTime = connections.length === 0;
 
@@ -132,8 +138,39 @@ export const Sidebar = ({ connections }: SidebarProps) => {
       );
     }
 
+    // Sort tools: enabled first, then disabled
+    if (!isFirstTime && currentConnectionId) {
+      filtered = [...filtered].sort((a, b) => {
+        let aEnabled: boolean;
+        let bEnabled: boolean;
+
+        if (activeTab === "system") {
+          aEnabled = isSystemToolEnabled(a.id);
+          bEnabled = isSystemToolEnabled(b.id);
+        } else {
+          aEnabled = isToolEnabled(currentConnectionId, a.id);
+          bEnabled = isToolEnabled(currentConnectionId, b.id);
+        }
+
+        // Enabled tools come first
+        if (aEnabled && !bEnabled) return -1;
+        if (!aEnabled && bEnabled) return 1;
+
+        // If both have same enabled state, maintain original order (alphabetical by name)
+        return a.name.localeCompare(b.name);
+      });
+    }
+
     return filtered;
-  }, [toolsToShow, toolSearchQuery]);
+  }, [
+    toolsToShow,
+    toolSearchQuery,
+    isFirstTime,
+    currentConnectionId,
+    activeTab,
+    isSystemToolEnabled,
+    isToolEnabled,
+  ]);
 
   // Tool management functions using reactive storage context
   const toggleTool = async (toolId: string) => {
@@ -446,9 +483,9 @@ export const Sidebar = ({ connections }: SidebarProps) => {
               </div>
             )}
 
-            {/* Tools List - Compact */}
+            {/* Tools List - Updated with new ToolCard */}
             <div
-              className={`space-y-2 ${isFirstTime ? "opacity-60" : ""} min-w-0 overflow-hidden`}
+              className={`space-y-3 ${isFirstTime ? "opacity-60" : ""} min-w-0 overflow-hidden`}
             >
               {filteredTools.length === 0 ? (
                 <div className="text-center py-4 text-xs text-gray-500 dark:text-gray-400">
@@ -479,7 +516,9 @@ export const Sidebar = ({ connections }: SidebarProps) => {
                       key={`${tool.id}-${idx}`}
                       tool={tool}
                       enabled={enabled}
-                      onClick={() => toggleTool(tool.id)}
+                      onToggle={() => toggleTool(tool.id)}
+                      onNavigate={handleToolNavigate}
+                      connectionId={currentConnectionId}
                       isDemoMode={isFirstTime}
                     />
                   );
