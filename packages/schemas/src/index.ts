@@ -2,9 +2,11 @@ export {
   ConnectionSchema,
   ConnectionStatusSchema,
   ConnectionTypeSchema,
+  CorsConfigSchema,
   type Connection,
   type ConnectionStatus,
   type ConnectionType,
+  type CorsConfig,
 } from "./connection";
 
 export {

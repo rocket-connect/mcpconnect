@@ -12,3 +12,7 @@ export {
   ConnectionHeader,
   type ConnectionHeaderProps,
 } from "./ConnectionHeader";
+export {
+  ConnectionCorsConfig,
+  type ConnectionCorsConfigProps,
+} from "./ConnectionCorsConfig";

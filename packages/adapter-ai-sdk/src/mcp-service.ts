@@ -24,6 +24,7 @@ import {
 import { AdapterError, AdapterStatus } from "@mcpconnect/base-adapters";
 import { normalizeUrl, normalizeUrlWithPath } from "./utils";
 
+type RequestInit = Record<any, any>;
 export class MCPService extends MCPAdapter {
   private static instance: MCPService | null = null;
   private static requestId = 1;
@@ -79,6 +80,7 @@ export class MCPService extends MCPAdapter {
     return `req_${MCPService.requestId++}_${this.generateId()}`;
   }
 
+  // packages/adapter-ai-sdk/src/mcp-service.ts - Update prepareHeaders method
   private prepareHeaders(connection: Connection): Record<string, string> {
     const baseHeaders: Record<string, string> = {
       "Content-Type": "application/json",
@@ -106,20 +108,41 @@ export class MCPService extends MCPAdapter {
       authHeaders["Authorization"] = `Basic ${auth}`;
     }
 
+    // Add CORS headers if enabled
+    const corsHeaders: Record<string, string> = {};
+    if (connection.cors?.enabled) {
+      corsHeaders["Origin"] = connection.cors.origin || "*";
+      corsHeaders["Access-Control-Request-Method"] =
+        connection.cors.methods || "GET,POST,PUT,DELETE,OPTIONS";
+      corsHeaders["Access-Control-Request-Headers"] =
+        connection.cors.allowedHeaders ||
+        "Content-Type,Authorization,X-API-Key";
+
+      // Only add credentials header if explicitly enabled
+      if (connection.cors.credentials) {
+        // Note: credentials are typically handled by fetch options, not headers
+        // But we include this for completeness
+      }
+    }
+
     return withUserAgentSuffix(
-      combineHeaders(baseHeaders, connectionHeaders, authHeaders),
+      combineHeaders(baseHeaders, connectionHeaders, authHeaders, corsHeaders),
       "mcpconnect/0.0.11"
     );
   }
 
   private prepareSSEHeaders(connection: Connection): Record<string, string> {
     const headers = this.prepareHeaders(connection);
-    return {
+
+    const sseHeaders = {
       ...headers,
       Accept: "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     };
+
+    // CORS headers are already included via prepareHeaders
+    return sseHeaders;
   }
 
   private async sendSSERequest(
@@ -220,6 +243,7 @@ export class MCPService extends MCPAdapter {
     });
   }
 
+  // packages/adapter-ai-sdk/src/mcp-service.ts - Update establishSSESession method
   private async establishSSESession(
     connection: Connection,
     abortSignal?: AbortSignal
@@ -234,11 +258,23 @@ export class MCPService extends MCPAdapter {
       try {
         const normalizedUrl = normalizeUrl(connection.url);
         const fetchFn = this.fetch || fetch;
-        const response = await fetchFn(normalizedUrl, {
+
+        // Prepare fetch options with CORS settings
+        const fetchOptions: RequestInit = {
           method: "GET",
           headers: this.prepareSSEHeaders(connection),
           signal: abortSignal,
-        });
+        };
+
+        // Add CORS-specific fetch options if enabled
+        if (connection.cors?.enabled) {
+          fetchOptions.mode = "cors";
+          fetchOptions.credentials = connection.cors.credentials
+            ? "include"
+            : "same-origin";
+        }
+
+        const response = await fetchFn(normalizedUrl, fetchOptions);
 
         if (!response.ok) {
           clearTimeout(timeout);
@@ -615,6 +651,7 @@ export class MCPService extends MCPAdapter {
     }
   }
 
+  // packages/adapter-ai-sdk/src/mcp-service.ts - Update sendHTTPRequest method
   private async sendHTTPRequest(
     connection: Connection,
     request: MCPMessage,
@@ -623,12 +660,24 @@ export class MCPService extends MCPAdapter {
     try {
       const normalizedUrl = normalizeUrl(connection.url);
       const fetchFn = this.fetch || fetch;
-      const response = await fetchFn(normalizedUrl, {
+
+      // Prepare fetch options with CORS settings
+      const fetchOptions: RequestInit = {
         method: "POST",
         headers: this.prepareHeaders(connection),
         body: JSON.stringify(request),
         signal: abortSignal,
-      });
+      };
+
+      // Add CORS-specific fetch options if enabled
+      if (connection.cors?.enabled) {
+        fetchOptions.mode = "cors";
+        fetchOptions.credentials = connection.cors.credentials
+          ? "include"
+          : "same-origin";
+      }
+
+      const response = await fetchFn(normalizedUrl, fetchOptions);
 
       if (!response.ok) {
         throw new AdapterError(

@@ -1,3 +1,4 @@
+// packages/schemas/src/connection.ts
 import { z } from "zod";
 
 /**
@@ -6,6 +7,19 @@ import { z } from "zod";
 export const ConnectionTypeSchema = z.enum(["sse", "http", "websocket"]);
 
 export type ConnectionType = z.infer<typeof ConnectionTypeSchema>;
+
+/**
+ * Schema for CORS configuration
+ */
+export const CorsConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  origin: z.string().default("*"),
+  methods: z.string().default("GET,POST,PUT,DELETE,OPTIONS"),
+  allowedHeaders: z.string().default("Content-Type,Authorization,X-API-Key"),
+  credentials: z.boolean().default(true),
+});
+
+export type CorsConfig = z.infer<typeof CorsConfigSchema>;
 
 /**
  * Schema for MCP server connection configuration
@@ -33,6 +47,7 @@ export const ConnectionSchema = z.object({
     })
     .optional()
     .default({}),
+  cors: CorsConfigSchema.optional(),
 });
 
 /**

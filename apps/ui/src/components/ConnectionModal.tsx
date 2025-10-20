@@ -11,6 +11,8 @@ import {
   Zap,
   Globe2,
   Radio,
+  Info,
+  AlertCircle,
 } from "lucide-react";
 import { Connection, ConnectionType } from "@mcpconnect/schemas";
 import { MCPService } from "@mcpconnect/adapter-ai-sdk";
@@ -39,6 +41,13 @@ type FormData = {
   headers: Record<string, string>;
   timeout: number;
   retryAttempts: number;
+  cors?: {
+    enabled: boolean;
+    origin: string;
+    credentials?: boolean;
+    methods?: string;
+    allowedHeaders?: string;
+  };
 };
 
 const initialConnectionState: FormData = {
@@ -50,6 +59,13 @@ const initialConnectionState: FormData = {
   headers: {},
   timeout: 30000,
   retryAttempts: 3,
+  cors: {
+    enabled: false,
+    origin: "",
+    credentials: false,
+    methods: undefined,
+    allowedHeaders: undefined,
+  },
 };
 
 export const ConnectionModal: React.FC<ConnectionModalProps> = ({
@@ -93,6 +109,13 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
           headers: connection.headers || {},
           timeout: connection.timeout || 30000,
           retryAttempts: connection.retryAttempts || 3,
+          cors: connection.cors || {
+            enabled: false,
+            origin: "",
+            credentials: false,
+            methods: undefined,
+            allowedHeaders: undefined,
+          },
         });
 
         // Convert headers to array format
@@ -137,6 +160,19 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       ...prev,
       credentials: {
         ...prev.credentials,
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleCorsChange = <K extends keyof NonNullable<FormData["cors"]>>(
+    field: K,
+    value: NonNullable<FormData["cors"]>[K]
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      cors: {
+        ...prev.cors!,
         [field]: value,
       },
     }));
@@ -209,6 +245,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         headers: formData.headers,
         timeout: formData.timeout,
         retryAttempts: formData.retryAttempts,
+        // @ts-ignore
+        cors: formData.cors?.enabled ? formData.cors : undefined,
       };
 
       const introspectionResult =
@@ -248,6 +286,19 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       return;
     }
 
+    // Validate CORS config if enabled
+    if (formData.cors?.enabled) {
+      if (
+        formData.cors.credentials &&
+        (!formData.cors.origin || formData.cors.origin === "*")
+      ) {
+        setTestError(
+          "When credentials are enabled, you must specify a specific origin (not *)"
+        );
+        return;
+      }
+    }
+
     // Check for duplicate names (excluding current connection if editing)
     const isDuplicate = existingConnections.some(
       conn =>
@@ -275,6 +326,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         headers: formData.headers,
         timeout: formData.timeout,
         retryAttempts: formData.retryAttempts,
+        // @ts-ignore
+        cors: formData.cors?.enabled ? formData.cors : undefined,
       };
 
       // If creating new, generate ID using MCPService
@@ -597,6 +650,156 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* CORS Configuration */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+              <Globe className="w-4 h-4" />
+              CORS Settings
+            </h3>
+
+            {/* CORS Enable Toggle */}
+            <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                    Enable CORS
+                  </h4>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.cors?.enabled || false}
+                      onChange={e =>
+                        handleCorsChange("enabled", e.target.checked)
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+                <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                  Enable Cross-Origin Resource Sharing (CORS) to allow requests
+                  from different origins. Required for browser-based MCP
+                  connections.
+                </p>
+              </div>
+            </div>
+
+            {/* CORS Settings - Only show when enabled */}
+            {formData.cors?.enabled && (
+              <div className="space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                {/* Origin */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Allowed Origin
+                    <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                      (optional)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.cors?.origin || ""}
+                    onChange={e =>
+                      // @ts-ignore
+                      handleCorsChange("origin", e.target.value || undefined)
+                    }
+                    placeholder="* (allow all origins)"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Specify the origin (e.g., https://example.com) or leave
+                    empty for * (all origins)
+                  </p>
+                </div>
+
+                {/* Credentials */}
+                <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Include Credentials
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Allow cookies and authentication headers
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.cors?.credentials || false}
+                      onChange={e =>
+                        handleCorsChange("credentials", e.target.checked)
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+
+                {/* Methods */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Allowed Methods
+                    <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                      (optional)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.cors?.methods || ""}
+                    onChange={e =>
+                      handleCorsChange("methods", e.target.value || undefined)
+                    }
+                    placeholder="GET,POST,PUT,DELETE,OPTIONS"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Comma-separated list of HTTP methods
+                  </p>
+                </div>
+
+                {/* Allowed Headers */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Allowed Headers
+                    <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                      (optional)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.cors?.allowedHeaders || ""}
+                    onChange={e =>
+                      handleCorsChange(
+                        "allowedHeaders",
+                        e.target.value || undefined
+                      )
+                    }
+                    placeholder="Content-Type,Authorization,X-API-Key"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Comma-separated list of allowed request headers
+                  </p>
+                </div>
+
+                {/* Warning for credentials + wildcard origin */}
+                {formData.cors?.credentials &&
+                  (!formData.cors?.origin || formData.cors?.origin === "*") && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs text-amber-800 dark:text-amber-200">
+                          <strong>Warning:</strong> When credentials are
+                          enabled, you must specify a specific origin. Wildcard
+                          (*) origins are not allowed with credentials.
+                        </p>
+                      </div>
+                    </div>
+                  )}
               </div>
             )}
           </div>
