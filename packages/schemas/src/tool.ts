@@ -1,6 +1,19 @@
 import { z } from "zod";
 
 /**
+ * GraphQL-specific tool metadata
+ */
+export const GraphQLToolMetadataSchema = z.object({
+  operationType: z.enum(["query", "mutation", "subscription"]),
+  operationName: z.string(),
+  returnTypeName: z.string(),
+  variableDefinitions: z.string(),
+  fullOperation: z.string(),
+});
+
+export type GraphQLToolMetadata = z.infer<typeof GraphQLToolMetadataSchema>;
+
+/**
  * Schema for MCP tool definition
  */
 export const ToolSchema = z.object({
@@ -23,6 +36,11 @@ export const ToolSchema = z.object({
   tags: z.array(z.string()).optional(),
   version: z.string().optional(),
   deprecated: z.boolean().optional().default(false),
+  metadata: z
+    .object({
+      graphql: GraphQLToolMetadataSchema.optional(),
+    })
+    .optional(),
 });
 
 export type Tool = z.infer<typeof ToolSchema>;

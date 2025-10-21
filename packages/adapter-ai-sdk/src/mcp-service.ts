@@ -23,6 +23,8 @@ import {
 } from "@ai-sdk/provider-utils";
 import { AdapterError, AdapterStatus } from "@mcpconnect/base-adapters";
 import { normalizeUrl, normalizeUrlWithPath } from "./utils";
+import { GraphQLService } from "./graphql-service";
+import { AISDKAdapter } from "./ai-sdk-adapter";
 
 export class MCPService extends MCPAdapter {
   private static instance: MCPService | null = null;
@@ -95,6 +97,7 @@ export class MCPService extends MCPAdapter {
       connection.credentials?.apiKey
     ) {
       authHeaders["X-API-Key"] = connection.credentials.apiKey;
+      authHeaders["apiKey"] = connection.credentials.apiKey;
     } else if (
       connection.authType === "basic" &&
       connection.credentials?.username &&
@@ -767,6 +770,10 @@ export class MCPService extends MCPAdapter {
   }
 
   async cleanup(): Promise<void> {
+    this.sessionCache.forEach((_, connectionId) => {
+      GraphQLService.clearSchemaCache(connectionId);
+    });
+
     for (const [, pendingRequest] of this.pendingRequests) {
       clearTimeout(pendingRequest.timeout);
       pendingRequest.reject(new AdapterError("Service cleanup", "CLEANUP"));
@@ -853,6 +860,10 @@ export class MCPService extends MCPAdapter {
   async connectAndIntrospect(
     connection: Connection
   ): Promise<MCPConnectionResult> {
+    if (connection.connectionType === "graphql") {
+      return this.connectGraphQL(connection);
+    }
+
     const maxRetries = connection.retryAttempts || 2;
     let lastError: Error | undefined;
     const normalizedConnection = {
@@ -974,11 +985,58 @@ export class MCPService extends MCPAdapter {
     };
   }
 
+  private async connectGraphQL(
+    connection: Connection
+  ): Promise<MCPConnectionResult> {
+    try {
+      const { tools, schema } =
+        await GraphQLService.introspectSchema(connection);
+
+      const queryType = schema.getQueryType();
+      const mutationType = schema.getMutationType();
+      const subscriptionType = schema.getSubscriptionType();
+
+      return {
+        isConnected: true,
+        serverInfo: {
+          name: "GraphQL Server",
+          version: "1.0.0",
+          description: `GraphQL endpoint with ${tools.length} operations`,
+        },
+        capabilities: {
+          tools: true,
+          resources: false,
+          prompts: false,
+          experimental: {
+            graphql: true,
+            queries: !!queryType,
+            mutations: !!mutationType,
+            subscriptions: !!subscriptionType,
+          },
+        },
+        tools,
+        resources: [],
+      };
+    } catch (error) {
+      console.error("[GraphQL] Connection failed:", error);
+      return {
+        isConnected: false,
+        tools: [],
+        resources: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   async executeTool(
     connection: Connection,
     toolName: string,
     arguments_: Record<string, any> = {}
   ): Promise<MCPToolExecutionResult> {
+    if (connection.connectionType === "graphql") {
+      return this.executeGraphQLTool(connection, toolName, arguments_);
+    }
+
     const executionId = this.generateId();
     const startTime = Date.now();
     const normalizedConnection = {
@@ -1087,11 +1145,69 @@ export class MCPService extends MCPAdapter {
     };
   }
 
+  private async executeGraphQLTool(
+    connection: Connection,
+    toolName: string,
+    arguments_: Record<string, any>
+  ): Promise<MCPToolExecutionResult> {
+    try {
+      const tools =
+        (await AISDKAdapter.storageAdapter?.getConnectionTools(
+          connection.id
+        )) || [];
+      const tool = tools.find(t => t.name === toolName);
+
+      if (!tool) {
+        throw new AdapterError(
+          `GraphQL tool not found: ${toolName}`,
+          "TOOL_NOT_FOUND"
+        );
+      }
+
+      const execution = await GraphQLService.executeTool(
+        connection,
+        tool,
+        arguments_
+      );
+
+      return {
+        success: execution.status === "success",
+        result: execution.response?.result,
+        error: execution.error,
+        execution,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        error: errorMessage,
+        execution: {
+          id: `error_${Date.now()}`,
+          tool: toolName,
+          status: "error",
+          duration: 0,
+          timestamp: new Date().toISOString(),
+          request: {
+            tool: toolName,
+            arguments: arguments_,
+            timestamp: new Date().toISOString(),
+          },
+          error: errorMessage,
+        },
+      };
+    }
+  }
+
   // Static convenience methods
   static async testConnection(
     connection: Connection,
     fetch?: FetchFunction
   ): Promise<boolean> {
+    if (connection.connectionType === "graphql") {
+      return GraphQLService.testConnection(connection);
+    }
+
     const service = MCPService.getInstance(undefined, fetch);
     return service.testConnection(connection);
   }

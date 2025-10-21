@@ -11,8 +11,13 @@ import {
   Zap,
   Globe2,
   Radio,
+  Database,
 } from "lucide-react";
-import { Connection, ConnectionType } from "@mcpconnect/schemas";
+import {
+  Connection,
+  ConnectionType,
+  GraphQLConnectionConfig,
+} from "@mcpconnect/schemas";
 import { MCPService } from "@mcpconnect/adapter-ai-sdk";
 
 interface ConnectionModalProps {
@@ -39,12 +44,13 @@ type FormData = {
   headers: Record<string, string>;
   timeout: number;
   retryAttempts: number;
+  graphqlConfig?: GraphQLConnectionConfig;
 };
 
 const initialConnectionState: FormData = {
   name: "",
   url: "",
-  connectionType: "sse", // Default to SSE
+  connectionType: "sse",
   authType: "none",
   credentials: {},
   headers: {},
@@ -83,19 +89,18 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (connection) {
-        // Editing existing connection - ensure connectionType has a default
         setFormData({
           name: connection.name,
           url: connection.url,
-          connectionType: connection.connectionType || "sse", // Default to SSE if undefined
+          connectionType: connection.connectionType || "sse",
           authType: connection.authType || "none",
           credentials: connection.credentials || {},
           headers: connection.headers || {},
           timeout: connection.timeout || 30000,
           retryAttempts: connection.retryAttempts || 3,
+          graphqlConfig: connection.graphqlConfig,
         });
 
-        // Convert headers to array format
         if (connection.headers) {
           setCustomHeaders(
             Object.entries(connection.headers).map(([key, value]) => ({
@@ -107,7 +112,6 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
           setCustomHeaders([]);
         }
       } else {
-        // Creating new connection
         setFormData(initialConnectionState);
         setCustomHeaders([]);
       }
@@ -126,6 +130,27 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     setFormData(prev => ({
       ...prev,
       [field]: value,
+    }));
+  };
+
+  const handleGraphQLConfigChange = <K extends keyof GraphQLConnectionConfig>(
+    field: K,
+    value: GraphQLConnectionConfig[K]
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      graphqlConfig: {
+        ...prev.graphqlConfig,
+        endpoint: prev.graphqlConfig?.endpoint || prev.url,
+        introspectionEnabled: prev.graphqlConfig?.introspectionEnabled ?? true,
+        includeQueries: prev.graphqlConfig?.includeQueries ?? true,
+        includeMutations: prev.graphqlConfig?.includeMutations ?? true,
+        includeSubscriptions: prev.graphqlConfig?.includeSubscriptions ?? false,
+        maxDepth: prev.graphqlConfig?.maxDepth ?? 3,
+        excludedOperations: prev.graphqlConfig?.excludedOperations ?? [],
+        excludedTypes: prev.graphqlConfig?.excludedTypes ?? [],
+        [field]: value,
+      } as GraphQLConnectionConfig,
     }));
   };
 
@@ -151,7 +176,6 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     updated[index] = { ...updated[index], [field]: value };
     setCustomHeaders(updated);
 
-    // Update formData headers
     const headersObj: Record<string, string> = {};
     updated.forEach(({ key, value }) => {
       if (key.trim() && value.trim()) {
@@ -169,7 +193,6 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     const updated = customHeaders.filter((_, i) => i !== index);
     setCustomHeaders(updated);
 
-    // Update formData headers
     const headersObj: Record<string, string> = {};
     updated.forEach(({ key, value }) => {
       if (key.trim() && value.trim()) {
@@ -209,6 +232,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         headers: formData.headers,
         timeout: formData.timeout,
         retryAttempts: formData.retryAttempts,
+        graphqlConfig: formData.graphqlConfig,
       };
 
       const introspectionResult =
@@ -248,7 +272,6 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       return;
     }
 
-    // Check for duplicate names (excluding current connection if editing)
     const isDuplicate = existingConnections.some(
       conn =>
         conn.name.toLowerCase() === formData.name.toLowerCase() &&
@@ -275,9 +298,12 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         headers: formData.headers,
         timeout: formData.timeout,
         retryAttempts: formData.retryAttempts,
+        graphqlConfig:
+          formData.connectionType === "graphql"
+            ? formData.graphqlConfig
+            : undefined,
       };
 
-      // If creating new, generate ID using MCPService
       const finalConnection = connection?.id
         ? connectionData
         : MCPService.createConnection(connectionData);
@@ -314,6 +340,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         return <Globe className="w-4 h-4" />;
       case "websocket":
         return <Radio className="w-4 h-4" />;
+      case "graphql":
+        return <Database className="w-4 h-4" />;
       default:
         return <Globe2 className="w-4 h-4" />;
     }
@@ -327,6 +355,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         return "HTTP - Traditional request/response";
       case "websocket":
         return "WebSocket - Bidirectional real-time communication";
+      case "graphql":
+        return "GraphQL - Query any GraphQL API with introspection";
       default:
         return "Auto-detect based on URL protocol";
     }
@@ -381,12 +411,17 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 type="url"
                 value={formData.url}
                 onChange={e => handleInputChange("url", e.target.value)}
-                placeholder="https://api.example.com/mcp or ws://localhost:3000/mcp"
+                placeholder={
+                  formData.connectionType === "graphql"
+                    ? "https://api.example.com/graphql"
+                    : "https://api.example.com/mcp or ws://localhost:3000/mcp"
+                }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Supports HTTP (http://, https://) and WebSocket (ws://, wss://)
-                MCP protocol endpoints
+                {formData.connectionType === "graphql"
+                  ? "GraphQL endpoint URL (introspection will be used to discover operations)"
+                  : "Supports HTTP (http://, https://) and WebSocket (ws://, wss://) MCP protocol endpoints"}
               </p>
             </div>
 
@@ -396,71 +431,207 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                 Connection Type
               </label>
               <div className="space-y-3">
-                {(["sse", "http", "websocket"] as ConnectionType[]).map(
-                  type => (
-                    <label
-                      key={type}
-                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
-                        formData.connectionType === type
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                          : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="connectionType"
-                        value={type}
-                        checked={formData.connectionType === type}
-                        onChange={e =>
-                          handleInputChange(
-                            "connectionType",
-                            e.target.value as ConnectionType
-                          )
-                        }
-                        className="sr-only"
-                      />
-                      <div className="flex items-center gap-3 flex-1">
+                {(
+                  ["sse", "http", "websocket", "graphql"] as ConnectionType[]
+                ).map(type => (
+                  <label
+                    key={type}
+                    className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                      formData.connectionType === type
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                        : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="connectionType"
+                      value={type}
+                      checked={formData.connectionType === type}
+                      onChange={e =>
+                        handleInputChange(
+                          "connectionType",
+                          e.target.value as ConnectionType
+                        )
+                      }
+                      className="sr-only"
+                    />
+                    <div className="flex items-center gap-3 flex-1">
+                      <div
+                        className={`p-2 rounded-lg ${
+                          formData.connectionType === type
+                            ? "bg-blue-500 text-white"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                        }`}
+                      >
+                        {getConnectionTypeIcon(type)}
+                      </div>
+                      <div className="flex-1">
                         <div
-                          className={`p-2 rounded-lg ${
+                          className={`font-medium text-sm ${
                             formData.connectionType === type
-                              ? "bg-blue-500 text-white"
-                              : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                              ? "text-blue-700 dark:text-blue-300"
+                              : "text-gray-900 dark:text-white"
                           }`}
                         >
-                          {getConnectionTypeIcon(type)}
+                          {type.toUpperCase()}
+                          {type === "sse" && (
+                            <span className="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">
+                              Recommended
+                            </span>
+                          )}
                         </div>
-                        <div className="flex-1">
-                          <div
-                            className={`font-medium text-sm ${
-                              formData.connectionType === type
-                                ? "text-blue-700 dark:text-blue-300"
-                                : "text-gray-900 dark:text-white"
-                            }`}
-                          >
-                            {type.toUpperCase()}
-                            {type === "sse" && (
-                              <span className="ml-2 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">
-                                Recommended
-                              </span>
-                            )}
-                          </div>
-                          <div
-                            className={`text-xs ${
-                              formData.connectionType === type
-                                ? "text-blue-600 dark:text-blue-400"
-                                : "text-gray-500 dark:text-gray-400"
-                            }`}
-                          >
-                            {getConnectionTypeDescription(type)}
-                          </div>
+                        <div
+                          className={`text-xs ${
+                            formData.connectionType === type
+                              ? "text-blue-600 dark:text-blue-400"
+                              : "text-gray-500 dark:text-gray-400"
+                          }`}
+                        >
+                          {getConnectionTypeDescription(type)}
                         </div>
                       </div>
-                    </label>
-                  )
-                )}
+                    </div>
+                  </label>
+                ))}
               </div>
             </div>
           </div>
+
+          {/* GraphQL Configuration */}
+          {formData.connectionType === "graphql" && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <Database className="w-4 h-4" />
+                GraphQL Configuration
+              </h3>
+
+              {/* GraphQL Endpoint */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  GraphQL Endpoint
+                </label>
+                <input
+                  type="url"
+                  value={formData.graphqlConfig?.endpoint || formData.url}
+                  onChange={e =>
+                    handleGraphQLConfigChange("endpoint", e.target.value)
+                  }
+                  placeholder="https://api.example.com/graphql"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Override the main URL for GraphQL-specific endpoint
+                </p>
+              </div>
+
+              {/* Operation Types */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Include Operations
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.graphqlConfig?.includeQueries ?? true}
+                      onChange={e =>
+                        handleGraphQLConfigChange(
+                          "includeQueries",
+                          e.target.checked
+                        )
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Queries
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.graphqlConfig?.includeMutations ?? true}
+                      onChange={e =>
+                        handleGraphQLConfigChange(
+                          "includeMutations",
+                          e.target.checked
+                        )
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Mutations
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={
+                        formData.graphqlConfig?.includeSubscriptions ?? false
+                      }
+                      onChange={e =>
+                        handleGraphQLConfigChange(
+                          "includeSubscriptions",
+                          e.target.checked
+                        )
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Subscriptions
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Max Depth */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Max Selection Depth
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.graphqlConfig?.maxDepth ?? 3}
+                  onChange={e =>
+                    handleGraphQLConfigChange(
+                      "maxDepth",
+                      parseInt(e.target.value) || 3
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Controls how deep nested fields are included in queries (1-10)
+                </p>
+              </div>
+
+              {/* Introspection */}
+              <div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={
+                      formData.graphqlConfig?.introspectionEnabled ?? true
+                    }
+                    onChange={e =>
+                      handleGraphQLConfigChange(
+                        "introspectionEnabled",
+                        e.target.checked
+                      )
+                    }
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Enable Schema Introspection
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                  Required for automatic tool discovery
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Authentication */}
           <div className="space-y-4">
@@ -718,8 +889,11 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
             {testStatus === "success" && (
               <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
                 <p className="text-sm text-green-800 dark:text-green-200 mb-2">
-                  Connection test successful! The MCP server is reachable via{" "}
-                  {formData.connectionType.toUpperCase()}.
+                  Connection test successful! The{" "}
+                  {formData.connectionType === "graphql"
+                    ? "GraphQL API"
+                    : "MCP server"}{" "}
+                  is reachable via {formData.connectionType.toUpperCase()}.
                 </p>
                 {discoveredInfo && (
                   <div className="text-xs text-green-700 dark:text-green-300 space-y-1">

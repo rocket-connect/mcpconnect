@@ -92,8 +92,8 @@ const JsonHighlighter: React.FC<JsonHighlighterProps> = ({
       <style>{`
         .json-container {
           font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-          font-size: 0.75rem;
-          line-height: 1.4;
+          font-size: 0.625rem;
+          line-height: 1.3;
         }
         .json-line {
           margin: 0;
@@ -152,15 +152,15 @@ export const JsonCodeBlock: React.FC<JsonCodeBlockProps> = ({
 }) => {
   return (
     <div className="relative">
-      <div className="bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        {/* Code block header */}
-        <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+      <div className="bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
+        {/* Code block header - More compact */}
+        <div className="flex items-center justify-between px-2 py-1 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">
               JSON
             </span>
             {showDemo && (
-              <span className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+              <span className="text-[9px] px-1 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
                 Demo
               </span>
             )}
@@ -168,16 +168,16 @@ export const JsonCodeBlock: React.FC<JsonCodeBlockProps> = ({
           <button
             onClick={onCopy}
             disabled={showDemo}
-            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             title="Copy JSON"
             type="button"
           >
-            <Copy className="w-3 h-3 text-gray-400" />
+            <Copy className="w-2.5 h-2.5 text-gray-400" />
           </button>
         </div>
 
-        {/* JSON content with syntax highlighting */}
-        <div className="p-4 overflow-x-auto max-h-64">
+        {/* JSON content with syntax highlighting - More compact */}
+        <div className="p-2 overflow-x-auto max-h-48">
           <JsonHighlighter
             json={data}
             className="text-gray-800 dark:text-gray-200"

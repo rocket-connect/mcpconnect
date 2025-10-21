@@ -3,9 +3,33 @@ import { z } from "zod";
 /**
  * Schema for MCP connection types
  */
-export const ConnectionTypeSchema = z.enum(["sse", "http", "websocket"]);
+export const ConnectionTypeSchema = z.enum([
+  "sse",
+  "http",
+  "websocket",
+  "graphql",
+]);
 
 export type ConnectionType = z.infer<typeof ConnectionTypeSchema>;
+
+/**
+ * GraphQL-specific connection configuration
+ */
+export const GraphQLConnectionConfigSchema = z.object({
+  endpoint: z.string().url("Must be a valid GraphQL endpoint URL"),
+  introspectionEnabled: z.boolean().default(true),
+  includeQueries: z.boolean().default(true),
+  includeMutations: z.boolean().default(true),
+  includeSubscriptions: z.boolean().default(false),
+  maxDepth: z.number().min(1).max(10).default(3),
+  excludedOperations: z.array(z.string()).optional().default([]),
+  excludedTypes: z.array(z.string()).optional().default([]),
+  includedOperations: z.array(z.string()).optional(),
+});
+
+export type GraphQLConnectionConfig = z.infer<
+  typeof GraphQLConnectionConfigSchema
+>;
 
 /**
  * Schema for MCP server connection configuration
@@ -33,6 +57,7 @@ export const ConnectionSchema = z.object({
     })
     .optional()
     .default({}),
+  graphqlConfig: GraphQLConnectionConfigSchema.optional(),
 });
 
 /**

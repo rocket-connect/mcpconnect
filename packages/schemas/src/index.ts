@@ -2,9 +2,11 @@ export {
   ConnectionSchema,
   ConnectionStatusSchema,
   ConnectionTypeSchema,
+  GraphQLConnectionConfigSchema,
   type Connection,
   type ConnectionStatus,
   type ConnectionType,
+  type GraphQLConnectionConfig,
 } from "./connection";
 
 export {
