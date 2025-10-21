@@ -42,6 +42,8 @@ export const ConnectionItem: React.FC<ConnectionItemProps> = ({
         return "text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30";
       case "websocket":
         return "text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30";
+      case "graphql":
+        return "text-pink-600 dark:text-pink-400 bg-pink-100 dark:bg-pink-900/30";
       default:
         return "text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900/30";
     }
@@ -50,31 +52,42 @@ export const ConnectionItem: React.FC<ConnectionItemProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+      className={`p-3 rounded-lg border cursor-pointer transition-colors h-[120px] flex flex-col ${
         isActive
           ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
           : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
       }`}
     >
-      <div className="space-y-3">
-        <div className="flex items-start justify-between">
-          <div className="font-medium text-sm text-gray-900 dark:text-white">
+      <div className="flex flex-col h-full min-w-0 overflow-hidden">
+        {/* Header with name and badge */}
+        <div className="flex items-start justify-between gap-2 mb-2 min-w-0">
+          <h3
+            className="font-medium text-sm text-gray-900 dark:text-white truncate flex-1 min-w-0"
+            title={name}
+          >
             {name}
-          </div>
+          </h3>
           <div
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getConnectionTypeColor(connectionType)}`}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getConnectionTypeColor(connectionType)}`}
             title={`Connection type: ${connectionType.toUpperCase()}`}
           >
             {getConnectionTypeIcon(connectionType)}
-            <span className="uppercase">{connectionType}</span>
+            <span className="uppercase text-[10px]">{connectionType}</span>
           </div>
         </div>
 
-        <div className="text-xs text-gray-500 dark:text-gray-400 break-all">
-          {url}
+        {/* URL - takes remaining space */}
+        <div className="flex-1 min-h-0 mb-2">
+          <div
+            className="text-xs text-gray-500 dark:text-gray-400 truncate"
+            title={url}
+          >
+            {url}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Status at bottom */}
+        <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-100 dark:border-gray-700">
           <ConnectionStatus isConnected={isConnected} />
         </div>
       </div>

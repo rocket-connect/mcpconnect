@@ -46,6 +46,7 @@
     "@mcpconnect/base-adapters": "workspace:*",
     "@mcpconnect/schemas": "workspace:*",
     "ai": "^5.0.44",
+    "graphql": "^16.11.0",
     "zod": "^4.1.8"
   },
   "devDependencies": {

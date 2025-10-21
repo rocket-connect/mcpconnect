@@ -36,7 +36,7 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 relative ${
+      className={`p-2 rounded-md border cursor-pointer transition-all duration-200 relative ${
         isSelected
           ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
           : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -44,37 +44,37 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
     >
       {/* Demo overlay */}
       {isDemoMode && (
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent dark:via-gray-800/50 rounded-lg pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent dark:via-gray-800/50 rounded-md pointer-events-none"></div>
       )}
 
-      <div className="space-y-2 relative">
-        <div className="flex items-start justify-between">
-          <div className="font-medium text-sm text-gray-900 dark:text-white min-w-0 flex-1 pr-2">
-            <TruncatedText text={connection.name} maxLength={32} />
+      <div className="space-y-1.5 relative">
+        <div className="flex items-start justify-between gap-2">
+          <div className="font-medium text-xs text-gray-900 dark:text-white min-w-0 flex-1">
+            <TruncatedText text={connection.name} maxLength={28} />
           </div>
           <div
-            className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${getConnectionTypeColor(connection.connectionType || "http")}`}
+            className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${getConnectionTypeColor(connection.connectionType || "http")}`}
           >
             {(connection.connectionType || "HTTP").toUpperCase()}
           </div>
         </div>
 
-        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded">
-          <TruncatedText text={connection.url} maxLength={40} />
+        <div className="text-[10px] text-gray-500 dark:text-gray-400 font-mono bg-gray-50 dark:bg-gray-900 px-1.5 py-0.5 rounded">
+          <TruncatedText text={connection.url} maxLength={35} />
         </div>
 
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <div
               className={`w-1.5 h-1.5 rounded-full ${connection.isConnected ? "bg-green-500" : "bg-red-500"}`}
             />
-            <span className="text-xs text-gray-600 dark:text-gray-400">
+            <span className="text-[10px] text-gray-600 dark:text-gray-400">
               {connection.isConnected ? "Connected" : "Offline"}
             </span>
           </div>
-          <div className="flex items-center gap-1">
-            <MessageSquare className="w-3 h-3 text-gray-400" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-0.5">
+            <MessageSquare className="w-2.5 h-2.5 text-gray-400" />
+            <span className="text-[10px] text-gray-500 dark:text-gray-400">
               {conversationCount}
             </span>
           </div>

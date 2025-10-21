@@ -26,8 +26,8 @@ export const ConnectionGrid: React.FC<ConnectionGridProps> = ({
             onClick={() => onConnectionClick(connection)}
           />
 
-          {/* Compact action buttons positioned at bottom-right to avoid any overlaps */}
-          <div className="absolute bottom-3 right-3 flex gap-1">
+          {/* Compact action buttons positioned at bottom-right */}
+          <div className="absolute bottom-2.5 right-2.5 flex gap-1">
             <button
               onClick={e => {
                 e.stopPropagation();
@@ -36,7 +36,7 @@ export const ConnectionGrid: React.FC<ConnectionGridProps> = ({
               className="p-1.5 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/60 dark:border-gray-600/60 hover:bg-gray-50 dark:hover:bg-gray-700 hover:shadow-md transition-all duration-200 hover:scale-105"
               title="Open connection"
             >
-              <MessageSquare className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
+              <MessageSquare className="w-3 h-3 text-gray-600 dark:text-gray-300" />
             </button>
 
             <button
@@ -44,7 +44,7 @@ export const ConnectionGrid: React.FC<ConnectionGridProps> = ({
               className="p-1.5 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/60 dark:border-gray-600/60 hover:bg-gray-50 dark:hover:bg-gray-700 hover:shadow-md transition-all duration-200 hover:scale-105"
               title="Edit connection"
             >
-              <Settings className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
+              <Settings className="w-3 h-3 text-gray-600 dark:text-gray-300" />
             </button>
 
             <button
@@ -52,7 +52,7 @@ export const ConnectionGrid: React.FC<ConnectionGridProps> = ({
               className="p-1.5 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-md shadow-sm border border-gray-200/60 dark:border-gray-600/60 hover:bg-red-50 dark:hover:bg-red-900/30 hover:shadow-md transition-all duration-200 hover:scale-105 group"
               title="Delete connection"
             >
-              <Trash2 className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors" />
+              <Trash2 className="w-3 h-3 text-gray-600 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors" />
             </button>
           </div>
         </div>
