@@ -5,7 +5,7 @@ import {
 } from "@mcpconnect/adapter-ai-sdk";
 import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
 
-export type ModelProvider = "anthropic";
+export type ModelProvider = "anthropic" | "openai";
 
 // Re-export types from adapter for compatibility
 export type { ModelOption, LLMSettings };
@@ -26,26 +26,26 @@ export class ModelService {
   /**
    * Get default settings for a provider - delegates to AISDKAdapter
    */
-  static getDefaultSettings(_provider?: ModelProvider): Partial<LLMSettings> {
-    return AISDKAdapter.getDefaultSettings();
+  static getDefaultSettings(provider?: ModelProvider): Partial<LLMSettings> {
+    return AISDKAdapter.getDefaultSettings(provider);
   }
 
   /**
    * Get available models for the current provider - delegates to AISDKAdapter
    */
-  static getAvailableModels(_provider?: ModelProvider): ModelOption[] {
-    return AISDKAdapter.getAvailableModels();
+  static getAvailableModels(provider?: ModelProvider): ModelOption[] {
+    return AISDKAdapter.getAvailableModels(provider);
   }
 
   /**
    * Test API key validity - delegates to AISDKAdapter
    */
   static async testApiKey(
-    _provider: ModelProvider,
+    provider: ModelProvider,
     apiKey: string,
     baseUrl?: string
   ): Promise<boolean> {
-    return AISDKAdapter.testApiKey(apiKey, baseUrl);
+    return AISDKAdapter.testApiKey(apiKey, baseUrl, provider);
   }
 
   /**
@@ -57,7 +57,7 @@ export class ModelService {
     _baseUrl?: string
   ): Promise<ModelOption[]> {
     try {
-      // For Anthropic, we use static models as they don't provide a dynamic models API
+      // For both Anthropic and OpenAI, we use static models
       // AISDKAdapter handles this internally
       return this.getAvailableModels(provider);
     } catch (error) {
@@ -70,17 +70,17 @@ export class ModelService {
    * Validate API key format - delegates to AISDKAdapter
    */
   static validateApiKeyFormat(
-    _provider: ModelProvider,
+    provider: ModelProvider,
     apiKey: string
   ): boolean {
-    return AISDKAdapter.validateApiKey(apiKey);
+    return AISDKAdapter.validateApiKey(apiKey, provider);
   }
 
   /**
    * Get context limit for a model - delegates to AISDKAdapter
    */
-  static getContextLimit(_provider: ModelProvider, model: string): number {
-    return AISDKAdapter.getContextLimit(model);
+  static getContextLimit(provider: ModelProvider, model: string): number {
+    return AISDKAdapter.getContextLimit(model, provider);
   }
 
   /**
@@ -120,14 +120,14 @@ export class ModelService {
   /**
    * Get placeholder text for API key input - delegates to AISDKAdapter
    */
-  static getApiKeyPlaceholder(_provider?: ModelProvider): string {
-    return AISDKAdapter.getApiKeyPlaceholder();
+  static getApiKeyPlaceholder(provider?: ModelProvider): string {
+    return AISDKAdapter.getApiKeyPlaceholder(provider);
   }
 
   /**
    * Get provider display name - delegates to AISDKAdapter
    */
-  static getProviderDisplayName(_provider?: ModelProvider): string {
-    return AISDKAdapter.getProviderDisplayName();
+  static getProviderDisplayName(provider?: ModelProvider): string {
+    return AISDKAdapter.getProviderDisplayName(provider);
   }
 }

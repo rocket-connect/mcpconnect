@@ -8,7 +8,11 @@ export const AnthropicConfigSchema = z.object({
   baseUrl: z.string().url().optional(),
   model: z
     .enum([
+      "claude-opus-4-20250514",
+      "claude-sonnet-4-20250514",
+      "claude-3-7-sonnet-20250219",
       "claude-3-5-sonnet-20241022",
+      "claude-3-5-sonnet-20240620",
       "claude-3-5-haiku-20241022",
       "claude-3-opus-20240229",
       "claude-3-sonnet-20240229",
@@ -17,7 +21,7 @@ export const AnthropicConfigSchema = z.object({
       "claude-3-5-haiku-latest",
       "claude-3-opus-latest",
     ])
-    .default("claude-3-5-sonnet-20241022"),
+    .default("claude-sonnet-4-20250514"),
 });
 
 export type AnthropicConfig = z.infer<typeof AnthropicConfigSchema>;
@@ -58,9 +62,30 @@ export class AnthropicProvider {
   }> {
     return [
       {
+        value: "claude-opus-4-20250514",
+        label: "Claude Opus 4",
+        description:
+          "Most intelligent model for complex reasoning and analysis",
+      },
+      {
+        value: "claude-sonnet-4-20250514",
+        label: "Claude Sonnet 4",
+        description: "Best balance of intelligence and speed for most tasks",
+      },
+      {
+        value: "claude-3-7-sonnet-20250219",
+        label: "Claude 3.7 Sonnet",
+        description: "Enhanced version with improved capabilities",
+      },
+      {
         value: "claude-3-5-sonnet-20241022",
         label: "Claude 3.5 Sonnet",
-        description: "Most capable model for complex tasks",
+        description: "Capable model for complex tasks",
+      },
+      {
+        value: "claude-3-5-sonnet-20240620",
+        label: "Claude 3.5 Sonnet (June 2024)",
+        description: "Earlier version of Claude 3.5 Sonnet",
       },
       {
         value: "claude-3-5-haiku-20241022",
@@ -84,17 +109,17 @@ export class AnthropicProvider {
       },
       {
         value: "claude-3-5-sonnet-latest",
-        label: "Claude 3.5 Sonnet (Latest)",
+        label: "Claude 3.5 Sonnet",
         description: "Latest version of Claude 3.5 Sonnet",
       },
       {
         value: "claude-3-5-haiku-latest",
-        label: "Claude 3.5 Haiku (Latest)",
+        label: "Claude 3.5 Haiku",
         description: "Latest version of Claude 3.5 Haiku",
       },
       {
         value: "claude-3-opus-latest",
-        label: "Claude 3 Opus (Latest)",
+        label: "Claude 3 Opus",
         description: "Latest version of Claude 3 Opus",
       },
     ];
@@ -130,7 +155,7 @@ export class AnthropicProvider {
       await generateText({
         model,
         messages: [{ role: "user", content: "Hi" }],
-        maxOutputTokens: 1,
+        maxOutputTokens: 16,
       });
 
       return true;
@@ -179,11 +204,20 @@ export class AnthropicProvider {
 
   static getContextLimit(model: string): number {
     const limits: Record<string, number> = {
+      // Claude 4 models
+      "claude-opus-4-20250514": 200000,
+      "claude-sonnet-4-20250514": 200000,
+      // Claude 3.7 models
+      "claude-3-7-sonnet-20250219": 200000,
+      // Claude 3.5 models
       "claude-3-5-sonnet-20241022": 200000,
+      "claude-3-5-sonnet-20240620": 200000,
       "claude-3-5-haiku-20241022": 200000,
+      // Claude 3 models
       "claude-3-opus-20240229": 200000,
       "claude-3-sonnet-20240229": 200000,
       "claude-3-haiku-20240307": 200000,
+      // Latest aliases
       "claude-3-5-sonnet-latest": 200000,
       "claude-3-5-haiku-latest": 200000,
       "claude-3-opus-latest": 200000,

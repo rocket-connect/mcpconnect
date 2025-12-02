@@ -24,7 +24,7 @@ export async function* handleStream(
     model: aiModel,
     messages,
     ...(Object.keys(tools).length > 0 && { tools }),
-    maxOutputTokens: config.maxTokens,
+    maxOutputTokens: config.maxTokens || 16,
     temperature: config.temperature,
   });
 
