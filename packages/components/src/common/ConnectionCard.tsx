@@ -1,8 +1,8 @@
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Connection, ConnectionType } from "@mcpconnect/schemas";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Loader2 } from "lucide-react";
 import { TruncatedText } from "./TruncatedText";
 
 export interface ConnectionCardProps {
@@ -11,6 +11,7 @@ export interface ConnectionCardProps {
   conversationCount?: number;
   onClick?: () => void;
   isDemoMode?: boolean;
+  onCheckConnectivity?: (connectionId: string) => Promise<boolean>;
 }
 
 export const ConnectionCard: React.FC<ConnectionCardProps> = ({
@@ -19,7 +20,67 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
   conversationCount = 0,
   onClick,
   isDemoMode = false,
+  onCheckConnectivity,
 }) => {
+  const [isChecking, setIsChecking] = useState(false);
+  const [localIsConnected, setLocalIsConnected] = useState(
+    connection.isConnected
+  );
+
+  // Store callback in ref to avoid re-running effect when callback reference changes
+  const onCheckConnectivityRef = React.useRef(onCheckConnectivity);
+  onCheckConnectivityRef.current = onCheckConnectivity;
+
+  // Track if we've already started a check for this connection
+  const checkStartedRef = React.useRef(false);
+
+  // Check connectivity on mount (only once per connection)
+  useEffect(() => {
+    if (isDemoMode) return;
+    if (checkStartedRef.current) return;
+
+    const checkFn = onCheckConnectivityRef.current;
+    if (!checkFn) return;
+
+    checkStartedRef.current = true;
+    let mounted = true;
+    setIsChecking(true);
+
+    // Add a timeout to prevent infinite spinning
+    const timeoutId = setTimeout(() => {
+      if (mounted) {
+        setIsChecking(false);
+        setLocalIsConnected(connection.isConnected ?? false);
+      }
+    }, 30000); // 30 second timeout
+
+    checkFn(connection.id)
+      .then(result => {
+        if (mounted) {
+          setLocalIsConnected(result);
+          setIsChecking(false);
+        }
+      })
+      .catch(error => {
+        console.error("[ConnectionCard] Connectivity check failed:", error);
+        if (mounted) {
+          setLocalIsConnected(false);
+          setIsChecking(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [connection.id, isDemoMode]);
+
+  // Sync with prop when it changes externally (after check completes)
+  useEffect(() => {
+    if (!isChecking) {
+      setLocalIsConnected(connection.isConnected);
+    }
+  }, [connection.isConnected, isChecking]);
   const getConnectionTypeColor = (type: ConnectionType) => {
     switch (type) {
       case "sse":
@@ -65,12 +126,23 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <div
-              className={`w-1.5 h-1.5 rounded-full ${connection.isConnected ? "bg-green-500" : "bg-red-500"}`}
-            />
-            <span className="text-[10px] text-gray-600 dark:text-gray-400">
-              {connection.isConnected ? "Connected" : "Offline"}
-            </span>
+            {isChecking ? (
+              <>
+                <Loader2 className="w-2.5 h-2.5 text-gray-400 animate-spin" />
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  Checking...
+                </span>
+              </>
+            ) : (
+              <>
+                <div
+                  className={`w-1.5 h-1.5 rounded-full ${localIsConnected ? "bg-green-500" : "bg-red-500"}`}
+                />
+                <span className="text-[10px] text-gray-600 dark:text-gray-400">
+                  {localIsConnected ? "Connected" : "Offline"}
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-0.5">
             <MessageSquare className="w-2.5 h-2.5 text-gray-400" />

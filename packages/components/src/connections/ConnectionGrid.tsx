@@ -9,6 +9,7 @@ export interface ConnectionGridProps {
   onEditConnection: (connection: Connection, event: React.MouseEvent) => void;
   onDeleteConnection: (connectionId: string, event: React.MouseEvent) => void;
   conversations?: Record<string, any[]>;
+  onCheckConnectivity?: (connectionId: string) => Promise<boolean>;
 }
 
 export const ConnectionGrid: React.FC<ConnectionGridProps> = ({
@@ -16,6 +17,7 @@ export const ConnectionGrid: React.FC<ConnectionGridProps> = ({
   onConnectionClick,
   onEditConnection,
   onDeleteConnection,
+  onCheckConnectivity,
 }) => {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -24,6 +26,7 @@ export const ConnectionGrid: React.FC<ConnectionGridProps> = ({
           <ConnectionItem
             {...connection}
             onClick={() => onConnectionClick(connection)}
+            onCheckConnectivity={onCheckConnectivity}
           />
 
           {/* Compact action buttons positioned at bottom-right */}

@@ -73,6 +73,7 @@ export const Sidebar = ({ connections }: SidebarProps) => {
     isSystemToolEnabled,
     onToolStateChange,
     onSystemToolStateChange,
+    checkConnectionConnectivity,
   } = useStorage();
 
   const [toolSearchQuery, setToolSearchQuery] = useState("");
@@ -394,6 +395,7 @@ export const Sidebar = ({ connections }: SidebarProps) => {
                   )}
                   conversationCount={(conversations[conn.id] || []).length}
                   onClick={() => handleConnectionClick(conn)}
+                  onCheckConnectivity={checkConnectionConnectivity}
                 />
               ))}
             </div>

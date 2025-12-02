@@ -1,6 +1,6 @@
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Connection, ConnectionType } from "@mcpconnect/schemas";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { Zap, Globe, Radio } from "lucide-react";
@@ -11,16 +11,76 @@ export interface ConnectionItemProps
     "authType" | "credentials" | "headers" | "timeout" | "retryAttempts"
   > {
   onClick?: () => void;
+  onCheckConnectivity?: (connectionId: string) => Promise<boolean>;
 }
 
 export const ConnectionItem: React.FC<ConnectionItemProps> = ({
+  id,
   name,
   url,
   connectionType = "sse",
   isActive = false,
   isConnected = true,
   onClick,
+  onCheckConnectivity,
 }) => {
+  const [isChecking, setIsChecking] = useState(false);
+  const [localIsConnected, setLocalIsConnected] = useState(isConnected);
+
+  // Store callback in ref to avoid re-running effect when callback reference changes
+  const onCheckConnectivityRef = React.useRef(onCheckConnectivity);
+  onCheckConnectivityRef.current = onCheckConnectivity;
+
+  // Track if we've already started a check for this connection
+  const checkStartedRef = React.useRef(false);
+
+  // Check connectivity on mount (only once per connection)
+  useEffect(() => {
+    if (!id) return;
+    if (checkStartedRef.current) return;
+
+    const checkFn = onCheckConnectivityRef.current;
+    if (!checkFn) return;
+
+    checkStartedRef.current = true;
+    let mounted = true;
+    setIsChecking(true);
+
+    // Add a timeout to prevent infinite spinning
+    const timeoutId = setTimeout(() => {
+      if (mounted) {
+        setIsChecking(false);
+        setLocalIsConnected(isConnected ?? false);
+      }
+    }, 30000); // 30 second timeout
+
+    checkFn(id)
+      .then(result => {
+        if (mounted) {
+          setLocalIsConnected(result);
+          setIsChecking(false);
+        }
+      })
+      .catch(error => {
+        console.error("[ConnectionItem] Connectivity check failed:", error);
+        if (mounted) {
+          setLocalIsConnected(false);
+          setIsChecking(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [id]);
+
+  // Sync with prop when it changes externally (after check completes)
+  useEffect(() => {
+    if (!isChecking) {
+      setLocalIsConnected(isConnected);
+    }
+  }, [isConnected, isChecking]);
   const getConnectionTypeIcon = (type: ConnectionType) => {
     switch (type) {
       case "sse":
@@ -88,7 +148,10 @@ export const ConnectionItem: React.FC<ConnectionItemProps> = ({
 
         {/* Status at bottom */}
         <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-100 dark:border-gray-700">
-          <ConnectionStatus isConnected={isConnected} />
+          <ConnectionStatus
+            isConnected={localIsConnected}
+            isChecking={isChecking}
+          />
         </div>
       </div>
     </div>
