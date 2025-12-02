@@ -4,7 +4,14 @@ import {
   LLMToolCall,
   AdapterError,
 } from "@mcpconnect/base-adapters";
-import { ChatMessage } from "@mcpconnect/schemas";
+import {
+  ChatMessage,
+  Tool,
+  ToolSelectionCallbacks,
+  ToolSelectionContext,
+  ToolSelectionProvider,
+  ToolSelectionResult,
+} from "@mcpconnect/schemas";
 import { AIModel, StreamingChatResponse, ChatContext } from "./types";
 import {
   generateId,
@@ -13,6 +20,93 @@ import {
 } from "./utils";
 import { executeToolWithMCP } from "./tool-executor";
 import { AISDKAdapter } from "./ai-sdk-adapter";
+
+/**
+ * Select tools using provider or return all tools
+ */
+async function selectToolsForPrompt(
+  allTools: Tool[],
+  prompt: string,
+  conversationHistory: ChatMessage[] = [],
+  provider?: ToolSelectionProvider,
+  options?: {
+    maxTools?: number;
+    includeHistory?: boolean;
+    fallbackToAll?: boolean;
+    connectionId?: string;
+  },
+  callbacks?: ToolSelectionCallbacks
+): Promise<Tool[]> {
+  // If no provider, return all tools (existing behavior)
+  if (!provider) {
+    return allTools;
+  }
+
+  const startTime = Date.now();
+  const maxTools = options?.maxTools;
+  const fallbackToAll = options?.fallbackToAll ?? true;
+
+  try {
+    // Notify selection start
+    callbacks?.onSelectionStart?.({
+      prompt,
+      totalTools: allTools.length,
+      providerId: provider.id,
+    });
+
+    // Build selection context
+    const context: ToolSelectionContext = {
+      prompt,
+      conversationHistory: options?.includeHistory
+        ? conversationHistory.map(msg => ({
+            role: msg.isUser ? ("user" as const) : ("assistant" as const),
+            content: msg.message || "",
+          }))
+        : undefined,
+      connectionId: options?.connectionId,
+      maxTools,
+    };
+
+    // Call provider
+    const result: ToolSelectionResult = await provider.selectTools(
+      allTools,
+      context,
+      callbacks
+    );
+
+    // Notify completion
+    const durationMs = Date.now() - startTime;
+    callbacks?.onSelectionComplete?.({
+      result,
+      selectedCount: result.tools.length,
+      totalCount: allTools.length,
+      durationMs,
+    });
+
+    // Return selected tools
+    return result.tools;
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+
+    // Notify error
+    callbacks?.onSelectionError?.({
+      error: err,
+      willFallback: fallbackToAll,
+    });
+
+    // Fallback behavior
+    if (fallbackToAll) {
+      callbacks?.onSelectionFallback?.({
+        reason: "Provider failed",
+        originalError: err,
+      });
+      return allTools;
+    }
+
+    // Re-throw if no fallback
+    throw err;
+  }
+}
 
 export async function* handleStream(
   aiModel: AIModel,
@@ -160,13 +254,34 @@ export async function* sendMessageStream(
   context: ChatContext,
   conversationHistory: ChatMessage[] = []
 ): AsyncIterable<StreamingChatResponse> {
-  const { tools, connection } = context;
+  const {
+    tools,
+    connection,
+    toolSelectionProvider,
+    toolSelectionOptions,
+    toolSelectionCallbacks,
+  } = context;
+
+  // Select tools using provider if available
+  const selectedTools = await selectToolsForPrompt(
+    tools,
+    userMessage,
+    conversationHistory,
+    toolSelectionProvider,
+    {
+      ...toolSelectionOptions,
+      connectionId: connection.id,
+    },
+    toolSelectionCallbacks
+  );
+
   const llmMessages = [
     ...conversationToLLMMessages(conversationHistory),
     { role: "user" as const, content: userMessage },
   ];
 
-  const llmTools = toolsToLLMFormat(tools);
+  // Use selected tools instead of all tools
+  const llmTools = toolsToLLMFormat(selectedTools);
   let explanationContent = ""; // Content before tool execution
   let finalContent = ""; // Content after tool execution (the real answer)
   const allToolExecutionMessages: ChatMessage[] = [];

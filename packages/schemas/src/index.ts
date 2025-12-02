@@ -45,6 +45,8 @@ export {
   type ThemeConfig,
 } from "./theme";
 
+export * from "./tool-selection";
+
 export { MCPCapabilitiesSchema, type MCPCapabilities } from "./mcp-protocol";
 
 export { z } from "zod";

@@ -8,6 +8,8 @@ import {
   Tool,
   ChatMessage,
   ToolExecution,
+  ToolSelectionProvider,
+  ToolSelectionCallbacks,
 } from "@mcpconnect/schemas";
 import { z } from "zod";
 import {
@@ -38,6 +40,13 @@ export interface ChatContext {
   connection: Connection;
   tools: Tool[];
   llmSettings: LLMSettings;
+  toolSelectionProvider?: ToolSelectionProvider;
+  toolSelectionOptions?: {
+    maxTools?: number;
+    includeHistory?: boolean;
+    fallbackToAll?: boolean;
+  };
+  toolSelectionCallbacks?: ToolSelectionCallbacks;
 }
 
 export interface ChatResponse {
