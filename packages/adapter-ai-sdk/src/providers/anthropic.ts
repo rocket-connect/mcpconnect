@@ -109,17 +109,17 @@ export class AnthropicProvider {
       },
       {
         value: "claude-3-5-sonnet-latest",
-        label: "Claude 3.5 Sonnet (Latest)",
+        label: "Claude 3.5 Sonnet",
         description: "Latest version of Claude 3.5 Sonnet",
       },
       {
         value: "claude-3-5-haiku-latest",
-        label: "Claude 3.5 Haiku (Latest)",
+        label: "Claude 3.5 Haiku",
         description: "Latest version of Claude 3.5 Haiku",
       },
       {
         value: "claude-3-opus-latest",
-        label: "Claude 3 Opus (Latest)",
+        label: "Claude 3 Opus",
         description: "Latest version of Claude 3 Opus",
       },
     ];
