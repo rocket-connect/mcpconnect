@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useRef,
 } from "react";
 import { LocalStorageAdapter } from "@mcpconnect/adapter-localstorage";
 import {
@@ -15,7 +16,7 @@ import {
 } from "@mcpconnect/schemas";
 import { ModelService } from "../services/modelService";
 import { ChatService } from "../services/chatService";
-import { SystemToolsService } from "@mcpconnect/adapter-ai-sdk";
+import { SystemToolsService, MCPService } from "@mcpconnect/adapter-ai-sdk";
 
 interface StorageContextType {
   adapter: LocalStorageAdapter;
@@ -62,6 +63,7 @@ interface StorageContextType {
   hideAllExecutions: (connectionId: string) => Promise<void>; // NEW
   isExecutionHidden: (connectionId: string, executionId: string) => boolean; // NEW
   getVisibleExecutions: (connectionId: string) => ToolExecution[]; // NEW
+  checkConnectionConnectivity: (connectionId: string) => Promise<boolean>;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -115,6 +117,9 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const [systemToolStateListeners, setSystemToolStateListeners] = useState<
     Set<() => void>
   >(new Set());
+
+  // Track in-flight connectivity checks to prevent duplicate requests
+  const connectivityCheckInFlight = useRef<Set<string>>(new Set());
 
   const notifyToolStateChange = useCallback(
     (connectionId: string) => {
@@ -729,6 +734,108 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [disabledSystemTools]
   );
 
+  // Use a ref to access current connections without adding to dependencies
+  const connectionsRef = useRef(connections);
+  useEffect(() => {
+    connectionsRef.current = connections;
+  }, [connections]);
+
+  // Check connectivity by fetching tools from the MCP server
+  const checkConnectionConnectivity = useCallback(
+    async (connectionId: string): Promise<boolean> => {
+      // Prevent duplicate in-flight requests for the same connection
+      if (connectivityCheckInFlight.current.has(connectionId)) {
+        return (
+          connectionsRef.current.find(c => c.id === connectionId)
+            ?.isConnected ?? false
+        );
+      }
+
+      const connection = connectionsRef.current.find(
+        c => c.id === connectionId
+      );
+      if (!connection) {
+        return false;
+      }
+
+      connectivityCheckInFlight.current.add(connectionId);
+
+      try {
+        const introspectionResult =
+          await MCPService.connectAndIntrospect(connection);
+        const isConnected = introspectionResult.isConnected;
+
+        // Update connection status and tools in storage
+        const updatedConnection = { ...connection, isConnected };
+        setConnections(prev => {
+          const updatedConnections = prev.map(c =>
+            c.id === connectionId ? updatedConnection : c
+          );
+          // Update storage asynchronously
+          adapter.setConnections(updatedConnections);
+          return updatedConnections;
+        });
+
+        // Update tools if introspection was successful
+        if (isConnected && introspectionResult.tools.length > 0) {
+          const normalizedTools: Tool[] = (
+            introspectionResult.tools as Tool[]
+          ).map(tool => ({
+            ...tool,
+            deprecated: tool.deprecated ?? false,
+            parameters:
+              tool.parameters?.map(param => ({
+                ...param,
+                required: param.required ?? false,
+                default: param.default ?? undefined,
+              })) ?? undefined,
+          }));
+          await adapter.setConnectionTools(connectionId, normalizedTools);
+          setTools(prev => ({
+            ...prev,
+            [connectionId]: normalizedTools,
+          }));
+        }
+
+        // Update resources if available
+        if (isConnected && introspectionResult.resources.length > 0) {
+          await adapter.setConnectionResources(
+            connectionId,
+            introspectionResult.resources as Resource[]
+          );
+          setResources(prev => ({
+            ...prev,
+            [connectionId]: introspectionResult.resources as Resource[],
+          }));
+        }
+
+        return isConnected;
+      } catch (error) {
+        console.error(
+          `[StorageContext] Connectivity check failed for ${connectionId}:`,
+          error
+        );
+
+        // Mark connection as disconnected on error
+        setConnections(prev => {
+          const connection = prev.find(c => c.id === connectionId);
+          if (!connection) return prev;
+          const updatedConnection = { ...connection, isConnected: false };
+          const updatedConnections = prev.map(c =>
+            c.id === connectionId ? updatedConnection : c
+          );
+          adapter.setConnections(updatedConnections);
+          return updatedConnections;
+        });
+
+        return false;
+      } finally {
+        connectivityCheckInFlight.current.delete(connectionId);
+      }
+    },
+    [adapter]
+  );
+
   // Initialization effect
   useEffect(() => {
     let mounted = true;
@@ -892,6 +999,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     hideAllExecutions, // NEW
     isExecutionHidden, // NEW
     getVisibleExecutions, // NEW
+    checkConnectionConnectivity,
   };
 
   return (
