@@ -1,6 +1,6 @@
 {
   "name": "mcpconnect",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Build and debug Model Context Protocol integrations with a browser-based interface",
   "keywords": [
     "mcp",
