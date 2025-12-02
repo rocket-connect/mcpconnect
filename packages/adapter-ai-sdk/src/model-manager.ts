@@ -1,5 +1,6 @@
 import { AdapterError } from "@mcpconnect/base-adapters";
 import { AnthropicProvider } from "./providers/anthropic";
+import { OpenAIProvider } from "./providers/openai";
 import { AISDKConfig, AIModel, LLMSettings } from "./types";
 
 export function initializeAIModel(config: AISDKConfig): AIModel | null {
@@ -11,6 +12,13 @@ export function initializeAIModel(config: AISDKConfig): AIModel | null {
           config.baseUrl
         );
         return anthropicProvider(config.model);
+      }
+      case "openai": {
+        const openaiProvider = OpenAIProvider.createProviderWithCors(
+          config.apiKey!,
+          config.baseUrl
+        );
+        return openaiProvider(config.model);
       }
       default:
         throw new AdapterError(

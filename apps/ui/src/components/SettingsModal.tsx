@@ -13,6 +13,7 @@ import {
   ModelService,
   LLMSettings,
   ModelOption,
+  ModelProvider,
 } from "../services/modelService";
 import { useStorage } from "../contexts/StorageContext";
 
@@ -29,6 +30,19 @@ const defaultSettings: LLMSettings = {
   temperature: 0.7,
   maxTokens: 4096,
 };
+
+const providerOptions = [
+  {
+    value: "anthropic" as const,
+    label: "Anthropic",
+    logo: "/anthropic-logo.svg",
+  },
+  {
+    value: "openai" as const,
+    label: "OpenAI",
+    logo: "/openai-logo.svg",
+  },
+];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -66,7 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       if (savedSettings) {
         setSettings({ ...defaultSettings, ...savedSettings });
       } else {
-        // Set default settings for Claude
+        // Set default settings for the default provider
         const providerDefaults = ModelService.getDefaultSettings("anthropic");
         setSettings(prev => ({ ...prev, ...providerDefaults }));
       }
@@ -84,15 +98,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsLoadingModels(true);
     try {
       // Load static models immediately (AISDKAdapter handles this)
-      const staticModels = ModelService.getAvailableModels("anthropic");
+      const staticModels = ModelService.getAvailableModels(settings.provider);
       setAvailableModels(staticModels);
 
-      // For Anthropic, we use static models as they don't provide a dynamic models API
-      // The adapter handles this internally
+      // Try to fetch dynamic models if API key is available
       if (settings.apiKey) {
         try {
           const dynamicModels = await ModelService.fetchModelsFromAPI(
-            "anthropic",
+            settings.provider,
             settings.apiKey,
             settings.baseUrl
           );
@@ -168,10 +181,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setApiKeyStatus("idle");
       }
 
-      // Load provider defaults when switching providers (for future expansion)
+      // Load provider defaults when switching providers
       if (key === "provider") {
         const providerDefaults = ModelService.getDefaultSettings(
-          value as "anthropic"
+          value as ModelProvider
         );
         return { ...newSettings, ...providerDefaults };
       }
@@ -230,6 +243,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     ? ModelService.validateApiKeyFormat(settings.provider, settings.apiKey)
     : true;
 
+  const currentProvider = providerOptions.find(
+    p => p.value === settings.provider
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -268,8 +285,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </h3>
 
               <div className="space-y-4">
-                {/* Provider Selection - Hidden but kept for expandability */}
-                <input type="hidden" value={settings.provider} />
+                {/* Provider Selection with Logos */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    AI Provider
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {providerOptions.map(provider => (
+                      <button
+                        key={provider.value}
+                        type="button"
+                        onClick={() =>
+                          handleSettingChange("provider", provider.value)
+                        }
+                        className={`flex items-center gap-3 p-3 border-2 rounded-lg transition-all ${
+                          settings.provider === provider.value
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                            : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
+                        }`}
+                      >
+                        <img
+                          src={provider.logo}
+                          alt={`${provider.label} logo`}
+                          className="w-8 h-8 object-contain invert dark:invert-0"
+                          onError={e => {
+                            // Fallback if logo doesn't load
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                        <span
+                          className={`text-sm font-medium ${
+                            settings.provider === provider.value
+                              ? "text-blue-700 dark:text-blue-300"
+                              : "text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
+                          {provider.label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Select your preferred AI provider
+                  </p>
+                </div>
 
                 {/* Model Selection */}
                 <div>
@@ -311,8 +370,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {/* API Key */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    AI Provider API Key
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                    {currentProvider && (
+                      <img
+                        src={currentProvider.logo}
+                        alt={`${currentProvider.label} logo`}
+                        className="w-4 h-4 object-contain invert dark:invert-0"
+                        onError={e => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    )}
+                    {ModelService.getProviderDisplayName(settings.provider)} API
+                    Key
                   </label>
                   <div className="relative">
                     <input
@@ -322,7 +392,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         handleSettingChange("apiKey", e.target.value)
                       }
                       placeholder={ModelService.getApiKeyPlaceholder(
-                        "anthropic"
+                        settings.provider
                       )}
                       className={`w-full px-3 py-2 pr-20 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         !isApiKeyFormatValid
@@ -343,7 +413,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   {!isApiKeyFormatValid && (
                     <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                      Invalid API key format for AI provider
+                      Invalid API key format for{" "}
+                      {ModelService.getProviderDisplayName(settings.provider)}
                     </p>
                   )}
                   {apiKeyStatus === "invalid" && (
@@ -369,7 +440,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={e =>
                       handleSettingChange("baseUrl", e.target.value)
                     }
-                    placeholder="https://api.anthropic.com/v1 (default)"
+                    placeholder={
+                      settings.provider === "openai"
+                        ? "https://api.openai.com/v1 (default)"
+                        : "https://api.anthropic.com/v1 (default)"
+                    }
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

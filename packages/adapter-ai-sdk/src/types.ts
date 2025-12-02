@@ -25,7 +25,7 @@ export interface ExtendedLLMMessage extends LLMMessage {
 }
 
 export const AISDKConfigSchema = LLMConfigSchema.extend({
-  provider: z.enum(["anthropic"]),
+  provider: z.enum(["anthropic", "openai"]),
   modelProvider: z.unknown().optional(),
 }).transform(data => ({
   ...data,
@@ -76,7 +76,7 @@ export interface ToolExecutionResult {
 }
 
 export interface LLMSettings {
-  provider: "anthropic";
+  provider: "anthropic" | "openai";
   apiKey: string;
   model: string;
   baseUrl?: string;

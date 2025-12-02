@@ -64,16 +64,14 @@
     "vitest": "^1.2.0"
   },
   "peerDependencies": {
-    "@ai-sdk/anthropic": "^2.0.17"
+    "@ai-sdk/anthropic": "^2.0.17",
+    "@ai-sdk/openai": "^2.0.76"
   },
   "peerDependenciesMeta": {
     "@ai-sdk/openai": {
       "optional": true
     },
     "@ai-sdk/anthropic": {
-      "optional": true
-    },
-    "@ai-sdk/google": {
       "optional": true
     }
   },

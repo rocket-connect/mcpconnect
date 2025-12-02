@@ -25,7 +25,7 @@ export async function handleCompletion(
     model: aiModel,
     messages: aiMessages,
     ...(Object.keys(aiTools).length > 0 && { tools: aiTools }),
-    maxOutputTokens: options?.maxTokens,
+    maxOutputTokens: options?.maxTokens || 16,
     temperature: options?.temperature,
   });
 

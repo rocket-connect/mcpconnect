@@ -30,6 +30,7 @@ import {
   validateChatContext,
 } from "./utils";
 import { AnthropicProvider } from "./providers/anthropic";
+import { OpenAIProvider } from "./providers/openai";
 import {
   initializeAIModel,
   needsReinit,
@@ -44,11 +45,13 @@ export class AISDKAdapter extends LLMAdapter {
   public config: AISDKConfig;
   public static storageAdapter: StorageAdapter | null = null;
   public aiModel: AIModel | null = null;
+  private static currentProvider: "anthropic" | "openai" = "anthropic";
 
   constructor(config: AISDKConfig) {
     const parsedConfig = AISDKConfigSchema.parse(config);
     super(parsedConfig);
     this.config = parsedConfig;
+    AISDKAdapter.currentProvider = parsedConfig.provider;
     this.initializeAIModel();
   }
 
@@ -96,7 +99,7 @@ export class AISDKAdapter extends LLMAdapter {
       await generateText({
         model: this.aiModel,
         messages: [{ role: "user", content: "Hi" }],
-        maxOutputTokens: 1,
+        maxOutputTokens: 16,
       });
 
       return true;
@@ -209,6 +212,7 @@ export class AISDKAdapter extends LLMAdapter {
     // Update configuration and reinitialize if needed
     if (needsReinit(this.config, context.llmSettings)) {
       this.config = updateConfigWithSettings(this.config, context.llmSettings);
+      AISDKAdapter.currentProvider = this.config.provider;
       this.initializeAIModel();
     }
 
@@ -234,7 +238,20 @@ export class AISDKAdapter extends LLMAdapter {
   }
 
   // Static helper methods
-  static getDefaultSettings(): Partial<LLMSettings> {
+  static getDefaultSettings(
+    provider?: "anthropic" | "openai"
+  ): Partial<LLMSettings> {
+    const selectedProvider = provider || this.currentProvider;
+
+    if (selectedProvider === "openai") {
+      return {
+        provider: "openai",
+        model: "gpt-4o",
+        temperature: 0.7,
+        maxTokens: 4096,
+      };
+    }
+
     return {
       provider: "anthropic",
       model: "claude-3-5-sonnet-20241022",
@@ -243,27 +260,73 @@ export class AISDKAdapter extends LLMAdapter {
     };
   }
 
-  static getAvailableModels(): ModelOption[] {
+  static getAvailableModels(provider?: "anthropic" | "openai"): ModelOption[] {
+    const selectedProvider = provider || this.currentProvider;
+
+    if (selectedProvider === "openai") {
+      return OpenAIProvider.getAvailableModels();
+    }
+
     return AnthropicProvider.getAvailableModels();
   }
 
-  static async testApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
+  static async testApiKey(
+    apiKey: string,
+    baseUrl?: string,
+    provider?: "anthropic" | "openai"
+  ): Promise<boolean> {
+    const selectedProvider = provider || this.currentProvider;
+
+    if (selectedProvider === "openai") {
+      return OpenAIProvider.testApiKey(apiKey, baseUrl);
+    }
+
     return AnthropicProvider.testApiKey(apiKey, baseUrl);
   }
 
-  static validateApiKey(apiKey: string): boolean {
+  static validateApiKey(
+    apiKey: string,
+    provider?: "anthropic" | "openai"
+  ): boolean {
+    const selectedProvider = provider || this.currentProvider;
+
+    if (selectedProvider === "openai") {
+      return OpenAIProvider.validateApiKey(apiKey);
+    }
+
     return AnthropicProvider.validateApiKey(apiKey);
   }
 
-  static getContextLimit(model: string): number {
+  static getContextLimit(
+    model: string,
+    provider?: "anthropic" | "openai"
+  ): number {
+    const selectedProvider = provider || this.currentProvider;
+
+    if (selectedProvider === "openai") {
+      return OpenAIProvider.getContextLimit(model);
+    }
+
     return AnthropicProvider.getContextLimit(model);
   }
 
-  static getApiKeyPlaceholder(): string {
+  static getApiKeyPlaceholder(provider?: "anthropic" | "openai"): string {
+    const selectedProvider = provider || this.currentProvider;
+
+    if (selectedProvider === "openai") {
+      return "sk-proj-...";
+    }
+
     return "sk-ant-api03-...";
   }
 
-  static getProviderDisplayName(): string {
+  static getProviderDisplayName(provider?: "anthropic" | "openai"): string {
+    const selectedProvider = provider || this.currentProvider;
+
+    if (selectedProvider === "openai") {
+      return "OpenAI";
+    }
+
     return "Anthropic";
   }
 

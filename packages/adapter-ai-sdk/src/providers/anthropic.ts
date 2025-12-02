@@ -130,7 +130,7 @@ export class AnthropicProvider {
       await generateText({
         model,
         messages: [{ role: "user", content: "Hi" }],
-        maxOutputTokens: 1,
+        maxOutputTokens: 16,
       });
 
       return true;
