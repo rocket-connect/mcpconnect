@@ -1,6 +1,6 @@
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Connection, ConnectionType } from "@mcpconnect/schemas";
 import { MessageSquare, Loader2 } from "lucide-react";
 import { TruncatedText } from "./TruncatedText";
@@ -23,64 +23,92 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
   onCheckConnectivity,
 }) => {
   const [isChecking, setIsChecking] = useState(false);
-  const [localIsConnected, setLocalIsConnected] = useState(
-    connection.isConnected
+  // Start with undefined to show checking state until first check completes
+  const [localIsConnected, setLocalIsConnected] = useState<boolean | undefined>(
+    undefined
   );
 
   // Store callback in ref to avoid re-running effect when callback reference changes
   const onCheckConnectivityRef = React.useRef(onCheckConnectivity);
   onCheckConnectivityRef.current = onCheckConnectivity;
 
-  // Track if we've already started a check for this connection
-  const checkStartedRef = React.useRef(false);
+  // Track the last check timestamp to prevent rapid re-checks
+  const lastCheckRef = React.useRef<number>(0);
+  const CHECK_COOLDOWN = 5000; // Minimum 5 seconds between checks
 
-  // Check connectivity on mount (only once per connection)
-  useEffect(() => {
+  // Perform a connectivity check
+  const performCheck = useCallback(async () => {
     if (isDemoMode) return;
-    if (checkStartedRef.current) return;
 
     const checkFn = onCheckConnectivityRef.current;
     if (!checkFn) return;
 
-    checkStartedRef.current = true;
-    let mounted = true;
+    // Prevent rapid re-checks (cooldown period)
+    const now = Date.now();
+    if (now - lastCheckRef.current < CHECK_COOLDOWN) {
+      return;
+    }
+    lastCheckRef.current = now;
+
     setIsChecking(true);
 
-    // Add a timeout to prevent infinite spinning
-    const timeoutId = setTimeout(() => {
-      if (mounted) {
-        setIsChecking(false);
-        setLocalIsConnected(connection.isConnected ?? false);
-      }
-    }, 30000); // 30 second timeout
-
-    checkFn(connection.id)
-      .then(result => {
-        if (mounted) {
-          setLocalIsConnected(result);
-          setIsChecking(false);
-        }
-      })
-      .catch(error => {
-        console.error("[ConnectionCard] Connectivity check failed:", error);
-        if (mounted) {
-          setLocalIsConnected(false);
-          setIsChecking(false);
-        }
-      });
-
-    return () => {
-      mounted = false;
-      clearTimeout(timeoutId);
-    };
+    try {
+      const result = await Promise.race([
+        checkFn(connection.id),
+        // 15 second timeout for the check
+        new Promise<boolean>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout")), 15000)
+        ),
+      ]);
+      setLocalIsConnected(result);
+    } catch (error) {
+      console.error("[ConnectionCard] Connectivity check failed:", error);
+      setLocalIsConnected(false);
+    } finally {
+      setIsChecking(false);
+    }
   }, [connection.id, isDemoMode]);
+
+  // Check connectivity on mount (runs once per component mount)
+  useEffect(() => {
+    if (isDemoMode) {
+      setLocalIsConnected(connection.isConnected ?? true);
+      return;
+    }
+
+    performCheck();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDemoMode]); // Only run on mount, not when performCheck reference changes
+
+  // Re-check when page becomes visible (user switches tabs back)
+  useEffect(() => {
+    if (isDemoMode) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        performCheck();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isDemoMode, performCheck]);
 
   // Sync with prop when it changes externally (after check completes)
   useEffect(() => {
-    if (!isChecking) {
-      setLocalIsConnected(connection.isConnected);
+    if (!isChecking && localIsConnected !== undefined) {
+      // Only sync if the prop changed and we're not checking
+      if (connection.isConnected !== localIsConnected) {
+        setLocalIsConnected(connection.isConnected);
+      }
     }
-  }, [connection.isConnected, isChecking]);
+  }, [connection.isConnected, isChecking, localIsConnected]);
+
+  // Determine display status - show checking if we haven't completed first check
+  const showChecking = isChecking || localIsConnected === undefined;
+  const displayConnected = localIsConnected ?? false;
   const getConnectionTypeColor = (type: ConnectionType) => {
     switch (type) {
       case "sse":
@@ -126,7 +154,7 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            {isChecking ? (
+            {showChecking ? (
               <>
                 <Loader2 className="w-2.5 h-2.5 text-gray-400 animate-spin" />
                 <span className="text-[10px] text-gray-500 dark:text-gray-400">
@@ -136,10 +164,10 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
             ) : (
               <>
                 <div
-                  className={`w-1.5 h-1.5 rounded-full ${localIsConnected ? "bg-green-500" : "bg-red-500"}`}
+                  className={`w-1.5 h-1.5 rounded-full ${displayConnected ? "bg-green-500" : "bg-red-500"}`}
                 />
                 <span className="text-[10px] text-gray-600 dark:text-gray-400">
-                  {localIsConnected ? "Connected" : "Offline"}
+                  {displayConnected ? "Connected" : "Offline"}
                 </span>
               </>
             )}
