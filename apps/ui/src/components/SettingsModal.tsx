@@ -8,6 +8,7 @@ import {
   AlertCircle,
   CheckCircle,
   Loader,
+  Sparkles,
 } from "lucide-react";
 import {
   ModelService,
@@ -16,6 +17,10 @@ import {
   ModelProvider,
 } from "../services/modelService";
 import { useStorage } from "../contexts/StorageContext";
+import {
+  Neo4jConfigSection,
+  type Neo4jConnectionConfig,
+} from "@mcpconnect/components";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -64,6 +69,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     totalTools: 0,
     totalResources: 0,
   });
+
+  // Neo4j configuration state
+  const [neo4jConfig, setNeo4jConfig] = useState<Neo4jConnectionConfig>({
+    uri: "neo4j://localhost:7687",
+    username: "neo4j",
+    password: "",
+    database: "neo4j",
+  });
+  const [isNeo4jSyncing, setIsNeo4jSyncing] = useState(false);
+  const [isVectorized, setIsVectorized] = useState(false);
 
   // Load settings from adapter on mount
   useEffect(() => {
@@ -224,6 +239,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         alert("Failed to clear storage. Please try again.");
       }
     }
+  };
+
+  // Neo4j connection handlers
+  const handleNeo4jTestConnection = async (): Promise<boolean> => {
+    console.log("[SettingsModal] Testing Neo4j connection:", {
+      uri: neo4jConfig.uri,
+      username: neo4jConfig.username,
+      database: neo4jConfig.database,
+    });
+
+    // Simulate async operation - in real implementation this would call the backend
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // For now, always succeed (mocked)
+    console.log("[SettingsModal] Neo4j connection test successful (mocked)");
+    return true;
+  };
+
+  const handleNeo4jSync = async (): Promise<void> => {
+    setIsNeo4jSyncing(true);
+    console.log("[SettingsModal] Starting Neo4j sync:", {
+      config: { ...neo4jConfig, password: "***" },
+      toolCount: storageStats.totalTools,
+    });
+
+    // Simulate sync operation
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    console.log("[SettingsModal] Neo4j sync complete (mocked)");
+    setIsVectorized(true);
+    setIsNeo4jSyncing(false);
   };
 
   const getApiKeyStatusIcon = () => {
@@ -429,6 +475,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Vector Search Section */}
+          {!isLoadingSettings && (
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-500" />
+                Vector Search
+                {isVectorized && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
+                    <CheckCircle className="w-3 h-3" />
+                    Enabled
+                  </span>
+                )}
+              </h3>
+
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Enable intelligent tool selection with semantic search. Connect
+                to Neo4j to index your tools with vector embeddings.
+              </p>
+
+              <Neo4jConfigSection
+                config={neo4jConfig}
+                onConfigChange={setNeo4jConfig}
+                onTestConnection={handleNeo4jTestConnection}
+                onSync={handleNeo4jSync}
+                toolCount={storageStats.totalTools}
+                isSyncing={isNeo4jSyncing}
+                isOpenAIConfigured={settings.provider === "openai"}
+              />
             </div>
           )}
 

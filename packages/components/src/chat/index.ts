@@ -21,3 +21,15 @@ export {
   ChatMessagesContainer,
   type ChatMessagesContainerProps,
 } from "./ChatMessagesContainer";
+export {
+  VectorSearchToolCard,
+  type VectorSearchToolCardProps,
+  type VectorSearchResult,
+} from "./VectorSearchToolCard";
+export {
+  ToolSelectionHookCard,
+  type ToolSelectionHookCardProps,
+  type ToolHookEvent,
+  type HookType,
+  type HookStatus,
+} from "./ToolSelectionHookCard";

@@ -6,9 +6,13 @@ import {
   ConnectionCard,
   ToolCard,
   ToolActionsPanel,
+  VectorizeSchemaBanner,
+  Neo4jConnectionModal,
+  type Neo4jConnectionConfig,
 } from "@mcpconnect/components";
 import { useState, useMemo, useEffect } from "react";
-import { Users, Plus, Search, X, Wrench, Zap } from "lucide-react";
+import { Users, Plus, Search, X, Wrench, Zap, AlertCircle } from "lucide-react";
+import { ModelService, LLMSettings } from "../services/modelService";
 
 interface SidebarProps {
   connections: Connection[];
@@ -78,6 +82,65 @@ export const Sidebar = ({ connections }: SidebarProps) => {
 
   const [toolSearchQuery, setToolSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"mcp" | "system">("mcp");
+  const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
+  const [isNeo4jModalOpen, setIsNeo4jModalOpen] = useState(false);
+  const [isVectorized, setIsVectorized] = useState(false);
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+
+  // Check if OpenAI is the current provider (required for semantic tool search)
+  const isOpenAIProvider = llmSettings?.provider === "openai";
+
+  // Load LLM settings helper
+  const loadLLMSettings = async () => {
+    try {
+      const settings = await ModelService.loadSettings();
+      setLlmSettings(settings);
+    } catch (error) {
+      console.error("Failed to load LLM settings:", error);
+    }
+  };
+
+  // Load LLM settings on mount and watch for changes
+  useEffect(() => {
+    loadLLMSettings();
+
+    // Listen for custom event when settings are saved (same-tab updates)
+    const handleSettingsChanged = () => {
+      loadLLMSettings();
+    };
+
+    // Listen for storage events (cross-tab updates)
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key?.includes("llm-settings")) {
+        loadLLMSettings();
+      }
+    };
+
+    window.addEventListener("llm-settings-changed", handleSettingsChanged);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("llm-settings-changed", handleSettingsChanged);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
+  // Handle vectorize click - opens Neo4j connection modal
+  const handleVectorize = () => {
+    setIsNeo4jModalOpen(true);
+  };
+
+  // Handle Neo4j connection complete
+  const handleNeo4jConnect = (config: Neo4jConnectionConfig) => {
+    console.log("[Sidebar] Neo4j connected:", { ...config, password: "***" });
+    setIsVectorized(true);
+    setIsNeo4jModalOpen(false);
+  };
+
+  // Handle banner dismiss
+  const handleBannerDismiss = () => {
+    setIsBannerDismissed(true);
+  };
 
   // Manual URL parsing as backup since useParams seems to be failing
   const urlParts = location.pathname.split("/");
@@ -485,6 +548,30 @@ export const Sidebar = ({ connections }: SidebarProps) => {
               </div>
             )}
 
+            {/* Vectorize Schema Banner - Only show for OpenAI when not vectorized */}
+            {toolsToShow.length > 0 && !isFirstTime && !isBannerDismissed && (
+              <>
+                {isOpenAIProvider ? (
+                  <VectorizeSchemaBanner
+                    isVectorized={isVectorized}
+                    onVectorize={handleVectorize}
+                    onDismiss={handleBannerDismiss}
+                    toolCount={mcpToolsToShow.length}
+                    isOpenAIConnection={true}
+                  />
+                ) : (
+                  <div className="flex items-start gap-2 p-2 mb-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-700 dark:text-amber-300">
+                      <span className="font-medium">Semantic tool search</span>{" "}
+                      requires OpenAI for embeddings. Switch to OpenAI in
+                      Settings to enable.
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
             {/* Tools List - Updated with new ToolCard */}
             <div
               className={`space-y-3 ${isFirstTime ? "opacity-60" : ""} min-w-0 overflow-hidden`}
@@ -557,6 +644,20 @@ export const Sidebar = ({ connections }: SidebarProps) => {
       <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
         <RconnectLogo className="transition-opacity" />
       </div>
+
+      {/* Neo4j Connection Modal */}
+      <Neo4jConnectionModal
+        isOpen={isNeo4jModalOpen}
+        onClose={() => setIsNeo4jModalOpen(false)}
+        onConnect={handleNeo4jConnect}
+        toolCount={mcpToolsToShow.length}
+        connectionName={
+          currentConnectionId
+            ? connections.find(c => c.id === currentConnectionId)?.name
+            : undefined
+        }
+        isOpenAIConfigured={isOpenAIProvider}
+      />
     </div>
   );
 };

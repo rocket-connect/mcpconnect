@@ -14,6 +14,7 @@ import {
   ToolExecution,
   ChatConversation,
 } from "@mcpconnect/schemas";
+import { LLMSettings } from "@mcpconnect/adapter-ai-sdk";
 import { ModelService } from "../services/modelService";
 import { ChatService } from "../services/chatService";
 import { SystemToolsService, MCPService } from "@mcpconnect/adapter-ai-sdk";
@@ -29,6 +30,7 @@ interface StorageContextType {
   disabledTools: Record<string, Set<string>>;
   disabledSystemTools: Set<string>;
   hiddenExecutions: Record<string, Set<string>>; // NEW: connectionId -> Set of hidden execution IDs
+  llmSettings: LLMSettings | null;
   isLoading: boolean;
   error: string | null;
   updateConnections: (connections: Connection[]) => Promise<void>;
@@ -107,6 +109,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const [hiddenExecutions, setHiddenExecutions] = useState<
     Record<string, Set<string>>
   >({}); // NEW
+  const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -848,6 +851,12 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         ModelService.setAdapter(adapter);
         ChatService.setStorageAdapter(adapter);
 
+        // Load LLM settings
+        const savedLlmSettings = await ModelService.loadSettings();
+        if (savedLlmSettings) {
+          setLlmSettings(savedLlmSettings);
+        }
+
         await loadExistingData();
         setIsLoading(false);
       } catch (err) {
@@ -973,6 +982,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     disabledTools,
     disabledSystemTools,
     hiddenExecutions, // NEW
+    llmSettings,
     isLoading,
     error,
     updateConnections,

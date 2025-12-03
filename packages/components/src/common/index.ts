@@ -21,3 +21,16 @@ export {
   extractSvgTitle,
 } from "./SvgDisplay";
 export { JsonCodeBlock } from "./JsonCodeBlock";
+export {
+  VectorizeSchemaBanner,
+  type VectorizeSchemaBannerProps,
+} from "./VectorizeSchemaBanner";
+export {
+  Neo4jConfigSection,
+  type Neo4jConfigSectionProps,
+  type Neo4jConnectionConfig,
+} from "./Neo4jConfigSection";
+export {
+  Neo4jConnectionModal,
+  type Neo4jConnectionModalProps,
+} from "./Neo4jConnectionModal";
