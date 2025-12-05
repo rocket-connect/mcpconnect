@@ -17,6 +17,7 @@ import type {
   ToolSelectionCallbacks,
 } from "@mcpconnect/schemas";
 import { openai } from "@ai-sdk/openai";
+import { jsonSchema } from "ai";
 
 export interface Neo4jConfig {
   uri: string;
@@ -30,35 +31,132 @@ export interface SyncOptions {
   openaiApiKey: string;
   tools: Tool[];
   toolSetName?: string;
+  /** If true, deletes existing toolset before syncing (for resync) */
+  forceSync?: boolean;
+  /** Previous toolset hash to delete before syncing */
+  previousHash?: string;
 }
 
 export interface SyncResult {
   success: boolean;
   toolCount: number;
+  hash?: string;
   error?: string;
 }
 
-let driver: Driver | null = null;
-let ragClient: MCPRagClient | null = null;
+// Per-connection state management
+interface ConnectionRagState {
+  driver: Driver;
+  ragClient: MCPRagClient;
+  connectionId: string;
+}
+
+// Map of connectionId -> RAG state
+const connectionRagStates = new Map<string, ConnectionRagState>();
+
+// Current active connection (for backwards compatibility)
+let currentConnectionId: string | null = null;
+
+/**
+ * Recursively sort all keys in an object/array for deterministic JSON serialization.
+ * This ensures the same data structure always produces the same JSON string
+ * regardless of the original property insertion order.
+ */
+function sortObjectKeysDeep(obj: unknown): unknown {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(sortObjectKeysDeep);
+  }
+
+  const sortedKeys = Object.keys(obj as Record<string, unknown>).sort();
+  const result: Record<string, unknown> = {};
+  for (const key of sortedKeys) {
+    result[key] = sortObjectKeysDeep((obj as Record<string, unknown>)[key]);
+  }
+  return result;
+}
+
+/**
+ * Ensure inputSchema is a valid JSON Schema object.
+ * The AI SDK's asSchema function expects a proper JSON Schema.
+ *
+ * We create a clean copy to avoid any prototype chain issues that might
+ * cause the asSchema function to misidentify this as a Zod schema.
+ */
+function normalizeInputSchema(
+  inputSchema: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  // Default empty schema
+  const defaultSchema: Record<string, unknown> = {
+    type: "object",
+    properties: {},
+  };
+
+  if (!inputSchema || typeof inputSchema !== "object") {
+    return defaultSchema;
+  }
+
+  // Create a clean JSON copy to remove any prototype chain or special properties
+  // This prevents asSchema from mistaking this for a Zod schema
+  try {
+    const cleanSchema = JSON.parse(JSON.stringify(inputSchema));
+
+    // Ensure required fields for a valid JSON Schema
+    if (!cleanSchema.type) {
+      cleanSchema.type = "object";
+    }
+
+    // Ensure properties exists if type is object
+    if (cleanSchema.type === "object" && !cleanSchema.properties) {
+      cleanSchema.properties = {};
+    }
+
+    return cleanSchema;
+  } catch {
+    // If JSON serialization fails, return default
+    return defaultSchema;
+  }
+}
 
 /**
  * Convert MCPConnect Tool[] to AI SDK tool format expected by mcp-rag
+ *
+ * Important: We normalize the inputSchema by deep-sorting all keys to ensure
+ * consistent hashing regardless of property order from MCP server polling.
+ *
+ * We wrap the schema using AI SDK's jsonSchema() helper to ensure asSchema()
+ * can properly handle it without trying to detect it as a Zod schema.
  */
 function convertToolsToAISDKFormat(
   tools: Tool[]
-): Record<string, { description: string; parameters: unknown }> {
+): Record<
+  string,
+  { description: string; inputSchema: ReturnType<typeof jsonSchema> }
+> {
   const aiSDKTools: Record<
     string,
-    { description: string; parameters: unknown }
+    { description: string; inputSchema: ReturnType<typeof jsonSchema> }
   > = {};
 
-  for (const tool of tools) {
+  // Sort tools by name for consistent ordering
+  const sortedTools = [...tools].sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const tool of sortedTools) {
+    // First normalize the schema to ensure it's valid
+    const validSchema = normalizeInputSchema(tool.inputSchema);
+    // Then deep sort for consistent hashing
+    const normalizedSchema = sortObjectKeysDeep(validSchema) as Record<
+      string,
+      unknown
+    >;
+
+    // Wrap with AI SDK's jsonSchema helper so asSchema() handles it correctly
     aiSDKTools[tool.name] = {
-      description: tool.description,
-      parameters: tool.inputSchema || {
-        type: "object",
-        properties: {},
-      },
+      description: tool.description || "",
+      inputSchema: jsonSchema(normalizedSchema),
     };
   }
 
@@ -107,27 +205,41 @@ export async function syncToolsToNeo4j(
     openaiApiKey,
     tools,
     toolSetName = "mcpconnect",
+    forceSync = false,
+    previousHash,
   } = options;
+
+  // Use toolSetName as connectionId for per-connection state
+  const connectionId = toolSetName;
 
   try {
     console.log("[mcpRagService] Starting tool sync:", {
       toolCount: tools.length,
       toolSetName,
+      connectionId,
       neo4jUri: neo4jConfig.uri,
       hasApiKey: !!openaiApiKey,
       apiKeyLength: openaiApiKey?.length ?? 0,
       apiKeyPreview: openaiApiKey
         ? `${openaiApiKey.substring(0, 8)}...`
         : "MISSING",
+      forceSync,
+      previousHash,
     });
 
-    // Close existing driver if any
-    if (driver) {
-      await driver.close();
+    // Close existing state for this connection if any
+    const existingState = connectionRagStates.get(connectionId);
+    if (existingState) {
+      try {
+        await existingState.driver.close();
+      } catch (err) {
+        console.warn("[mcpRagService] Failed to close existing driver:", err);
+      }
+      connectionRagStates.delete(connectionId);
     }
 
     // Create new Neo4j driver
-    driver = neo4j.driver(
+    const driver = neo4j.driver(
       neo4jConfig.uri,
       neo4j.auth.basic(neo4jConfig.username, neo4jConfig.password)
     );
@@ -144,15 +256,40 @@ export async function syncToolsToNeo4j(
     // 1. Vector index creation in Neo4j
     // 2. Embedding generation via OpenAI
     // 3. Tool decomposition (tool, params, return types)
-    ragClient = createMCPRag({
+    const ragClient = createMCPRag({
       model: openai("gpt-4"),
       openaiApiKey,
       neo4j: driver,
       // @ts-ignore
       tools: aiSDKTools,
-      toolSetName,
       dangerouslyAllowBrowser: true,
     });
+
+    // Store the state for this connection
+    connectionRagStates.set(connectionId, {
+      driver,
+      ragClient,
+      connectionId,
+    });
+    currentConnectionId = connectionId;
+
+    // If forceSync is true and we have a previous hash, delete the old toolset first
+    // This ensures a clean sync when tools have changed
+    if (forceSync && previousHash) {
+      console.log(
+        "[mcpRagService] Force sync enabled, deleting previous toolset:",
+        previousHash
+      );
+      try {
+        const deleteResult = await ragClient.deleteToolsetByHash(previousHash);
+        console.log("[mcpRagService] Previous toolset deleted:", deleteResult);
+      } catch (deleteError) {
+        console.warn(
+          "[mcpRagService] Failed to delete previous toolset (continuing with sync):",
+          deleteError
+        );
+      }
+    }
 
     // Sync tools to Neo4j with vector embeddings
     // This will:
@@ -160,23 +297,34 @@ export async function syncToolsToNeo4j(
     // - Generate embeddings for each tool
     // - Store tool graph structure in Neo4j
     console.log("[mcpRagService] Calling rag.sync()...");
-    await ragClient.sync();
+    const syncResult = await ragClient.sync();
 
-    console.log("[mcpRagService] Tool sync completed successfully");
+    console.log(
+      "[mcpRagService] Tool sync completed successfully with hash:",
+      syncResult.hash
+    );
 
     return {
       success: true,
       toolCount: tools.length,
+      hash: syncResult.hash,
     };
   } catch (error) {
     console.error("[mcpRagService] Tool sync failed:", error);
 
     // Clean up on error
-    if (driver) {
-      await driver.close();
-      driver = null;
+    const state = connectionRagStates.get(connectionId);
+    if (state) {
+      try {
+        await state.driver.close();
+      } catch (err) {
+        console.warn("[mcpRagService] Failed to close driver on error:", err);
+      }
+      connectionRagStates.delete(connectionId);
     }
-    ragClient = null;
+    if (currentConnectionId === connectionId) {
+      currentConnectionId = null;
+    }
 
     return {
       success: false,
@@ -190,20 +338,64 @@ export async function syncToolsToNeo4j(
 /**
  * Get the current MCP-RAG client instance
  * Can be used for tool selection queries after sync
+ * @param connectionId - Optional connection ID. If not provided, uses current active connection
  */
-export function getRagClient(): MCPRagClient | null {
-  return ragClient;
+export function getRagClient(connectionId?: string): MCPRagClient | null {
+  const targetId = connectionId ?? currentConnectionId;
+  if (!targetId) return null;
+
+  const state = connectionRagStates.get(targetId);
+  return state?.ragClient ?? null;
 }
 
 /**
- * Close Neo4j connection and cleanup
+ * Get the RAG state for a specific connection
  */
-export async function closeConnection(): Promise<void> {
-  if (driver) {
-    await driver.close();
-    driver = null;
+export function getConnectionRagState(
+  connectionId: string
+): ConnectionRagState | null {
+  return connectionRagStates.get(connectionId) ?? null;
+}
+
+/**
+ * Close Neo4j connection and cleanup for a specific connection
+ * @param connectionId - Optional connection ID. If not provided, closes current active connection
+ */
+export async function closeConnection(connectionId?: string): Promise<void> {
+  const targetId = connectionId ?? currentConnectionId;
+  if (!targetId) return;
+
+  const state = connectionRagStates.get(targetId);
+  if (state) {
+    try {
+      await state.driver.close();
+    } catch (err) {
+      console.warn("[mcpRagService] Failed to close driver:", err);
+    }
+    connectionRagStates.delete(targetId);
   }
-  ragClient = null;
+
+  if (currentConnectionId === targetId) {
+    currentConnectionId = null;
+  }
+}
+
+/**
+ * Close all connections
+ */
+export async function closeAllConnections(): Promise<void> {
+  for (const [connectionId, state] of connectionRagStates) {
+    try {
+      await state.driver.close();
+    } catch (err) {
+      console.warn(
+        `[mcpRagService] Failed to close driver for ${connectionId}:`,
+        err
+      );
+    }
+  }
+  connectionRagStates.clear();
+  currentConnectionId = null;
 }
 
 /**
@@ -306,25 +498,135 @@ export class MCPRagToolSelectionProvider implements ToolSelectionProvider {
 /**
  * Create a ToolSelectionProvider using MCP RAG
  * Returns null if no RAG client is available
+ * @param connectionId - Optional connection ID. If not provided, uses current active connection
  */
 export function createToolSelectionProvider(options?: {
   maxTools?: number;
+  connectionId?: string;
 }): ToolSelectionProvider | null {
-  if (!ragClient || !driver) {
+  const targetId = options?.connectionId ?? currentConnectionId;
+  if (!targetId) {
     console.warn(
-      "[mcpRagService] Cannot create provider: RAG client or driver not initialized"
+      "[mcpRagService] Cannot create provider: no active connection"
     );
     return null;
   }
 
-  return new MCPRagToolSelectionProvider(ragClient, options);
+  const state = connectionRagStates.get(targetId);
+  if (!state) {
+    console.warn(
+      "[mcpRagService] Cannot create provider: RAG client or driver not initialized for connection:",
+      targetId
+    );
+    return null;
+  }
+
+  return new MCPRagToolSelectionProvider(state.ragClient, options);
 }
 
 /**
  * Check if the RAG client is initialized and ready
+ * @param connectionId - Optional connection ID. If not provided, uses current active connection
  */
-export function isRagClientReady(): boolean {
-  return ragClient !== null && driver !== null;
+export function isRagClientReady(connectionId?: string): boolean {
+  const targetId = connectionId ?? currentConnectionId;
+  if (!targetId) return false;
+
+  const state = connectionRagStates.get(targetId);
+  return state !== undefined;
+}
+
+/**
+ * Get the current toolset hash from the RAG client
+ * Returns null if the RAG client is not initialized
+ * @param connectionId - Optional connection ID. If not provided, uses current active connection
+ */
+export function getToolsetHash(connectionId?: string): string | null {
+  const targetId = connectionId ?? currentConnectionId;
+  if (!targetId) {
+    console.warn(
+      "[mcpRagService] Cannot get toolset hash: no active connection"
+    );
+    return null;
+  }
+
+  const state = connectionRagStates.get(targetId);
+  if (!state) {
+    console.warn(
+      "[mcpRagService] Cannot get toolset hash: RAG client not initialized for connection:",
+      targetId
+    );
+    return null;
+  }
+  return state.ragClient.getToolsetHash();
+}
+
+export interface DeleteToolsetResult {
+  deletedToolsets: number;
+  deletedTools: number;
+  deletedParams: number;
+  deletedReturnTypes: number;
+}
+
+/**
+ * Delete a toolset from Neo4j by its hash
+ *
+ * This removes the toolset and all associated tools, parameters,
+ * and return types from the Neo4j database.
+ *
+ * @param hash - The toolset hash to delete (or uses current hash if not provided)
+ * @param connectionId - Optional connection ID. If not provided, uses current active connection
+ * @returns The result of the deletion operation
+ */
+export async function deleteToolsetByHash(
+  hash?: string,
+  connectionId?: string
+): Promise<DeleteToolsetResult> {
+  const targetId = connectionId ?? currentConnectionId;
+  if (!targetId) {
+    console.warn("[mcpRagService] Cannot delete toolset: no active connection");
+    return {
+      deletedToolsets: 0,
+      deletedTools: 0,
+      deletedParams: 0,
+      deletedReturnTypes: 0,
+    };
+  }
+
+  const state = connectionRagStates.get(targetId);
+  if (!state) {
+    console.warn(
+      "[mcpRagService] Cannot delete toolset: RAG client not initialized for connection:",
+      targetId
+    );
+    return {
+      deletedToolsets: 0,
+      deletedTools: 0,
+      deletedParams: 0,
+      deletedReturnTypes: 0,
+    };
+  }
+
+  // Use provided hash or get current toolset hash
+  const targetHash = hash ?? state.ragClient.getToolsetHash();
+
+  console.log(
+    "[mcpRagService] Deleting toolset with hash:",
+    targetHash,
+    "for connection:",
+    targetId
+  );
+
+  try {
+    const result = await state.ragClient.deleteToolsetByHash(targetHash);
+
+    console.log("[mcpRagService] Toolset deleted:", result);
+
+    return result;
+  } catch (error) {
+    console.error("[mcpRagService] Failed to delete toolset:", error);
+    throw error;
+  }
 }
 
 /**
@@ -344,9 +646,17 @@ export async function reinitializeRagClient(options: {
     toolSetName = "mcpconnect",
   } = options;
 
-  // Already initialized
-  if (ragClient && driver) {
-    console.log("[mcpRagService] RAG client already initialized");
+  // Use toolSetName as connectionId
+  const connectionId = toolSetName;
+
+  // Already initialized for this connection
+  const existingState = connectionRagStates.get(connectionId);
+  if (existingState) {
+    console.log(
+      "[mcpRagService] RAG client already initialized for connection:",
+      connectionId
+    );
+    currentConnectionId = connectionId;
     return true;
   }
 
@@ -354,16 +664,12 @@ export async function reinitializeRagClient(options: {
     console.log("[mcpRagService] Reinitializing RAG client:", {
       toolCount: tools.length,
       toolSetName,
+      connectionId,
       neo4jUri: neo4jConfig.uri,
     });
 
-    // Close existing driver if any
-    if (driver) {
-      await driver.close();
-    }
-
     // Create new Neo4j driver
-    driver = neo4j.driver(
+    const driver = neo4j.driver(
       neo4jConfig.uri,
       neo4j.auth.basic(neo4jConfig.username, neo4jConfig.password)
     );
@@ -375,32 +681,32 @@ export async function reinitializeRagClient(options: {
     const aiSDKTools = convertToolsToAISDKFormat(tools);
 
     // Create MCP-RAG client (no sync needed - tools already in Neo4j)
-    ragClient = createMCPRag({
+    const ragClient = createMCPRag({
       model: openai("gpt-4"),
       openaiApiKey,
       neo4j: driver,
       // @ts-ignore
       tools: aiSDKTools,
-      toolSetName,
       dangerouslyAllowBrowser: true,
     });
 
-    console.log("[mcpRagService] RAG client reinitialized successfully");
+    // Store the state for this connection
+    connectionRagStates.set(connectionId, {
+      driver,
+      ragClient,
+      connectionId,
+    });
+    currentConnectionId = connectionId;
+
+    console.log(
+      "[mcpRagService] RAG client reinitialized successfully for connection:",
+      connectionId
+    );
     return true;
   } catch (error) {
     console.error("[mcpRagService] Failed to reinitialize RAG client:", error);
 
-    // Clean up on error
-    if (driver) {
-      try {
-        await driver.close();
-      } catch (closeError) {
-        console.error("[mcpRagService] Failed to close driver:", closeError);
-      }
-      driver = null;
-    }
-    ragClient = null;
-
+    // Clean up on error - we didn't store it yet, so just log
     return false;
   }
 }

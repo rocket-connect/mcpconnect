@@ -132,6 +132,9 @@ importers:
       '@mcpconnect/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      ai:
+        specifier: ^5.0.44
+        version: 5.0.44(zod@4.1.13)
       clsx:
         specifier: ^2.0.0
         version: 2.1.1

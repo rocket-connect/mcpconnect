@@ -452,8 +452,11 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       let searchId: string | null = null;
       let searchStartTime: number | null = null;
 
-      if (hasVectorSearch) {
-        const provider = createToolSelectionProvider({ maxTools: 10 });
+      if (hasVectorSearch && connectionId) {
+        const provider = createToolSelectionProvider({
+          maxTools: 10,
+          connectionId,
+        });
         if (provider) {
           toolSelectionProvider = provider;
           searchId = nanoid();

@@ -34,6 +34,7 @@
     "@mcpconnect/base-adapters": "workspace:*",
     "@mcpconnect/components": "workspace:*",
     "@mcpconnect/schemas": "workspace:*",
+    "ai": "^5.0.44",
     "clsx": "^2.0.0",
     "lucide-react": "^0.302.0",
     "nanoid": "^5.1.5",

@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useStorage } from "../contexts/StorageContext";
-import { computeToolsHash } from "../utils/toolsHash";
 import type { Neo4jConnectionConfig } from "@mcpconnect/components";
 import {
   syncToolsToNeo4j,
   isRagClientReady,
   reinitializeRagClient,
+  deleteToolsetByHash,
+  closeConnection,
 } from "../services/mcpRagService";
 import { ModelService } from "../services/modelService";
+import { computeToolsHash } from "../utils/toolsHash";
 
 export interface Neo4jSyncOptions {
   config: Neo4jConnectionConfig;
   rememberPassword: boolean;
   openaiApiKey?: string;
+  /** If true, deletes existing toolset before syncing (for resync) */
+  forceSync?: boolean;
 }
 
 export interface Neo4jSyncResult {
@@ -37,7 +41,9 @@ export function useNeo4jSync(connectionId: string | undefined) {
   const syncState = connectionId ? getNeo4jSyncState(connectionId) : undefined;
 
   // Track if RAG client is ready (for vector search to work)
-  const [isClientReady, setIsClientReady] = useState(isRagClientReady());
+  const [isClientReady, setIsClientReady] = useState(
+    connectionId ? isRagClientReady(connectionId) : false
+  );
   const initializingRef = useRef(false);
 
   // Reinitialize RAG client on mount if we have a synced state with saved password
@@ -52,8 +58,8 @@ export function useNeo4jSync(connectionId: string | undefined) {
         return;
       }
 
-      // Check if RAG client is already ready
-      if (isRagClientReady()) {
+      // Check if RAG client is already ready for this connection
+      if (isRagClientReady(connectionId)) {
         setIsClientReady(true);
         return;
       }
@@ -143,9 +149,12 @@ export function useNeo4jSync(connectionId: string | undefined) {
         throw new Error("No connection selected");
       }
 
-      const { config, rememberPassword } = options;
+      const { config, rememberPassword, forceSync = false } = options;
 
       const { openaiApiKey } = options;
+
+      // Get the previous hash for forceSync (to delete old toolset)
+      const previousHash = syncState?.toolsetHash;
 
       console.log("[useNeo4jSync] Starting sync:", {
         connectionId,
@@ -153,6 +162,8 @@ export function useNeo4jSync(connectionId: string | undefined) {
         username: config.username,
         rememberPassword,
         hasOpenAIKey: !!openaiApiKey,
+        forceSync,
+        previousHash,
       });
 
       // Update status to syncing with config
@@ -170,9 +181,7 @@ export function useNeo4jSync(connectionId: string | undefined) {
       });
 
       try {
-        // Compute the hash of current tools
         const connectionTools = tools[connectionId] || [];
-        const hash = computeToolsHash(connectionTools);
         const toolCount = connectionTools.length;
 
         // Validate OpenAI API key is provided
@@ -193,16 +202,22 @@ export function useNeo4jSync(connectionId: string | undefined) {
           openaiApiKey,
           tools: connectionTools,
           toolSetName: connectionId,
+          forceSync,
+          previousHash,
         });
 
         if (!syncResult.success) {
           throw new Error(syncResult.error || "Sync failed");
         }
 
+        // Compute local hash using the same function as stale detection
+        // This ensures consistency between sync and stale detection
+        const localHash = computeToolsHash(connectionTools);
+
         // Update state with sync result (preserve password settings)
         await updateNeo4jSyncState(connectionId, {
           status: "synced",
-          toolsetHash: hash,
+          toolsetHash: localHash,
           toolCount,
           lastSyncTime: Date.now(),
           error: undefined,
@@ -217,8 +232,12 @@ export function useNeo4jSync(connectionId: string | undefined) {
           rememberPassword,
         });
 
-        console.log("[useNeo4jSync] Sync complete:", { hash, toolCount });
-        return { hash, toolCount };
+        console.log("[useNeo4jSync] Sync complete:", {
+          localHash,
+          mcpRagHash: syncResult.hash,
+          toolCount,
+        });
+        return { hash: localHash, toolCount };
       } catch (error) {
         console.error("[useNeo4jSync] Sync failed:", error);
         await updateNeo4jSyncState(connectionId, {
@@ -228,13 +247,13 @@ export function useNeo4jSync(connectionId: string | undefined) {
         throw error;
       }
     },
-    [connectionId, tools, updateNeo4jSyncState]
+    [connectionId, tools, updateNeo4jSyncState, syncState?.toolsetHash]
   );
 
-  // Handle resync (same as sync)
+  // Handle resync - forces deletion of old toolset before syncing
   const handleResync = useCallback(
     async (options: Neo4jSyncOptions): Promise<Neo4jSyncResult> => {
-      return handleSync(options);
+      return handleSync({ ...options, forceSync: true });
     },
     [handleSync]
   );
@@ -245,10 +264,32 @@ export function useNeo4jSync(connectionId: string | undefined) {
       throw new Error("No connection selected");
     }
 
-    console.log("[useNeo4jSync] Deleting toolset");
+    console.log(
+      "[useNeo4jSync] Deleting toolset for connection:",
+      connectionId
+    );
 
-    // TODO: Call mcp-rag deleteToolsetByHash here to remove from Neo4j
+    // Delete the toolset from Neo4j if the RAG client is ready for this connection
+    // Note: We don't pass the hash - let the ragClient use its internal hash
+    // (our local toolsetHash is for stale detection only)
+    if (isRagClientReady(connectionId)) {
+      try {
+        const result = await deleteToolsetByHash(undefined, connectionId);
+        console.log("[useNeo4jSync] Neo4j deletion result:", result);
+      } catch (error) {
+        console.error(
+          "[useNeo4jSync] Failed to delete toolset from Neo4j:",
+          error
+        );
+        // Continue with local state deletion even if Neo4j deletion fails
+      }
+    }
 
+    // Close the Neo4j connection for this connection
+    await closeConnection(connectionId);
+    setIsClientReady(false);
+
+    // Delete the local sync state
     await deleteNeo4jSyncState(connectionId);
     console.log("[useNeo4jSync] Toolset deleted");
   }, [connectionId, deleteNeo4jSyncState]);
@@ -259,20 +300,42 @@ export function useNeo4jSync(connectionId: string | undefined) {
       throw new Error("No connection selected");
     }
 
-    console.log("[useNeo4jSync] Resetting all data");
+    console.log(
+      "[useNeo4jSync] Resetting all data for connection:",
+      connectionId
+    );
 
-    // TODO: Call mcp-rag deleteToolsetByHash here to remove from Neo4j
+    // Delete the toolset from Neo4j if the RAG client is ready for this connection
+    // Note: We don't pass the hash - let the ragClient use its internal hash
+    // (our local toolsetHash is for stale detection only)
+    if (isRagClientReady(connectionId)) {
+      try {
+        const result = await deleteToolsetByHash(undefined, connectionId);
+        console.log("[useNeo4jSync] Neo4j deletion result:", result);
+      } catch (error) {
+        console.error(
+          "[useNeo4jSync] Failed to delete toolset from Neo4j:",
+          error
+        );
+        // Continue with local state deletion even if Neo4j deletion fails
+      }
+    }
 
+    // Close the Neo4j connection for this connection
+    await closeConnection(connectionId);
+    setIsClientReady(false);
+
+    // Delete the local sync state
     await deleteNeo4jSyncState(connectionId);
     console.log("[useNeo4jSync] Full reset complete");
   }, [connectionId, deleteNeo4jSyncState]);
 
   // Update isClientReady when sync completes
   useEffect(() => {
-    if (isRagClientReady()) {
+    if (connectionId && isRagClientReady(connectionId)) {
       setIsClientReady(true);
     }
-  }, [syncState?.status]);
+  }, [connectionId, syncState?.status]);
 
   return {
     syncState,
