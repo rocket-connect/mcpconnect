@@ -5,7 +5,7 @@ export {
   extractSvgTitle,
 } from "../common/SvgDisplay";
 import React from "react";
-import { Loader, ExternalLink } from "lucide-react";
+import { Loader, ExternalLink, Sparkles } from "lucide-react";
 import { ChatMessage } from "@mcpconnect/schemas";
 import { JsonCodeBlock } from "../common/JsonCodeBlock";
 import {
@@ -259,7 +259,25 @@ export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
               </div>
             ) : (
               // Regular message content - only render if it's not a tool execution
-              renderMessageContent(message.message || "")
+              <div>
+                {renderMessageContent(message.message || "")}
+
+                {/* Semantic search results badge - shown for user messages */}
+                {message.isUser && message.semanticSearch && (
+                  <div className="mt-2 flex justify-end">
+                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-800 text-xs">
+                      <Sparkles className="w-3 h-3 text-purple-500" />
+                      <span className="text-purple-700 dark:text-purple-300">
+                        {message.semanticSearch.relevantTools.length} of{" "}
+                        {message.semanticSearch.totalTools} tools selected
+                      </span>
+                      <span className="text-purple-500 dark:text-purple-400">
+                        ({message.semanticSearch.duration}ms)
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

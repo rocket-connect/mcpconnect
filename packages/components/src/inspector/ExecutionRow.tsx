@@ -1,9 +1,20 @@
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 import React from "react";
-import { CheckCircle, AlertCircle, Clock, Trash2 } from "lucide-react";
+import {
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  Trash2,
+  Sparkles,
+} from "lucide-react";
 import { ToolExecution } from "@mcpconnect/schemas";
 import { formatTimestamp } from "../common/JsonCodeBlock";
+
+// Check if execution is a semantic tool search
+const isSemanticSearch = (execution: ToolExecution): boolean => {
+  return execution.tool === "semantic_tool_search";
+};
 
 export interface ExecutionRowProps {
   execution: ToolExecution;
@@ -51,7 +62,13 @@ export const ExecutionRow: React.FC<ExecutionRowProps> = ({
   onExecutionClick,
   onDeleteExecution,
 }) => {
+  const isSemanticSearchRow = isSemanticSearch(execution);
+
   const getStatusIcon = (status: string) => {
+    // Use sparkles icon for semantic search
+    if (isSemanticSearchRow) {
+      return <Sparkles className="w-3.5 h-3.5 text-purple-500" />;
+    }
     switch (status) {
       case "success":
         return <CheckCircle className="w-3.5 h-3.5 text-green-500" />;
@@ -65,6 +82,10 @@ export const ExecutionRow: React.FC<ExecutionRowProps> = ({
   };
 
   const getStatusColor = (status: string) => {
+    // Use purple for semantic search
+    if (isSemanticSearchRow) {
+      return "text-purple-600 dark:text-purple-400";
+    }
     switch (status) {
       case "success":
         return "text-green-600 dark:text-green-400";
@@ -90,23 +111,40 @@ export const ExecutionRow: React.FC<ExecutionRowProps> = ({
     }
   };
 
+  // Build row classes based on state
+  const getRowClasses = () => {
+    const baseClasses = "group px-3 py-2.5 cursor-pointer transition-colors";
+    const borderClasses =
+      index < totalExecutions - 1
+        ? " border-b border-gray-100 dark:border-gray-800"
+        : "";
+    const demoClasses = showDemoData ? " opacity-75" : "";
+
+    if (isSelected) {
+      if (isSemanticSearchRow) {
+        return `${baseClasses} bg-purple-50 dark:bg-purple-900/20 border-l-2 border-purple-500 hover:bg-purple-100 dark:hover:bg-purple-900/30${borderClasses}${demoClasses}`;
+      }
+      return `${baseClasses} bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500 hover:bg-gray-100 dark:hover:bg-gray-800${borderClasses}${demoClasses}`;
+    }
+
+    if (isSemanticSearchRow) {
+      return `${baseClasses} bg-purple-50/50 dark:bg-purple-900/10 hover:bg-purple-100/70 dark:hover:bg-purple-900/20${borderClasses}${demoClasses}`;
+    }
+
+    return `${baseClasses} hover:bg-gray-100 dark:hover:bg-gray-800${borderClasses}${demoClasses}`;
+  };
+
   return (
     <div
-      className={`group px-3 py-2.5 cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 ${
-        isSelected
-          ? "bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500"
-          : ""
-      }${
-        index < totalExecutions - 1
-          ? " border-b border-gray-100 dark:border-gray-800"
-          : ""
-      } ${showDemoData ? "opacity-75" : ""}`}
+      className={getRowClasses()}
       onClick={() => !showDemoData && onExecutionClick(execution.id)}
     >
       <div className="grid grid-cols-12 gap-2 items-center text-xs">
         <div className="col-span-5 flex items-center gap-1.5 min-w-0">
           {getStatusIcon(execution.status)}
-          <span className="text-gray-900 dark:text-gray-100 truncate font-mono text-xs">
+          <span
+            className={`truncate font-mono text-xs ${isSemanticSearchRow ? "text-purple-700 dark:text-purple-300" : "text-gray-900 dark:text-gray-100"}`}
+          >
             {execution.tool || "Unknown Tool"}
           </span>
         </div>

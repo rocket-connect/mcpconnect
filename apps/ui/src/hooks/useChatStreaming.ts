@@ -3,6 +3,14 @@ import { ChatMessage as ChatMessageType } from "@mcpconnect/schemas";
 import { SSEEvent } from "../services/chatService";
 import { nanoid } from "nanoid";
 
+export interface SemanticSearchState {
+  isSearching: boolean;
+  searchId: string | null;
+  relevantTools: Array<{ name: string; score: number }>;
+  searchDuration: number | null;
+  startTime: number | null;
+}
+
 export interface StreamingState {
   isStreaming: boolean;
   currentStreamingContent: string;
@@ -13,6 +21,7 @@ export interface StreamingState {
     partialMessageId: string | null;
     toolExecutionMessageIds: string[];
   };
+  semanticSearch: SemanticSearchState;
 }
 
 export const useChatStreaming = (
@@ -33,6 +42,14 @@ export const useChatStreaming = (
     hasPartialMessage: false,
     partialMessageId: null,
     toolExecutionMessageIds: [],
+  });
+
+  const [semanticSearch, setSemanticSearch] = useState<SemanticSearchState>({
+    isSearching: false,
+    searchId: null,
+    relevantTools: [],
+    searchDuration: null,
+    startTime: null,
   });
 
   const streamingMessageRef = useRef<string>("");
@@ -60,6 +77,13 @@ export const useChatStreaming = (
       partialMessageId: null,
       toolExecutionMessageIds: [],
     });
+    setSemanticSearch({
+      isSearching: false,
+      searchId: null,
+      relevantTools: [],
+      searchDuration: null,
+      startTime: null,
+    });
     streamingMessageRef.current = "";
   }, []);
 
@@ -73,6 +97,13 @@ export const useChatStreaming = (
       hasPartialMessage: false,
       partialMessageId: null,
       toolExecutionMessageIds: [],
+    });
+    setSemanticSearch({
+      isSearching: false,
+      searchId: null,
+      relevantTools: [],
+      searchDuration: null,
+      startTime: null,
     });
   }, []);
 
@@ -188,6 +219,14 @@ export const useChatStreaming = (
           setCurrentStreamingContent("");
           setStreamingStatus("");
           streamingMessageRef.current = "";
+          // Clear semantic search state when message completes
+          setSemanticSearch({
+            isSearching: false,
+            searchId: null,
+            relevantTools: [],
+            searchDuration: null,
+            startTime: null,
+          });
 
           if (event.data?.assistantMessage) {
             const currentConversationId = connectionIdRef.current;
@@ -234,6 +273,29 @@ export const useChatStreaming = (
           }
           break;
 
+        case "semantic_search_start":
+          setSemanticSearch({
+            isSearching: true,
+            searchId: event.data?.semanticSearchId || nanoid(),
+            relevantTools: [],
+            searchDuration: null,
+            startTime: Date.now(),
+          });
+          setStreamingStatus("Searching for relevant tools...");
+          break;
+
+        case "semantic_search_end":
+          setSemanticSearch(prev => ({
+            ...prev,
+            isSearching: false,
+            relevantTools: event.data?.relevantTools || [],
+            searchDuration:
+              event.data?.searchDuration ||
+              (prev.startTime ? Date.now() - prev.startTime : null),
+          }));
+          setStreamingStatus("");
+          break;
+
         case "error": {
           console.error("Streaming error:", event.data?.error);
           setCurrentStreamingContent("");
@@ -274,6 +336,13 @@ export const useChatStreaming = (
             partialMessageId: null,
             toolExecutionMessageIds: [],
           });
+          setSemanticSearch({
+            isSearching: false,
+            searchId: null,
+            relevantTools: [],
+            searchDuration: null,
+            startTime: null,
+          });
           break;
         }
       }
@@ -287,6 +356,7 @@ export const useChatStreaming = (
     streamingStatus,
     streamingToolMessages,
     streamingContext,
+    semanticSearch,
   };
 
   return {

@@ -27,14 +27,18 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^2.0.77",
+    "@mcp-rag/client": "^0.0.5",
     "@mcpconnect/adapter-ai-sdk": "workspace:*",
     "@mcpconnect/adapter-localstorage": "workspace:*",
     "@mcpconnect/base-adapters": "workspace:*",
     "@mcpconnect/components": "workspace:*",
     "@mcpconnect/schemas": "workspace:*",
+    "ai": "^5.0.44",
     "clsx": "^2.0.0",
     "lucide-react": "^0.302.0",
     "nanoid": "^5.1.5",
+    "neo4j-driver": "^6.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1"

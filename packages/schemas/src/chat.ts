@@ -34,6 +34,21 @@ export const ChatMessageSchema = z.object({
       duration: z.number().optional(), // Duration in ms
     })
     .optional(),
+
+  // Semantic search results attached to user messages
+  semanticSearch: z
+    .object({
+      searchId: z.string(),
+      relevantTools: z.array(
+        z.object({
+          name: z.string(),
+          score: z.number(),
+        })
+      ),
+      totalTools: z.number(),
+      duration: z.number(), // Duration in ms
+    })
+    .optional(),
 });
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;

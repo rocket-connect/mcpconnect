@@ -2,8 +2,15 @@
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 import React, { useEffect, useState, useCallback } from "react";
 import { Connection, ConnectionType } from "@mcpconnect/schemas";
-import { MessageSquare, Loader2 } from "lucide-react";
+import { MessageSquare, Loader2, Database } from "lucide-react";
 import { TruncatedText } from "./TruncatedText";
+
+export type Neo4jSyncStatusType =
+  | "idle"
+  | "syncing"
+  | "synced"
+  | "stale"
+  | "error";
 
 export interface ConnectionCardProps {
   connection: Connection;
@@ -12,6 +19,8 @@ export interface ConnectionCardProps {
   onClick?: () => void;
   isDemoMode?: boolean;
   onCheckConnectivity?: (connectionId: string) => Promise<boolean>;
+  /** Neo4j sync status for this connection */
+  neo4jSyncStatus?: Neo4jSyncStatusType;
 }
 
 export const ConnectionCard: React.FC<ConnectionCardProps> = ({
@@ -21,6 +30,7 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
   onClick,
   isDemoMode = false,
   onCheckConnectivity,
+  neo4jSyncStatus,
 }) => {
   const [isChecking, setIsChecking] = useState(false);
   // Start with undefined to show checking state until first check completes
@@ -172,11 +182,42 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
               </>
             )}
           </div>
-          <div className="flex items-center gap-0.5">
-            <MessageSquare className="w-2.5 h-2.5 text-gray-400" />
-            <span className="text-[10px] text-gray-500 dark:text-gray-400">
-              {conversationCount}
-            </span>
+          <div className="flex items-center gap-2">
+            {/* Neo4j Sync Status Indicator */}
+            {neo4jSyncStatus && neo4jSyncStatus !== "idle" && (
+              <div
+                className={`flex items-center gap-0.5 ${
+                  neo4jSyncStatus === "synced"
+                    ? "text-purple-500"
+                    : neo4jSyncStatus === "syncing"
+                      ? "text-purple-400"
+                      : neo4jSyncStatus === "stale"
+                        ? "text-amber-500"
+                        : "text-red-500"
+                }`}
+                title={
+                  neo4jSyncStatus === "synced"
+                    ? "Vector search enabled"
+                    : neo4jSyncStatus === "syncing"
+                      ? "Syncing..."
+                      : neo4jSyncStatus === "stale"
+                        ? "Schema changed - resync needed"
+                        : "Sync error"
+                }
+              >
+                {neo4jSyncStatus === "syncing" ? (
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                ) : (
+                  <Database className="w-2.5 h-2.5" />
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-0.5">
+              <MessageSquare className="w-2.5 h-2.5 text-gray-400" />
+              <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                {conversationCount}
+              </span>
+            </div>
           </div>
         </div>
       </div>

@@ -6,9 +6,11 @@ import {
   ConnectionCard,
   ToolCard,
   ToolActionsPanel,
+  VectorizeSchemaBanner,
 } from "@mcpconnect/components";
-import { useState, useMemo, useEffect } from "react";
-import { Users, Plus, Search, X, Wrench, Zap } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { Users, Plus, Search, X, Wrench, Zap, AlertCircle } from "lucide-react";
+import { ModelService, LLMSettings } from "../services/modelService";
 
 interface SidebarProps {
   connections: Connection[];
@@ -74,10 +76,13 @@ export const Sidebar = ({ connections }: SidebarProps) => {
     onToolStateChange,
     onSystemToolStateChange,
     checkConnectionConnectivity,
+    getNeo4jSyncState,
   } = useStorage();
 
   const [toolSearchQuery, setToolSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"mcp" | "system">("mcp");
+  const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   // Manual URL parsing as backup since useParams seems to be failing
   const urlParts = location.pathname.split("/");
@@ -91,6 +96,66 @@ export const Sidebar = ({ connections }: SidebarProps) => {
 
   // Get current connection ID from URL params - use manual parsing as fallback
   const currentConnectionId = params.connectionId || manualConnectionId;
+
+  // Get sync state for current connection from storage
+  const currentSyncState = currentConnectionId
+    ? getNeo4jSyncState(currentConnectionId)
+    : undefined;
+  const isVectorized = currentSyncState?.status === "synced";
+
+  // Check if OpenAI is the current provider (required for semantic tool search)
+  const isOpenAIProvider = llmSettings?.provider === "openai";
+
+  // Load LLM settings helper
+  const loadLLMSettings = async () => {
+    try {
+      const settings = await ModelService.loadSettings();
+      setLlmSettings(settings);
+    } catch (error) {
+      console.error("Failed to load LLM settings:", error);
+    }
+  };
+
+  // Load LLM settings on mount and watch for changes
+  useEffect(() => {
+    loadLLMSettings();
+
+    // Listen for custom event when settings are saved (same-tab updates)
+    const handleSettingsChanged = () => {
+      loadLLMSettings();
+    };
+
+    // Listen for storage events (cross-tab updates)
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key?.includes("llm-settings")) {
+        loadLLMSettings();
+      }
+    };
+
+    window.addEventListener("llm-settings-changed", handleSettingsChanged);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("llm-settings-changed", handleSettingsChanged);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
+  // Handle vectorize click - opens Settings modal with Neo4j config for this connection
+  const handleVectorize = useCallback(() => {
+    if (currentConnectionId) {
+      window.dispatchEvent(
+        new CustomEvent("open-settings", {
+          detail: { connectionId: currentConnectionId },
+        })
+      );
+    }
+  }, [currentConnectionId]);
+
+  // Handle banner dismiss
+  const handleBannerDismiss = () => {
+    setIsBannerDismissed(true);
+  };
 
   const handleConnectionClick = (connection: Connection) => {
     // Use the connection's actual ID (nanoid), not array index
@@ -386,18 +451,22 @@ export const Sidebar = ({ connections }: SidebarProps) => {
             </div>
           ) : (
             <div className="space-y-2">
-              {connections.map(conn => (
-                <ConnectionCard
-                  key={conn.id}
-                  connection={conn}
-                  isSelected={location.pathname.includes(
-                    `/connections/${conn.id}`
-                  )}
-                  conversationCount={(conversations[conn.id] || []).length}
-                  onClick={() => handleConnectionClick(conn)}
-                  onCheckConnectivity={checkConnectionConnectivity}
-                />
-              ))}
+              {connections.map(conn => {
+                const syncState = getNeo4jSyncState(conn.id);
+                return (
+                  <ConnectionCard
+                    key={conn.id}
+                    connection={conn}
+                    isSelected={location.pathname.includes(
+                      `/connections/${conn.id}`
+                    )}
+                    conversationCount={(conversations[conn.id] || []).length}
+                    onClick={() => handleConnectionClick(conn)}
+                    onCheckConnectivity={checkConnectionConnectivity}
+                    neo4jSyncStatus={syncState?.status}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -483,6 +552,43 @@ export const Sidebar = ({ connections }: SidebarProps) => {
                   </button>
                 )}
               </div>
+            )}
+
+            {/* Vectorize Schema Banner - Shows status for OpenAI provider */}
+            {toolsToShow.length > 0 && !isFirstTime && (
+              <>
+                {isOpenAIProvider
+                  ? // Show banner for all states (idle shows setup, synced shows ready status)
+                    // Only hide if user dismissed and status is idle
+                    !(isBannerDismissed && !currentSyncState?.status) && (
+                      <VectorizeSchemaBanner
+                        syncStatus={currentSyncState?.status}
+                        isVectorized={isVectorized}
+                        onVectorize={handleVectorize}
+                        onDismiss={
+                          currentSyncState?.status === "synced"
+                            ? undefined
+                            : handleBannerDismiss
+                        }
+                        toolCount={mcpToolsToShow.length}
+                        syncedToolCount={currentSyncState?.toolCount}
+                        lastSyncTime={currentSyncState?.lastSyncTime}
+                        isOpenAIConnection={true}
+                      />
+                    )
+                  : !isBannerDismissed && (
+                      <div className="flex items-start gap-2 p-2 mb-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div className="text-xs text-amber-700 dark:text-amber-300">
+                          <span className="font-medium">
+                            Semantic tool search
+                          </span>{" "}
+                          requires OpenAI for embeddings. Switch to OpenAI in
+                          Settings to enable.
+                        </div>
+                      </div>
+                    )}
+              </>
             )}
 
             {/* Tools List - Updated with new ToolCard */}

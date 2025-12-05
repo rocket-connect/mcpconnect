@@ -20,7 +20,9 @@ export interface SSEEvent {
     | "tool_end"
     | "message_complete"
     | "error"
-    | "assistant_partial"; // NEW: for assistant explanation before tools
+    | "assistant_partial"
+    | "semantic_search_start"
+    | "semantic_search_end";
   data?: {
     delta?: string;
     content?: string; // For partial messages
@@ -34,6 +36,10 @@ export interface SSEEvent {
     hasToolCalls?: boolean; // NEW: indicates more content will follow after tools
     partialMessageId?: string; // NEW: ID for partial message tracking
     messageOrder?: number; // NEW: Message order for preservation
+    // Semantic search fields
+    semanticSearchId?: string;
+    relevantTools?: Array<{ name: string; score: number }>;
+    searchDuration?: number;
   };
 }
 

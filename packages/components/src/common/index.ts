@@ -8,7 +8,11 @@ export {
   type ToolStatusWarningProps,
 } from "./ToolStatusWarning";
 export { TruncatedText, type TruncatedTextProps } from "./TruncatedText";
-export { ConnectionCard, type ConnectionCardProps } from "./ConnectionCard";
+export {
+  ConnectionCard,
+  type ConnectionCardProps,
+  type Neo4jSyncStatusType,
+} from "./ConnectionCard";
 export { ToolCard, type ToolCardProps } from "./ToolCard";
 export {
   ToolActionsPanel,
@@ -21,3 +25,14 @@ export {
   extractSvgTitle,
 } from "./SvgDisplay";
 export { JsonCodeBlock } from "./JsonCodeBlock";
+export {
+  VectorizeSchemaBanner,
+  type VectorizeSchemaBannerProps,
+  type VectorSyncStatus,
+} from "./VectorizeSchemaBanner";
+export {
+  Neo4jConfigSection,
+  type Neo4jConfigSectionProps,
+  type Neo4jConnectionConfig,
+  type Neo4jSyncResult,
+} from "./Neo4jConfigSection";

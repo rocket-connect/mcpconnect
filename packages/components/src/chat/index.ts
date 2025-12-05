@@ -3,7 +3,11 @@ export {
   ChatMessageComponent,
   type ChatMessageComponentProps,
 } from "./ChatMessageComponent";
-export { ChatInput, type ChatInputProps } from "./ChatInput";
+export {
+  ChatInput,
+  type ChatInputProps,
+  type SemanticSearchStatus,
+} from "./ChatInput";
 export {
   StreamingMessage,
   type StreamingMessageProps,
@@ -21,3 +25,19 @@ export {
   ChatMessagesContainer,
   type ChatMessagesContainerProps,
 } from "./ChatMessagesContainer";
+export {
+  VectorSearchToolCard,
+  type VectorSearchToolCardProps,
+  type VectorSearchResult,
+} from "./VectorSearchToolCard";
+export {
+  ToolSelectionHookCard,
+  type ToolSelectionHookCardProps,
+  type ToolHookEvent,
+  type HookType,
+  type HookStatus,
+} from "./ToolSelectionHookCard";
+export {
+  SemanticSearchMessage,
+  type SemanticSearchMessageProps,
+} from "./SemanticSearchMessage";

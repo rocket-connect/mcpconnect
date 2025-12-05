@@ -13,10 +13,14 @@ import {
   Resource,
   ToolExecution,
   ChatConversation,
+  Neo4jSyncState,
+  Neo4jSyncStatus,
 } from "@mcpconnect/schemas";
+import { LLMSettings } from "@mcpconnect/adapter-ai-sdk";
 import { ModelService } from "../services/modelService";
 import { ChatService } from "../services/chatService";
 import { SystemToolsService, MCPService } from "@mcpconnect/adapter-ai-sdk";
+import { computeToolsHash } from "../utils/toolsHash";
 
 interface StorageContextType {
   adapter: LocalStorageAdapter;
@@ -29,6 +33,8 @@ interface StorageContextType {
   disabledTools: Record<string, Set<string>>;
   disabledSystemTools: Set<string>;
   hiddenExecutions: Record<string, Set<string>>; // NEW: connectionId -> Set of hidden execution IDs
+  neo4jSyncStates: Record<string, Neo4jSyncState>; // connectionId -> sync state
+  llmSettings: LLMSettings | null;
   isLoading: boolean;
   error: string | null;
   updateConnections: (connections: Connection[]) => Promise<void>;
@@ -64,6 +70,16 @@ interface StorageContextType {
   isExecutionHidden: (connectionId: string, executionId: string) => boolean; // NEW
   getVisibleExecutions: (connectionId: string) => ToolExecution[]; // NEW
   checkConnectionConnectivity: (connectionId: string) => Promise<boolean>;
+  // Neo4j sync state management
+  getNeo4jSyncState: (connectionId: string) => Neo4jSyncState | undefined;
+  updateNeo4jSyncState: (
+    connectionId: string,
+    state: Partial<Neo4jSyncState>
+  ) => Promise<void>;
+  deleteNeo4jSyncState: (connectionId: string) => Promise<void>;
+  onNeo4jSyncStateChange: (
+    callback: (connectionId: string) => void
+  ) => () => void;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -107,6 +123,10 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const [hiddenExecutions, setHiddenExecutions] = useState<
     Record<string, Set<string>>
   >({}); // NEW
+  const [neo4jSyncStates, setNeo4jSyncStates] = useState<
+    Record<string, Neo4jSyncState>
+  >({});
+  const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,6 +136,10 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
   const [systemToolStateListeners, setSystemToolStateListeners] = useState<
     Set<() => void>
+  >(new Set());
+
+  const [neo4jSyncStateListeners, setNeo4jSyncStateListeners] = useState<
+    Set<(connectionId: string) => void>
   >(new Set());
 
   // Track in-flight connectivity checks to prevent duplicate requests
@@ -144,6 +168,19 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     });
   }, [systemToolStateListeners]);
 
+  const notifyNeo4jSyncStateChange = useCallback(
+    (connectionId: string) => {
+      neo4jSyncStateListeners.forEach(listener => {
+        try {
+          listener(connectionId);
+        } catch (error) {
+          console.error("Error in Neo4j sync state listener:", error);
+        }
+      });
+    },
+    [neo4jSyncStateListeners]
+  );
+
   const onToolStateChange = useCallback(
     (callback: (connectionId: string) => void) => {
       setToolStateListeners(prev => new Set(prev).add(callback));
@@ -168,6 +205,20 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       });
     };
   }, []);
+
+  const onNeo4jSyncStateChange = useCallback(
+    (callback: (connectionId: string) => void) => {
+      setNeo4jSyncStateListeners(prev => new Set(prev).add(callback));
+      return () => {
+        setNeo4jSyncStateListeners(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(callback);
+          return newSet;
+        });
+      };
+    },
+    []
+  );
 
   // NEW: Load hidden executions for a connection
   const loadHiddenExecutions = useCallback(
@@ -278,6 +329,83 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     [hiddenExecutions]
   );
 
+  // Neo4j sync state management
+  const loadNeo4jSyncState = useCallback(
+    async (connectionId: string): Promise<Neo4jSyncState | null> => {
+      try {
+        const stored = await adapter.get(`neo4j-sync-${connectionId}`);
+        if (stored?.value) {
+          return stored.value as Neo4jSyncState;
+        }
+      } catch (error) {
+        console.error(
+          `Failed to load Neo4j sync state for ${connectionId}:`,
+          error
+        );
+      }
+      return null;
+    },
+    [adapter]
+  );
+
+  const getNeo4jSyncState = useCallback(
+    (connectionId: string): Neo4jSyncState | undefined => {
+      return neo4jSyncStates[connectionId];
+    },
+    [neo4jSyncStates]
+  );
+
+  const updateNeo4jSyncState = useCallback(
+    async (connectionId: string, state: Partial<Neo4jSyncState>) => {
+      try {
+        const currentState = neo4jSyncStates[connectionId] || {
+          connectionId,
+          status: "idle" as Neo4jSyncStatus,
+        };
+        const newState: Neo4jSyncState = {
+          ...currentState,
+          ...state,
+          connectionId, // Ensure connectionId is always set
+        };
+
+        await adapter.set(`neo4j-sync-${connectionId}`, newState, {
+          type: "object",
+          tags: ["mcp", "neo4j-sync", connectionId],
+          compress: false,
+          encrypt: false,
+        });
+
+        setNeo4jSyncStates(prev => ({
+          ...prev,
+          [connectionId]: newState,
+        }));
+        notifyNeo4jSyncStateChange(connectionId);
+      } catch (error) {
+        console.error("Failed to update Neo4j sync state:", error);
+        throw error;
+      }
+    },
+    [adapter, neo4jSyncStates, notifyNeo4jSyncStateChange]
+  );
+
+  const deleteNeo4jSyncState = useCallback(
+    async (connectionId: string) => {
+      try {
+        await adapter.delete(`neo4j-sync-${connectionId}`);
+        setNeo4jSyncStates(prev => {
+          const newStates = { ...prev };
+          delete newStates[connectionId];
+          return newStates;
+        });
+        notifyNeo4jSyncStateChange(connectionId);
+      } catch (error) {
+        console.error("Failed to delete Neo4j sync state:", error);
+        throw error;
+      }
+    },
+    [adapter, notifyNeo4jSyncStateChange]
+  );
+
   const loadDisabledTools = useCallback(
     async (connectionId: string): Promise<Set<string>> => {
       try {
@@ -342,16 +470,22 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
   const loadAllDisabledTools = useCallback(async () => {
     const newDisabledTools: Record<string, Set<string>> = {};
     const newHiddenExecutions: Record<string, Set<string>> = {}; // NEW
+    const newNeo4jSyncStates: Record<string, Neo4jSyncState> = {};
 
     for (const connection of connections) {
       newDisabledTools[connection.id] = await loadDisabledTools(connection.id);
       newHiddenExecutions[connection.id] = await loadHiddenExecutions(
         connection.id
       ); // NEW
+      const syncState = await loadNeo4jSyncState(connection.id);
+      if (syncState) {
+        newNeo4jSyncStates[connection.id] = syncState;
+      }
     }
 
     setDisabledTools(newDisabledTools);
     setHiddenExecutions(newHiddenExecutions); // NEW
+    setNeo4jSyncStates(newNeo4jSyncStates);
 
     const newDisabledSystemTools = await loadDisabledSystemTools();
     setDisabledSystemTools(newDisabledSystemTools);
@@ -360,6 +494,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     loadDisabledTools,
     loadDisabledSystemTools,
     loadHiddenExecutions,
+    loadNeo4jSyncState,
   ]);
 
   // ... rest of the existing implementation (getToolExecutionIdsFromChat, etc.)
@@ -624,6 +759,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         await adapter.removeConnectionData(connectionId);
         await adapter.delete(`disabled-tools-${connectionId}`);
         await adapter.delete(`hidden-executions-${connectionId}`); // NEW: Clean up hidden executions
+        await adapter.delete(`neo4j-sync-${connectionId}`); // Clean up Neo4j sync state
 
         const newConversations = { ...conversations };
         delete newConversations[connectionId];
@@ -648,6 +784,10 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         const newHiddenExecutions = { ...hiddenExecutions }; // NEW
         delete newHiddenExecutions[connectionId]; // NEW
         setHiddenExecutions(newHiddenExecutions); // NEW
+
+        const newNeo4jSyncStates = { ...neo4jSyncStates };
+        delete newNeo4jSyncStates[connectionId];
+        setNeo4jSyncStates(newNeo4jSyncStates);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -660,6 +800,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       toolExecutions,
       disabledTools,
       hiddenExecutions, // NEW
+      neo4jSyncStates,
       adapter,
       updateConnections,
     ]
@@ -795,6 +936,36 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
             ...prev,
             [connectionId]: normalizedTools,
           }));
+
+          // Check if Neo4j sync is stale (tools hash changed)
+          const currentSyncState = neo4jSyncStates[connectionId];
+          if (currentSyncState && currentSyncState.status === "synced") {
+            const newHash = computeToolsHash(normalizedTools);
+            if (
+              currentSyncState.toolsetHash &&
+              newHash !== currentSyncState.toolsetHash
+            ) {
+              console.log(
+                `[StorageContext] Tools hash changed for ${connectionId}: ${currentSyncState.toolsetHash} -> ${newHash}`
+              );
+              // Mark sync as stale
+              const staleState: Neo4jSyncState = {
+                ...currentSyncState,
+                status: "stale" as Neo4jSyncStatus,
+              };
+              await adapter.set(`neo4j-sync-${connectionId}`, staleState, {
+                type: "object",
+                tags: ["mcp", "neo4j-sync", connectionId],
+                compress: false,
+                encrypt: false,
+              });
+              setNeo4jSyncStates(prev => ({
+                ...prev,
+                [connectionId]: staleState,
+              }));
+              notifyNeo4jSyncStateChange(connectionId);
+            }
+          }
         }
 
         // Update resources if available
@@ -833,7 +1004,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         connectivityCheckInFlight.current.delete(connectionId);
       }
     },
-    [adapter]
+    [adapter, neo4jSyncStates, notifyNeo4jSyncStateChange]
   );
 
   // Initialization effect
@@ -847,6 +1018,12 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
         ModelService.setAdapter(adapter);
         ChatService.setStorageAdapter(adapter);
+
+        // Load LLM settings
+        const savedLlmSettings = await ModelService.loadSettings();
+        if (savedLlmSettings) {
+          setLlmSettings(savedLlmSettings);
+        }
 
         await loadExistingData();
         setIsLoading(false);
@@ -914,6 +1091,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
 
         const newDisabledTools: Record<string, Set<string>> = {};
         const newHiddenExecutions: Record<string, Set<string>> = {}; // NEW
+        const newNeo4jSyncStates: Record<string, Neo4jSyncState> = {};
 
         for (const connection of storedConnections) {
           newDisabledTools[connection.id] = await loadDisabledTools(
@@ -922,10 +1100,15 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
           newHiddenExecutions[connection.id] = await loadHiddenExecutions(
             connection.id
           ); // NEW
+          const syncState = await loadNeo4jSyncState(connection.id);
+          if (syncState) {
+            newNeo4jSyncStates[connection.id] = syncState;
+          }
         }
 
         setDisabledTools(newDisabledTools);
         setHiddenExecutions(newHiddenExecutions); // NEW
+        setNeo4jSyncStates(newNeo4jSyncStates);
 
         const newDisabledSystemTools = await loadDisabledSystemTools();
         setDisabledSystemTools(newDisabledSystemTools);
@@ -945,6 +1128,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     loadDisabledTools,
     loadDisabledSystemTools,
     loadHiddenExecutions,
+    loadNeo4jSyncState,
   ]);
 
   // Add this useEffect to ensure data loads immediately on mount
@@ -973,6 +1157,8 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     disabledTools,
     disabledSystemTools,
     hiddenExecutions, // NEW
+    neo4jSyncStates,
+    llmSettings,
     isLoading,
     error,
     updateConnections,
@@ -1000,6 +1186,11 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
     isExecutionHidden, // NEW
     getVisibleExecutions, // NEW
     checkConnectionConnectivity,
+    // Neo4j sync state management
+    getNeo4jSyncState,
+    updateNeo4jSyncState,
+    deleteNeo4jSyncState,
+    onNeo4jSyncStateChange,
   };
 
   return (
