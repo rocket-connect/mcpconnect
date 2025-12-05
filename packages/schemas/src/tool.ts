@@ -79,6 +79,7 @@ export const ToolExecutionSchema = z.object({
   status: z.enum(["success", "error", "pending"]),
   duration: z.number().optional(),
   timestamp: z.string(),
+  chatId: z.string().optional(),
   request: z.object({
     tool: z.string(),
     arguments: z.record(z.string(), z.unknown()).optional(),

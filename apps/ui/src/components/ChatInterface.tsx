@@ -510,10 +510,11 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
               // Store semantic search as a tool execution in the network inspector
               const searchExecution = {
                 id: searchId!,
-                tool: "🔍 Semantic Tool Search",
+                tool: "semantic_tool_search",
                 status: "success" as const,
                 duration: searchDuration,
                 timestamp: new Date().toISOString(),
+                chatId: chatId,
                 request: {
                   tool: "semantic_tool_search",
                   arguments: {

@@ -306,6 +306,7 @@ export function InspectorUI() {
     hideExecution,
     hiddenExecutions,
     getVisibleExecutions,
+    toolExecutions,
   } = useStorage();
   const {
     selectedToolCall,
@@ -354,13 +355,22 @@ export function InspectorUI() {
 
     if (!currentChat) return false;
 
-    return currentChat.messages.some(
+    // Check for tool calls in chat messages
+    const hasToolMessages = currentChat.messages.some(
       msg =>
         Boolean(msg.executingTool) ||
         Boolean(msg.toolExecution) ||
         Boolean(msg.isExecuting)
     );
-  }, [chatId, connectionId, conversations]);
+
+    // Also check for semantic search executions stored separately (filtered by chatId)
+    const storedExecutions = toolExecutions[connectionId] || [];
+    const hasSemanticSearches = storedExecutions.some(
+      exec => exec.tool === "semantic_tool_search" && exec.chatId === chatId
+    );
+
+    return hasToolMessages || hasSemanticSearches;
+  }, [chatId, connectionId, conversations, toolExecutions]);
 
   const hasAnyConnections = useMemo(
     () => connections.length > 0,
@@ -404,7 +414,7 @@ export function InspectorUI() {
           return timeA - timeB;
         });
 
-      return toolMessages.map(msg => {
+      const chatToolExecutions = toolMessages.map(msg => {
         const toolName =
           msg.executingTool || msg.toolExecution?.toolName || "unknown";
         const messageId = msg.id || Date.now().toString();
@@ -455,6 +465,31 @@ export function InspectorUI() {
           context: "chat",
         };
       });
+
+      // Include semantic search executions stored separately via ChatService.storeToolExecution
+      // Filter by chatId to only show searches for the current chat
+      const storedExecutions = toolExecutions[connectionId] || [];
+      const semanticSearchExecutions = storedExecutions
+        .filter(
+          exec => exec.tool === "semantic_tool_search" && exec.chatId === chatId
+        )
+        .map(exec => ({
+          ...exec,
+          context: "chat",
+        }));
+
+      // Merge chat tool executions with semantic search executions and sort by timestamp
+      const allExecutions = [
+        ...chatToolExecutions,
+        ...semanticSearchExecutions,
+      ];
+      allExecutions.sort((a, b) => {
+        const timeA = new Date(a.timestamp).getTime();
+        const timeB = new Date(b.timestamp).getTime();
+        return timeA - timeB;
+      });
+
+      return allExecutions;
     } else if (isToolDetailView) {
       return manualExecutions.map(exec => ({
         ...exec,
@@ -471,6 +506,7 @@ export function InspectorUI() {
     manualExecutions,
     connectionId,
     getVisibleExecutions,
+    toolExecutions,
   ]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
