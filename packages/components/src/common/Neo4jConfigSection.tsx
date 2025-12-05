@@ -18,6 +18,11 @@ export interface Neo4jConnectionConfig {
   database?: string;
 }
 
+export interface Neo4jSyncResult {
+  hash: string;
+  toolCount: number;
+}
+
 export interface Neo4jConfigSectionProps {
   /** Current configuration values */
   config: Neo4jConnectionConfig;
@@ -25,8 +30,8 @@ export interface Neo4jConfigSectionProps {
   onConfigChange: (config: Neo4jConnectionConfig) => void;
   /** Callback when test connection is clicked */
   onTestConnection: () => Promise<boolean>;
-  /** Callback when sync is clicked */
-  onSync: () => Promise<void>;
+  /** Callback when sync is clicked - returns hash and tool count on success */
+  onSync: () => Promise<Neo4jSyncResult>;
   /** Number of tools available to vectorize */
   toolCount?: number;
   /** Whether sync is in progress */
@@ -35,6 +40,12 @@ export interface Neo4jConfigSectionProps {
   compact?: boolean;
   /** Whether OpenAI is configured (required for embeddings) */
   isOpenAIConfigured?: boolean;
+  /** Current sync status */
+  syncStatus?: "idle" | "syncing" | "synced" | "stale" | "error";
+  /** Last known toolset hash */
+  currentHash?: string;
+  /** Error message from last sync attempt */
+  syncError?: string;
 }
 
 export const Neo4jConfigSection: React.FC<Neo4jConfigSectionProps> = ({

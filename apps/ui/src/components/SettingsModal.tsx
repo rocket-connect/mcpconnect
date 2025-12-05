@@ -9,6 +9,8 @@ import {
   CheckCircle,
   Loader,
   Sparkles,
+  Zap,
+  ChevronRight,
 } from "lucide-react";
 import {
   ModelService,
@@ -17,10 +19,8 @@ import {
   ModelProvider,
 } from "../services/modelService";
 import { useStorage } from "../contexts/StorageContext";
-import {
-  Neo4jConfigSection,
-  type Neo4jConnectionConfig,
-} from "@mcpconnect/components";
+import { Neo4jConnectionModal } from "@mcpconnect/components";
+import { useNeo4jSync } from "../hooks/useNeo4jSync";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -70,15 +70,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     totalResources: 0,
   });
 
-  // Neo4j configuration state
-  const [neo4jConfig, setNeo4jConfig] = useState<Neo4jConnectionConfig>({
-    uri: "neo4j://localhost:7687",
-    username: "neo4j",
-    password: "",
-    database: "neo4j",
-  });
-  const [isNeo4jSyncing, setIsNeo4jSyncing] = useState(false);
-  const [isVectorized, setIsVectorized] = useState(false);
+  // Get Neo4j sync states for all connections
+  const { connections, getNeo4jSyncState, tools } = useStorage();
+
+  // State for managing Neo4j per connection
+  const [selectedConnectionId, setSelectedConnectionId] = useState<
+    string | null
+  >(null);
+  const [isNeo4jModalOpen, setIsNeo4jModalOpen] = useState(false);
+
+  // Use Neo4j sync hook for selected connection
+  const {
+    syncState: selectedSyncState,
+    handleSync,
+    handleResync,
+    handleDelete,
+    handleReset,
+  } = useNeo4jSync(selectedConnectionId || undefined);
+
+  // Count connections with active vector search
+  const vectorizedConnectionsCount = connections.filter(
+    conn => getNeo4jSyncState(conn.id)?.status === "synced"
+  ).length;
+
+  // Get tool count for selected connection
+  const selectedConnectionToolCount = selectedConnectionId
+    ? (tools[selectedConnectionId] || []).length
+    : 0;
 
   // Load settings from adapter on mount
   useEffect(() => {
@@ -239,37 +257,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         alert("Failed to clear storage. Please try again.");
       }
     }
-  };
-
-  // Neo4j connection handlers
-  const handleNeo4jTestConnection = async (): Promise<boolean> => {
-    console.log("[SettingsModal] Testing Neo4j connection:", {
-      uri: neo4jConfig.uri,
-      username: neo4jConfig.username,
-      database: neo4jConfig.database,
-    });
-
-    // Simulate async operation - in real implementation this would call the backend
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // For now, always succeed (mocked)
-    console.log("[SettingsModal] Neo4j connection test successful (mocked)");
-    return true;
-  };
-
-  const handleNeo4jSync = async (): Promise<void> => {
-    setIsNeo4jSyncing(true);
-    console.log("[SettingsModal] Starting Neo4j sync:", {
-      config: { ...neo4jConfig, password: "***" },
-      toolCount: storageStats.totalTools,
-    });
-
-    // Simulate sync operation
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    console.log("[SettingsModal] Neo4j sync complete (mocked)");
-    setIsVectorized(true);
-    setIsNeo4jSyncing(false);
   };
 
   const getApiKeyStatusIcon = () => {
@@ -484,28 +471,92 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-purple-500" />
                 Vector Search
-                {isVectorized && (
+                {vectorizedConnectionsCount > 0 && (
                   <span className="ml-2 inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
-                    <CheckCircle className="w-3 h-3" />
-                    Enabled
+                    <Zap className="w-3 h-3" />
+                    {vectorizedConnectionsCount} Active
                   </span>
                 )}
               </h3>
 
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Enable intelligent tool selection with semantic search. Connect
-                to Neo4j to index your tools with vector embeddings.
-              </p>
+              {settings.provider !== "openai" ? (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-700 dark:text-amber-300">
+                    <span className="font-medium">OpenAI required</span>
+                    <p className="mt-0.5">
+                      Vector embeddings require an OpenAI API key. Switch your
+                      AI provider to OpenAI above to enable semantic tool
+                      search.
+                    </p>
+                  </div>
+                </div>
+              ) : connections.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
+                  No connections yet. Add a connection to enable vector search.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {connections.map(conn => {
+                    const syncState = getNeo4jSyncState(conn.id);
+                    const toolCount = (tools[conn.id] || []).length;
+                    const status = syncState?.status || "idle";
 
-              <Neo4jConfigSection
-                config={neo4jConfig}
-                onConfigChange={setNeo4jConfig}
-                onTestConnection={handleNeo4jTestConnection}
-                onSync={handleNeo4jSync}
-                toolCount={storageStats.totalTools}
-                isSyncing={isNeo4jSyncing}
-                isOpenAIConfigured={settings.provider === "openai"}
-              />
+                    return (
+                      <div
+                        key={conn.id}
+                        className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {status === "synced" ? (
+                            <div className="w-6 h-6 bg-green-500 rounded flex items-center justify-center flex-shrink-0">
+                              <Zap className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          ) : status === "stale" ? (
+                            <div className="w-6 h-6 bg-amber-500 rounded flex items-center justify-center flex-shrink-0">
+                              <AlertCircle className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          ) : (
+                            <div className="w-6 h-6 bg-gray-300 dark:bg-gray-600 rounded flex items-center justify-center flex-shrink-0">
+                              <Database className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {conn.name}
+                            </p>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {toolCount} tools
+                              {status === "synced" && syncState?.toolCount && (
+                                <span className="text-green-600 dark:text-green-400">
+                                  {" "}
+                                  • {syncState.toolCount} synced
+                                </span>
+                              )}
+                              {status === "stale" && (
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {" "}
+                                  • needs resync
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedConnectionId(conn.id);
+                            setIsNeo4jModalOpen(true);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
+                        >
+                          {status === "synced" ? "Manage" : "Set Up"}
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -602,6 +653,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Neo4j Connection Modal for managing vector search per connection */}
+      <Neo4jConnectionModal
+        isOpen={isNeo4jModalOpen}
+        onClose={() => {
+          setIsNeo4jModalOpen(false);
+          setSelectedConnectionId(null);
+        }}
+        onSync={handleSync}
+        onResync={handleResync}
+        onDelete={handleDelete}
+        onReset={handleReset}
+        toolCount={selectedConnectionToolCount}
+        connectionName={
+          selectedConnectionId
+            ? connections.find(c => c.id === selectedConnectionId)?.name
+            : undefined
+        }
+        isOpenAIConfigured={settings.provider === "openai"}
+        syncState={
+          selectedSyncState
+            ? {
+                status: selectedSyncState.status,
+                toolsetHash: selectedSyncState.toolsetHash,
+                toolCount: selectedSyncState.toolCount,
+                lastSyncTime: selectedSyncState.lastSyncTime,
+                error: selectedSyncState.error,
+                neo4jConfig: selectedSyncState.neo4jConfig,
+                savedPassword: selectedSyncState.savedPassword,
+                rememberPassword: selectedSyncState.rememberPassword,
+              }
+            : undefined
+        }
+        initialConfig={selectedSyncState?.neo4jConfig}
+      />
     </div>
   );
 };

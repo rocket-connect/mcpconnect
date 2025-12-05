@@ -49,4 +49,13 @@ export * from "./tool-selection";
 
 export { MCPCapabilitiesSchema, type MCPCapabilities } from "./mcp-protocol";
 
+export {
+  Neo4jConfigSchema,
+  Neo4jSyncStatusSchema,
+  Neo4jSyncStateSchema,
+  type Neo4jConfig,
+  type Neo4jSyncStatus,
+  type Neo4jSyncState,
+} from "./neo4j-sync";
+
 export { z } from "zod";

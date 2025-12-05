@@ -73,6 +73,7 @@ export const ConnectionItem: React.FC<ConnectionItemProps> = ({
       mounted = false;
       clearTimeout(timeoutId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Sync with prop when it changes externally (after check completes)

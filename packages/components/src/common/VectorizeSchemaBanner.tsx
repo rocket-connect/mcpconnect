@@ -1,31 +1,145 @@
 import React, { useState } from "react";
-import { Database, Sparkles, ChevronRight, X, HelpCircle } from "lucide-react";
+import {
+  Database,
+  Sparkles,
+  ChevronRight,
+  X,
+  HelpCircle,
+  Settings,
+  Zap,
+  AlertTriangle,
+} from "lucide-react";
+
+// Helper to format relative time
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  if (minutes > 0) return `${minutes}m ago`;
+  return "just now";
+}
+
+export type VectorSyncStatus =
+  | "idle"
+  | "syncing"
+  | "synced"
+  | "stale"
+  | "error";
 
 export interface VectorizeSchemaBannerProps {
-  /** Whether the schema has already been vectorized */
+  /** Current sync status */
+  syncStatus?: VectorSyncStatus;
+  /** Whether the schema has already been vectorized (deprecated, use syncStatus) */
   isVectorized?: boolean;
-  /** Callback when user clicks to vectorize */
+  /** Callback when user clicks to vectorize or manage settings */
   onVectorize: () => void;
   /** Callback when user dismisses the banner */
   onDismiss?: () => void;
   /** Number of tools available to vectorize */
   toolCount?: number;
+  /** Number of tools synced (for synced state) */
+  syncedToolCount?: number;
+  /** Last sync timestamp */
+  lastSyncTime?: number;
   /** Whether the connection uses OpenAI (required for embeddings) */
   isOpenAIConnection?: boolean;
 }
 
 export const VectorizeSchemaBanner: React.FC<VectorizeSchemaBannerProps> = ({
+  syncStatus = "idle",
   isVectorized = false,
   onVectorize,
   onDismiss,
   toolCount = 0,
+  syncedToolCount,
+  lastSyncTime,
   isOpenAIConnection = true,
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Don't show if already vectorized or not an OpenAI connection
-  if (isVectorized || !isOpenAIConnection) {
+  // Derive effective status from isVectorized if syncStatus not provided
+  const effectiveStatus: VectorSyncStatus =
+    syncStatus !== "idle" ? syncStatus : isVectorized ? "synced" : "idle";
+
+  // Don't show if not an OpenAI connection
+  if (!isOpenAIConnection) {
     return null;
+  }
+
+  // Show synced state - compact and subtle
+  if (effectiveStatus === "synced") {
+    return (
+      <div className="flex items-center justify-between gap-2 px-3 py-2 mb-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-5 h-5 bg-green-500 rounded flex items-center justify-center flex-shrink-0">
+            <Zap className="w-3 h-3 text-white" />
+          </div>
+          <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
+            Vector search active
+          </span>
+          <span className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:inline">
+            {syncedToolCount ?? toolCount} tools
+            {lastSyncTime && ` • ${formatRelativeTime(lastSyncTime)}`}
+          </span>
+        </div>
+        <button
+          onClick={onVectorize}
+          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
+        >
+          <Settings className="w-3 h-3" />
+          Manage
+        </button>
+      </div>
+    );
+  }
+
+  // Show stale state - compact warning
+  if (effectiveStatus === "stale") {
+    return (
+      <div className="flex items-center justify-between gap-2 px-3 py-2 mb-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-5 h-5 bg-amber-500 rounded flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-3 h-3 text-white" />
+          </div>
+          <span className="text-xs font-medium text-amber-800 dark:text-amber-200 truncate">
+            Schema changed
+          </span>
+          <span className="text-[10px] text-amber-600 dark:text-amber-400 hidden sm:inline">
+            Resync to update embeddings
+          </span>
+        </div>
+        <button
+          onClick={onVectorize}
+          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-white bg-amber-500 hover:bg-amber-600 rounded transition-colors flex-shrink-0"
+        >
+          <Sparkles className="w-3 h-3" />
+          Resync
+        </button>
+      </div>
+    );
+  }
+
+  // Show syncing state - compact
+  if (effectiveStatus === "syncing") {
+    return (
+      <div className="flex items-center justify-between gap-2 px-3 py-2 mb-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-5 h-5 bg-purple-500 rounded flex items-center justify-center flex-shrink-0">
+            <Sparkles className="w-3 h-3 text-white animate-pulse" />
+          </div>
+          <span className="text-xs font-medium text-purple-800 dark:text-purple-200 truncate">
+            Syncing {toolCount} tools...
+          </span>
+        </div>
+        <div className="w-4 h-4 border-2 border-purple-300 dark:border-purple-600 border-t-purple-600 dark:border-t-purple-300 rounded-full animate-spin flex-shrink-0" />
+      </div>
+    );
   }
 
   const handleVectorizeClick = () => {
