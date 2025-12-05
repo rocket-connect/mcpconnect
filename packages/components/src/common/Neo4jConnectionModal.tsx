@@ -34,6 +34,7 @@ export interface Neo4jSyncState {
 export interface Neo4jSyncOptions {
   config: Neo4jConnectionConfig;
   rememberPassword: boolean;
+  openaiApiKey?: string;
 }
 
 export interface Neo4jConnectionModalProps {
@@ -46,6 +47,8 @@ export interface Neo4jConnectionModalProps {
   toolCount?: number;
   connectionName?: string;
   isOpenAIConfigured?: boolean;
+  /** OpenAI API key for generating vector embeddings */
+  openaiApiKey?: string;
   /** Current sync state from storage */
   syncState?: Neo4jSyncState;
   /** Initial config to populate form (from storage) */
@@ -62,6 +65,7 @@ export const Neo4jConnectionModal: React.FC<Neo4jConnectionModalProps> = ({
   toolCount = 0,
   connectionName = "Connection",
   isOpenAIConfigured = true,
+  openaiApiKey,
   syncState,
   initialConfig,
 }) => {
@@ -134,10 +138,15 @@ export const Neo4jConnectionModal: React.FC<Neo4jConnectionModalProps> = ({
       config: { ...formData, password: "***" },
       rememberPassword,
       toolCount,
+      hasOpenAIKey: !!openaiApiKey,
     });
 
     try {
-      const result = await onSync({ config: formData, rememberPassword });
+      const result = await onSync({
+        config: formData,
+        rememberPassword,
+        openaiApiKey,
+      });
       console.log("[Neo4jConnectionModal] Sync complete:", result);
       setIsSyncing(false);
       onClose();
@@ -161,10 +170,15 @@ export const Neo4jConnectionModal: React.FC<Neo4jConnectionModalProps> = ({
       config: { ...formData, password: "***" },
       rememberPassword,
       toolCount,
+      hasOpenAIKey: !!openaiApiKey,
     });
 
     try {
-      const result = await onResync({ config: formData, rememberPassword });
+      const result = await onResync({
+        config: formData,
+        rememberPassword,
+        openaiApiKey,
+      });
       console.log("[Neo4jConnectionModal] Resync complete:", result);
       setIsSyncing(false);
       onClose();

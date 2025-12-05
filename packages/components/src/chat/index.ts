@@ -3,7 +3,11 @@ export {
   ChatMessageComponent,
   type ChatMessageComponentProps,
 } from "./ChatMessageComponent";
-export { ChatInput, type ChatInputProps } from "./ChatInput";
+export {
+  ChatInput,
+  type ChatInputProps,
+  type SemanticSearchStatus,
+} from "./ChatInput";
 export {
   StreamingMessage,
   type StreamingMessageProps,
@@ -33,3 +37,7 @@ export {
   type HookType,
   type HookStatus,
 } from "./ToolSelectionHookCard";
+export {
+  SemanticSearchMessage,
+  type SemanticSearchMessageProps,
+} from "./SemanticSearchMessage";

@@ -7,12 +7,10 @@ import {
   ToolCard,
   ToolActionsPanel,
   VectorizeSchemaBanner,
-  Neo4jConnectionModal,
 } from "@mcpconnect/components";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Users, Plus, Search, X, Wrench, Zap, AlertCircle } from "lucide-react";
 import { ModelService, LLMSettings } from "../services/modelService";
-import { useNeo4jSync } from "../hooks/useNeo4jSync";
 
 interface SidebarProps {
   connections: Connection[];
@@ -84,7 +82,6 @@ export const Sidebar = ({ connections }: SidebarProps) => {
   const [toolSearchQuery, setToolSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"mcp" | "system">("mcp");
   const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
-  const [isNeo4jModalOpen, setIsNeo4jModalOpen] = useState(false);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   // Manual URL parsing as backup since useParams seems to be failing
@@ -100,15 +97,11 @@ export const Sidebar = ({ connections }: SidebarProps) => {
   // Get current connection ID from URL params - use manual parsing as fallback
   const currentConnectionId = params.connectionId || manualConnectionId;
 
-  // Use shared Neo4j sync hook
-  const {
-    syncState: currentSyncState,
-    isVectorized,
-    handleSync: handleNeo4jSync,
-    handleResync: handleNeo4jResync,
-    handleDelete: handleNeo4jDelete,
-    handleReset: handleNeo4jReset,
-  } = useNeo4jSync(currentConnectionId);
+  // Get sync state for current connection from storage
+  const currentSyncState = currentConnectionId
+    ? getNeo4jSyncState(currentConnectionId)
+    : undefined;
+  const isVectorized = currentSyncState?.status === "synced";
 
   // Check if OpenAI is the current provider (required for semantic tool search)
   const isOpenAIProvider = llmSettings?.provider === "openai";
@@ -148,10 +141,16 @@ export const Sidebar = ({ connections }: SidebarProps) => {
     };
   }, []);
 
-  // Handle vectorize click - opens Neo4j connection modal
-  const handleVectorize = () => {
-    setIsNeo4jModalOpen(true);
-  };
+  // Handle vectorize click - opens Settings modal with Neo4j config for this connection
+  const handleVectorize = useCallback(() => {
+    if (currentConnectionId) {
+      window.dispatchEvent(
+        new CustomEvent("open-settings", {
+          detail: { connectionId: currentConnectionId },
+        })
+      );
+    }
+  }, [currentConnectionId]);
 
   // Handle banner dismiss
   const handleBannerDismiss = () => {
@@ -664,38 +663,6 @@ export const Sidebar = ({ connections }: SidebarProps) => {
       <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
         <RconnectLogo className="transition-opacity" />
       </div>
-
-      {/* Neo4j Connection Modal */}
-      <Neo4jConnectionModal
-        isOpen={isNeo4jModalOpen}
-        onClose={() => setIsNeo4jModalOpen(false)}
-        onSync={handleNeo4jSync}
-        onResync={handleNeo4jResync}
-        onDelete={handleNeo4jDelete}
-        onReset={handleNeo4jReset}
-        toolCount={mcpToolsToShow.length}
-        connectionName={
-          currentConnectionId
-            ? connections.find(c => c.id === currentConnectionId)?.name
-            : undefined
-        }
-        isOpenAIConfigured={isOpenAIProvider}
-        syncState={
-          currentSyncState
-            ? {
-                status: currentSyncState.status,
-                toolsetHash: currentSyncState.toolsetHash,
-                toolCount: currentSyncState.toolCount,
-                lastSyncTime: currentSyncState.lastSyncTime,
-                error: currentSyncState.error,
-                neo4jConfig: currentSyncState.neo4jConfig,
-                savedPassword: currentSyncState.savedPassword,
-                rememberPassword: currentSyncState.rememberPassword,
-              }
-            : undefined
-        }
-        initialConfig={currentSyncState?.neo4jConfig}
-      />
     </div>
   );
 };

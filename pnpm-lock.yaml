@@ -115,8 +115,8 @@ importers:
         specifier: ^2.0.77
         version: 2.0.77(zod@4.1.13)
       '@mcp-rag/client':
-        specifier: ^0.0.4
-        version: 0.0.4(ai@5.0.44(zod@4.1.13))(neo4j-driver@6.0.1)(ws@8.18.3)
+        specifier: ^0.0.5
+        version: 0.0.5(ai@5.0.44(zod@4.1.13))(neo4j-driver@6.0.1)(ws@8.18.3)
       '@mcpconnect/adapter-ai-sdk':
         specifier: workspace:*
         version: link:../../packages/adapter-ai-sdk
@@ -1040,14 +1040,14 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@mcp-rag/client@0.0.4':
-    resolution: {integrity: sha512-02rH79xZNbw5/896qA1agQ18VGwBTD2qluEaLI//ARlnIcd0uPf9rWjNVpWDH1ow/8B6pQjTzqlAMnsOjtQq5A==}
+  '@mcp-rag/client@0.0.5':
+    resolution: {integrity: sha512-cpQRt04zpghu164UrBMF1RFXXBK0vgmG5TCoobD5/gjM6z3gliMO3moxVphke42x6HXgYpQH/EizmGUhWNR/ig==}
     peerDependencies:
       ai: '>=5.0.0'
       neo4j-driver: '>6.0.0'
 
-  '@mcp-rag/neo4j@0.0.4':
-    resolution: {integrity: sha512-Up46MBiZzX0UYDotqlAk/y09NmLaiJi0IQ7FQHBk/96OIGBlwzPFf4eXoI8YQU0jo0UIsbPIT2c1dhYf0Xe3QQ==}
+  '@mcp-rag/neo4j@0.0.5':
+    resolution: {integrity: sha512-hNf2PiMwToLuDj0CKQ/gwOp3T5XgB4/gZxyqIV/j0f8RkyA87y7WZpSOLgrBfjnYwpM/XVu6pLoDSUh8g22Rjw==}
     peerDependencies:
       ai: ^5.0.93
       neo4j-driver: ^6.0.1
@@ -4267,10 +4267,10 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@mcp-rag/client@0.0.4(ai@5.0.44(zod@4.1.13))(neo4j-driver@6.0.1)(ws@8.18.3)':
+  '@mcp-rag/client@0.0.5(ai@5.0.44(zod@4.1.13))(neo4j-driver@6.0.1)(ws@8.18.3)':
     dependencies:
       '@ai-sdk/provider-utils': 3.0.18(zod@4.1.13)
-      '@mcp-rag/neo4j': 0.0.4(ai@5.0.44(zod@4.1.13))(neo4j-driver@6.0.1)
+      '@mcp-rag/neo4j': 0.0.5(ai@5.0.44(zod@4.1.13))(neo4j-driver@6.0.1)
       '@types/debug': 4.1.12
       ai: 5.0.44(zod@4.1.13)
       debug: 4.4.3
@@ -4282,7 +4282,7 @@ snapshots:
       - supports-color
       - ws
 
-  '@mcp-rag/neo4j@0.0.4(ai@5.0.44(zod@4.1.13))(neo4j-driver@6.0.1)':
+  '@mcp-rag/neo4j@0.0.5(ai@5.0.44(zod@4.1.13))(neo4j-driver@6.0.1)':
     dependencies:
       '@ai-sdk/provider-utils': 3.0.18(zod@4.1.13)
       '@types/debug': 4.1.12

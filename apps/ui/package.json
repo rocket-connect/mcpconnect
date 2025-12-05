@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.77",
-    "@mcp-rag/client": "^0.0.4",
+    "@mcp-rag/client": "^0.0.5",
     "@mcpconnect/adapter-ai-sdk": "workspace:*",
     "@mcpconnect/adapter-localstorage": "workspace:*",
     "@mcpconnect/base-adapters": "workspace:*",

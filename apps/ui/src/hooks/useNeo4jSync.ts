@@ -1,7 +1,13 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { computeToolsHash } from "../utils/toolsHash";
 import type { Neo4jSyncOptions } from "@mcpconnect/components";
+import {
+  syncToolsToNeo4j,
+  isRagClientReady,
+  reinitializeRagClient,
+} from "../services/mcpRagService";
+import { ModelService } from "../services/modelService";
 
 export interface Neo4jSyncResult {
   hash: string;
@@ -18,10 +24,106 @@ export function useNeo4jSync(connectionId: string | undefined) {
     getNeo4jSyncState,
     updateNeo4jSyncState,
     deleteNeo4jSyncState,
+    llmSettings,
   } = useStorage();
 
   // Get current sync state
   const syncState = connectionId ? getNeo4jSyncState(connectionId) : undefined;
+
+  // Track if RAG client is ready (for vector search to work)
+  const [isClientReady, setIsClientReady] = useState(isRagClientReady());
+  const initializingRef = useRef(false);
+
+  // Reinitialize RAG client on mount if we have a synced state with saved password
+  useEffect(() => {
+    const reinitialize = async () => {
+      if (!connectionId || !syncState || initializingRef.current) {
+        return;
+      }
+
+      // Only reinitialize if status is synced and we have saved credentials
+      if (syncState.status !== "synced" || !syncState.neo4jConfig) {
+        return;
+      }
+
+      // Check if RAG client is already ready
+      if (isRagClientReady()) {
+        setIsClientReady(true);
+        return;
+      }
+
+      // We need the password to reinitialize
+      if (!syncState.savedPassword) {
+        console.warn(
+          "[useNeo4jSync] Cannot reinitialize: no saved password. User will need to reconnect."
+        );
+        return;
+      }
+
+      // We need the OpenAI API key
+      let openaiApiKey: string | undefined;
+
+      // First try from context
+      if (llmSettings?.provider === "openai" && llmSettings?.apiKey) {
+        openaiApiKey = llmSettings.apiKey;
+      } else {
+        // Fall back to loading from storage
+        try {
+          const settings = await ModelService.loadSettings();
+          if (settings?.provider === "openai" && settings?.apiKey) {
+            openaiApiKey = settings.apiKey;
+          }
+        } catch (error) {
+          console.error("[useNeo4jSync] Failed to load LLM settings:", error);
+        }
+      }
+
+      if (!openaiApiKey) {
+        console.warn(
+          "[useNeo4jSync] Cannot reinitialize: OpenAI API key not available"
+        );
+        return;
+      }
+
+      initializingRef.current = true;
+
+      try {
+        // Decode the saved password
+        const password = atob(syncState.savedPassword);
+        const connectionTools = tools[connectionId] || [];
+
+        console.log(
+          "[useNeo4jSync] Reinitializing RAG client for:",
+          connectionId
+        );
+
+        const success = await reinitializeRagClient({
+          neo4jConfig: {
+            ...syncState.neo4jConfig,
+            password,
+          },
+          openaiApiKey,
+          tools: connectionTools,
+          toolSetName: connectionId,
+        });
+
+        setIsClientReady(success);
+
+        if (!success) {
+          console.warn(
+            "[useNeo4jSync] Failed to reinitialize RAG client - vector search won't work until reconnected"
+          );
+        }
+      } catch (error) {
+        console.error("[useNeo4jSync] Error reinitializing RAG client:", error);
+        setIsClientReady(false);
+      } finally {
+        initializingRef.current = false;
+      }
+    };
+
+    reinitialize();
+  }, [connectionId, syncState, tools, llmSettings]);
 
   // Helper to encode password for storage (base64)
   const encodePassword = (password: string): string => {
@@ -37,11 +139,14 @@ export function useNeo4jSync(connectionId: string | undefined) {
 
       const { config, rememberPassword } = options;
 
+      const { openaiApiKey } = options;
+
       console.log("[useNeo4jSync] Starting sync:", {
         connectionId,
         uri: config.uri,
         username: config.username,
         rememberPassword,
+        hasOpenAIKey: !!openaiApiKey,
       });
 
       // Update status to syncing with config
@@ -64,9 +169,29 @@ export function useNeo4jSync(connectionId: string | undefined) {
         const hash = computeToolsHash(connectionTools);
         const toolCount = connectionTools.length;
 
-        // TODO: Replace this with actual mcp-rag sync call
-        // For now, simulate the sync operation
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Validate OpenAI API key is provided
+        if (!openaiApiKey) {
+          throw new Error(
+            "OpenAI API key is required for vector embeddings. Please configure OpenAI as your provider in settings."
+          );
+        }
+
+        // Sync tools to Neo4j with vector embeddings
+        const syncResult = await syncToolsToNeo4j({
+          neo4jConfig: {
+            uri: config.uri,
+            username: config.username,
+            password: config.password,
+            database: config.database,
+          },
+          openaiApiKey,
+          tools: connectionTools,
+          toolSetName: connectionId,
+        });
+
+        if (!syncResult.success) {
+          throw new Error(syncResult.error || "Sync failed");
+        }
 
         // Update state with sync result (preserve password settings)
         await updateNeo4jSyncState(connectionId, {
@@ -136,12 +261,21 @@ export function useNeo4jSync(connectionId: string | undefined) {
     console.log("[useNeo4jSync] Full reset complete");
   }, [connectionId, deleteNeo4jSyncState]);
 
+  // Update isClientReady when sync completes
+  useEffect(() => {
+    if (isRagClientReady()) {
+      setIsClientReady(true);
+    }
+  }, [syncState?.status]);
+
   return {
     syncState,
-    isVectorized: syncState?.status === "synced",
+    // isVectorized is true only if sync state is synced AND RAG client is ready
+    isVectorized: syncState?.status === "synced" && isClientReady,
     isStale: syncState?.status === "stale",
     hasError: syncState?.status === "error",
     isSyncing: syncState?.status === "syncing",
+    isClientReady,
     handleSync,
     handleResync,
     handleDelete,

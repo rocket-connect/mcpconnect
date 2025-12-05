@@ -24,6 +24,12 @@ import {
 import { useChatConversationWarnings } from "../hooks/useChatConversationWarnings";
 import { useChatStreaming } from "../hooks/useChatStreaming";
 import { useChatConversationManager } from "../hooks/useChatConversationManager";
+import { useNeo4jSync } from "../hooks/useNeo4jSync";
+import { createToolSelectionProvider } from "../services/mcpRagService";
+import type {
+  ToolSelectionProvider,
+  ToolSelectionCallbacks,
+} from "@mcpconnect/schemas";
 
 interface ChatInterfaceProps {
   expandedToolCall?: boolean;
@@ -113,6 +119,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const [llmSettings, setLlmSettings] = useState<LLMSettings | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [settingsPreSelectedConnectionId, setSettingsPreSelectedConnectionId] =
+    useState<string | undefined>(undefined);
 
   // Reactive tool state - forces re-render when tool enablement changes
   const [, setToolStateVersion] = useState(0);
@@ -135,9 +143,25 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     [currentConversation?.messages]
   );
 
+  // Get last used tools from the most recent user message with semantic search data
+  const lastUsedTools = useMemo(() => {
+    // Find the most recent user message with semantic search results
+    const messagesWithSearch = currentMessages
+      .filter(msg => msg.isUser && msg.semanticSearch?.relevantTools?.length)
+      .reverse();
+
+    if (messagesWithSearch.length > 0) {
+      return messagesWithSearch[0].semanticSearch?.relevantTools || [];
+    }
+    return [];
+  }, [currentMessages]);
+
   // Initialize hooks
   const { getWarnings, confirmLongConversation, confirmManyTools } =
     useChatConversationWarnings();
+
+  // Neo4j semantic search sync state
+  const { isVectorized: hasVectorSearch } = useNeo4jSync(connectionId);
 
   // IMPORTANT: When saving messages, preserve order
   const updateConversationMessages = useCallback(
@@ -421,10 +445,134 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
       const messagesWithUser = [...currentMessages, userMessage];
       await updateConversationMessages(messagesWithUser);
 
+      // Create tool selection provider and callbacks if vector search is enabled
+      let toolSelectionProvider: ToolSelectionProvider | undefined;
+      let toolSelectionCallbacks: ToolSelectionCallbacks | undefined;
+      let searchId: string | null = null;
+      let searchStartTime: number | null = null;
+
+      if (hasVectorSearch) {
+        const provider = createToolSelectionProvider({ maxTools: 10 });
+        if (provider) {
+          toolSelectionProvider = provider;
+          searchId = nanoid();
+
+          // Create callbacks that emit semantic search events
+          toolSelectionCallbacks = {
+            onSelectionStart: async _event => {
+              searchStartTime = Date.now();
+              await handleStreamingEvent({
+                type: "semantic_search_start",
+                data: {
+                  semanticSearchId: searchId!,
+                },
+              });
+            },
+            onSelectionComplete: async event => {
+              const searchDuration =
+                Date.now() - (searchStartTime || Date.now());
+
+              // Convert scores Map to array of {name, score}
+              const relevantTools = event.result.tools.map((tool: any) => ({
+                name: tool.name,
+                score: event.result.scores?.get(tool.name) ?? 0,
+              }));
+
+              await handleStreamingEvent({
+                type: "semantic_search_end",
+                data: {
+                  relevantTools,
+                  searchDuration,
+                },
+              });
+
+              // Update user message with semantic search results
+              const userMessageWithSearch: ChatMessageType = {
+                ...userMessage,
+                semanticSearch: {
+                  searchId: searchId!,
+                  relevantTools,
+                  totalTools: event.totalCount,
+                  duration: searchDuration,
+                },
+              };
+
+              // Update the conversation with semantic search attached to user message
+              await updateConversationMessages([
+                ...currentMessages,
+                userMessageWithSearch,
+              ]);
+
+              // Store semantic search as a tool execution in the network inspector
+              const searchExecution = {
+                id: searchId!,
+                tool: "🔍 Semantic Tool Search",
+                status: "success" as const,
+                duration: searchDuration,
+                timestamp: new Date().toISOString(),
+                request: {
+                  tool: "semantic_tool_search",
+                  arguments: {
+                    query: originalMessage,
+                    totalTools: event.totalCount,
+                  },
+                  timestamp: new Date(
+                    searchStartTime || Date.now()
+                  ).toISOString(),
+                },
+                response: {
+                  success: true,
+                  result: {
+                    relevantTools,
+                    toolsFound: event.selectedCount,
+                    contextReduction: `${Math.round((1 - event.selectedCount / event.totalCount) * 100)}%`,
+                  },
+                  timestamp: new Date().toISOString(),
+                },
+              };
+
+              await ChatService.storeToolExecution(
+                connectionId,
+                searchExecution
+              );
+            },
+            onSelectionError: async event => {
+              console.error(
+                "[ChatInterface] Semantic search error:",
+                event.error
+              );
+              // If fallback is happening, we don't need to do anything special
+              // The streaming handler will use all tools
+            },
+            onSelectionFallback: async event => {
+              console.warn(
+                "[ChatInterface] Semantic search fallback:",
+                event.reason
+              );
+              // End the semantic search with empty results to indicate fallback
+              await handleStreamingEvent({
+                type: "semantic_search_end",
+                data: {
+                  relevantTools: [],
+                  searchDuration: Date.now() - (searchStartTime || Date.now()),
+                },
+              });
+            },
+          };
+        }
+      }
+
       const chatContext = {
         connection: currentConnection,
         tools: allCurrentEnabledTools,
         llmSettings,
+        toolSelectionProvider,
+        toolSelectionOptions: {
+          maxTools: 10,
+          includeHistory: true,
+          fallbackToAll: true,
+        },
+        toolSelectionCallbacks,
       };
 
       if (!ChatService.validateChatContext(chatContext)) {
@@ -602,14 +750,27 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
         )}
 
         {warnings.showManyToolsWarning && (
-          <ChatWarningBanner type="manyTools" toolCount={warnings.toolCount} />
+          <ChatWarningBanner
+            type="manyTools"
+            toolCount={warnings.toolCount}
+            hasVectorSearch={hasVectorSearch}
+            onEnableRag={
+              !hasVectorSearch && connectionId
+                ? () => {
+                    setSettingsPreSelectedConnectionId(connectionId);
+                    setIsSettingsOpen(true);
+                  }
+                : undefined
+            }
+          />
         )}
 
-        {/* Tool Status Warning */}
+        {/* Tool Status Warning - only show when MCP RAG is NOT enabled */}
         {totalDisabledToolsCount > 0 &&
           !showApiWarning &&
           !warnings.showLongConversationWarning &&
-          !warnings.showManyToolsWarning && (
+          !warnings.showManyToolsWarning &&
+          !hasVectorSearch && (
             <ToolStatusWarning disabledToolsCount={totalDisabledToolsCount} />
           )}
 
@@ -666,15 +827,16 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
                         />
                       ))}
 
-                  {/* Show streaming message if active */}
+                  {/* Show streaming message if active (but not during semantic search) */}
                   {(streamingState.isStreaming ||
                     streamingState.currentStreamingContent ||
-                    streamingState.streamingStatus) && (
-                    <StreamingMessage
-                      content={streamingState.currentStreamingContent}
-                      status={streamingState.streamingStatus}
-                    />
-                  )}
+                    streamingState.streamingStatus) &&
+                    !streamingState.semanticSearch.isSearching && (
+                      <StreamingMessage
+                        content={streamingState.currentStreamingContent}
+                        status={streamingState.streamingStatus}
+                      />
+                    )}
 
                   <div ref={messagesEndRef} />
                 </div>
@@ -697,11 +859,26 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
           isLoading={isLoading}
           isStreaming={streamingState.isStreaming}
           streamingStatus={streamingState.streamingStatus}
+          semanticSearch={{
+            isSearching: streamingState.semanticSearch.isSearching,
+            relevantToolsCount:
+              streamingState.semanticSearch.relevantTools.length,
+            totalTools: totalEnabledToolsCount,
+            searchDuration: streamingState.semanticSearch.searchDuration,
+          }}
+          lastUsedTools={lastUsedTools}
         />
       </div>
 
       {/* Settings Modal */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={handleSettingsClose} />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => {
+          handleSettingsClose();
+          setSettingsPreSelectedConnectionId(undefined);
+        }}
+        preSelectedConnectionId={settingsPreSelectedConnectionId}
+      />
     </>
   );
 };

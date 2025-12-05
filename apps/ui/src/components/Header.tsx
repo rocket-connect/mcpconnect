@@ -1,12 +1,37 @@
 import { ThemeToggle } from "@mcpconnect/components";
 import { useTheme } from "../contexts/ThemeContext";
 import { Server, Settings, Github } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SettingsModal } from "./SettingsModal";
+
+// Custom event for opening settings with optional connection pre-selected
+declare global {
+  interface WindowEventMap {
+    "open-settings": CustomEvent<{ connectionId?: string }>;
+  }
+}
 
 export const Header = () => {
   const { theme, toggleTheme } = useTheme();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [preSelectedConnectionId, setPreSelectedConnectionId] = useState<
+    string | undefined
+  >();
+
+  // Listen for custom event to open settings modal
+  useEffect(() => {
+    const handleOpenSettings = (
+      event: CustomEvent<{ connectionId?: string }>
+    ) => {
+      setPreSelectedConnectionId(event.detail?.connectionId);
+      setIsSettingsOpen(true);
+    };
+
+    window.addEventListener("open-settings", handleOpenSettings);
+    return () => {
+      window.removeEventListener("open-settings", handleOpenSettings);
+    };
+  }, []);
 
   return (
     <>
@@ -47,7 +72,11 @@ export const Header = () => {
 
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => {
+          setIsSettingsOpen(false);
+          setPreSelectedConnectionId(undefined);
+        }}
+        preSelectedConnectionId={preSelectedConnectionId}
       />
     </>
   );

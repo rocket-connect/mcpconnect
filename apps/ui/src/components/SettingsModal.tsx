@@ -25,6 +25,8 @@ import { useNeo4jSync } from "../hooks/useNeo4jSync";
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Pre-select a connection and auto-open its Neo4j sync modal */
+  preSelectedConnectionId?: string;
 }
 
 const defaultSettings: LLMSettings = {
@@ -52,6 +54,7 @@ const providerOptions = [
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
+  preSelectedConnectionId,
 }) => {
   const { adapter } = useStorage();
   const [settings, setSettings] = useState<LLMSettings>(defaultSettings);
@@ -105,6 +108,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       calculateStorageStats();
     }
   }, [isOpen, adapter]);
+
+  // Auto-open Neo4j modal when preSelectedConnectionId is provided
+  useEffect(() => {
+    if (isOpen && preSelectedConnectionId) {
+      setSelectedConnectionId(preSelectedConnectionId);
+      setIsNeo4jModalOpen(true);
+    }
+  }, [isOpen, preSelectedConnectionId]);
 
   const loadSettings = async () => {
     setIsLoadingSettings(true);
@@ -672,6 +683,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             : undefined
         }
         isOpenAIConfigured={settings.provider === "openai"}
+        openaiApiKey={
+          settings.provider === "openai" ? settings.apiKey : undefined
+        }
         syncState={
           selectedSyncState
             ? {
