@@ -71,7 +71,8 @@ export const useChatConversationWarnings = () => {
     (
       messages: ChatMessage[],
       toolCount: number,
-      showApiWarning: boolean
+      showApiWarning: boolean,
+      hasVectorSearch?: boolean
     ): ConversationWarnings => {
       const messageCount = messages.length;
       const charCount = getConversationCharCount(messages);
@@ -79,8 +80,12 @@ export const useChatConversationWarnings = () => {
 
       return {
         showLongConversationWarning: longConversation && !showApiWarning,
+        // Don't show many tools warning if vector search (RAG) is enabled
         showManyToolsWarning:
-          toolCount > 5 && !showApiWarning && !longConversation,
+          toolCount > 5 &&
+          !showApiWarning &&
+          !longConversation &&
+          !hasVectorSearch,
         messageCount,
         charCount,
         toolCount,

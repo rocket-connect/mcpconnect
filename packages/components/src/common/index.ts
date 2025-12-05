@@ -36,10 +36,3 @@ export {
   type Neo4jConnectionConfig,
   type Neo4jSyncResult,
 } from "./Neo4jConfigSection";
-export {
-  Neo4jConnectionModal,
-  type Neo4jConnectionModalProps,
-  type Neo4jSyncState,
-  type Neo4jSyncStatus,
-  type Neo4jSyncOptions,
-} from "./Neo4jConnectionModal";

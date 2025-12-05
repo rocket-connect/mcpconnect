@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useStorage } from "../contexts/StorageContext";
 import { computeToolsHash } from "../utils/toolsHash";
-import type { Neo4jSyncOptions } from "@mcpconnect/components";
+import type { Neo4jConnectionConfig } from "@mcpconnect/components";
 import {
   syncToolsToNeo4j,
   isRagClientReady,
   reinitializeRagClient,
 } from "../services/mcpRagService";
 import { ModelService } from "../services/modelService";
+
+export interface Neo4jSyncOptions {
+  config: Neo4jConnectionConfig;
+  rememberPassword: boolean;
+  openaiApiKey?: string;
+}
 
 export interface Neo4jSyncResult {
   hash: string;

@@ -410,7 +410,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     const warnings = getWarnings(
       currentMessages,
       allCurrentEnabledTools.length,
-      !llmSettings?.apiKey
+      !llmSettings?.apiKey,
+      hasVectorSearch
     );
 
     if (warnings.showLongConversationWarning) {
@@ -691,7 +692,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   const warnings = getWarnings(
     currentMessages,
     totalEnabledToolsCount,
-    showApiWarning
+    showApiWarning,
+    hasVectorSearch
   );
 
   // Create display messages array that includes streaming messages
