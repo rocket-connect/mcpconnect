@@ -20,6 +20,7 @@ import {
   ChatWarningBanner,
   ChatHeaderInfo,
   ChatEmptyStateDisplay,
+  ChatTokenUsageBanner,
 } from "@mcpconnect/components";
 import { useChatConversationWarnings } from "../hooks/useChatConversationWarnings";
 import { useChatStreaming } from "../hooks/useChatStreaming";
@@ -203,6 +204,8 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     startStreaming,
     handleStreamingEvent,
     setIsStreaming,
+    resetTokenUsage,
+    initializeTokenUsageForStreaming,
   } = useChatStreaming(updateConversationMessages, refreshAll);
 
   const {
@@ -261,6 +264,163 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
   useEffect(() => {
     updateRefs(conversations, connectionId, chatId);
   }, [conversations, connectionId, chatId, updateRefs]);
+
+  // Reset streaming token usage when connection or chat changes
+  useEffect(() => {
+    resetTokenUsage();
+  }, [connectionId, chatId, resetTokenUsage]);
+
+  // Derive token usage for display - saved conversation data is the source of truth
+  // We only show streaming state tokens when actively streaming in the CURRENT chat
+  // Token usage is scoped to each specific connection/chat - never show cross-chat tokens
+  //
+  // Extract the specific conversation's token usage here for proper dependency tracking.
+  // This ensures React re-computes when the specific chat's data changes.
+  const currentChatTokenUsage = useMemo(() => {
+    if (!connectionId || !chatId || chatId === "new") {
+      return { tokenUsage: undefined, messageCount: 0 };
+    }
+    const connectionConvos = conversations[connectionId] || [];
+    const matchingConvo = connectionConvos.find(c => c.id === chatId);
+    return {
+      tokenUsage: matchingConvo?.tokenUsage,
+      messageCount: matchingConvo?.messages?.length || 0,
+    };
+  }, [conversations, connectionId, chatId]);
+
+  // Check if streaming is happening for THIS specific chat
+  // This prevents token bleeding between chats when switching tabs
+  const isStreamingForCurrentChat =
+    streamingState.isStreaming &&
+    streamingState.streamingForConnectionId === connectionId &&
+    streamingState.streamingForChatId === chatId;
+
+  const displayTokenUsage = useMemo(() => {
+    // Must have valid connection and chat
+    if (!connectionId || !chatId || chatId === "new") {
+      return {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        scopedMessageCount: 0,
+      };
+    }
+
+    const savedUsage = currentChatTokenUsage.tokenUsage;
+    const savedTokens = savedUsage?.totalTokens || 0;
+    const scopedMessageCount = currentChatTokenUsage.messageCount;
+
+    // If no messages in this chat, don't show any token usage
+    if (scopedMessageCount === 0) {
+      return {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        scopedMessageCount: 0,
+      };
+    }
+
+    // ONLY use streaming state when actively streaming for THIS SPECIFIC chat
+    // The streaming state tracks which connectionId/chatId it belongs to
+    // This prevents stale values from showing when switching between chats
+    if (
+      isStreamingForCurrentChat &&
+      streamingState.tokenUsage.totalTokens > 0
+    ) {
+      return {
+        promptTokens: streamingState.tokenUsage.promptTokens,
+        completionTokens: streamingState.tokenUsage.completionTokens,
+        totalTokens: streamingState.tokenUsage.totalTokens,
+        scopedMessageCount,
+      };
+    }
+
+    // Not streaming for this chat - use ONLY saved conversation data
+    // This is the authoritative source when not actively streaming
+    if (savedTokens > 0) {
+      return {
+        promptTokens: savedUsage!.promptTokens,
+        completionTokens: savedUsage!.completionTokens,
+        totalTokens: savedUsage!.totalTokens,
+        scopedMessageCount,
+      };
+    }
+
+    return {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      scopedMessageCount,
+    };
+  }, [
+    connectionId,
+    chatId,
+    currentChatTokenUsage,
+    isStreamingForCurrentChat,
+    streamingState.tokenUsage.promptTokens,
+    streamingState.tokenUsage.completionTokens,
+    streamingState.tokenUsage.totalTokens,
+  ]);
+
+  // Save token usage to conversation when streaming completes with new tokens
+  useEffect(() => {
+    if (
+      !connectionId ||
+      !chatId ||
+      chatId === "new" ||
+      !currentConversation ||
+      streamingState.tokenUsage.totalTokens === 0
+    )
+      return;
+
+    // CRITICAL: Only save tokens if they actually belong to THIS chat
+    // This prevents token bleeding when switching between chats
+    // The streaming state tracks which chat the tokens were accumulated for
+    if (
+      streamingState.streamingForConnectionId !== connectionId ||
+      streamingState.streamingForChatId !== chatId
+    ) {
+      return;
+    }
+
+    // Only save if token usage has actually changed from what's saved
+    const savedUsage = currentConversation.tokenUsage;
+    const currentUsage = streamingState.tokenUsage;
+
+    if (savedUsage?.totalTokens === currentUsage.totalTokens) return;
+
+    const updatedConversation = {
+      ...currentConversation,
+      tokenUsage: {
+        promptTokens: currentUsage.promptTokens,
+        completionTokens: currentUsage.completionTokens,
+        totalTokens: currentUsage.totalTokens,
+        lastUpdated: currentUsage.lastUpdated || new Date(),
+      },
+      updatedAt: new Date(),
+    };
+
+    const connectionConvos = conversations[connectionId] || [];
+    const updatedConnectionConversations = connectionConvos.map(conv =>
+      conv.id === currentConversation.id ? updatedConversation : conv
+    );
+
+    const allConversations = {
+      ...conversations,
+      [connectionId]: updatedConnectionConversations,
+    };
+
+    updateConversations(allConversations);
+  }, [
+    streamingState.tokenUsage.totalTokens,
+    streamingState.streamingForConnectionId,
+    streamingState.streamingForChatId,
+    connectionId,
+    chatId,
+    currentConversation,
+    conversations,
+    updateConversations,
+  ]);
 
   // Get enabled tools reactively - this will update when toolStateVersion changes
   const enabledConnectionTools = connectionId
@@ -428,6 +588,11 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
     try {
       setIsLoading(true);
       setIsStreaming(streamingEnabled);
+
+      // Initialize token usage with saved conversation values before streaming
+      // This ensures accumulation works correctly for existing conversations
+      initializeTokenUsageForStreaming(currentConversation.tokenUsage);
+
       startStreaming();
 
       const originalMessage = messageInput.trim();
@@ -850,6 +1015,18 @@ export const ChatInterface = (_args: ChatInterfaceProps) => {
             )}
           </div>
         </div>
+
+        {/* Token Usage Banner - above input */}
+        {/* Key forces remount when chat changes to ensure fresh token display */}
+        <ChatTokenUsageBanner
+          key={`token-banner-${connectionId}-${chatId}`}
+          promptTokens={displayTokenUsage.promptTokens}
+          completionTokens={displayTokenUsage.completionTokens}
+          totalTokens={displayTokenUsage.totalTokens}
+          messageCount={displayTokenUsage.scopedMessageCount}
+          connectionId={connectionId}
+          chatId={chatId}
+        />
 
         {/* Fixed Input */}
         <ChatInput

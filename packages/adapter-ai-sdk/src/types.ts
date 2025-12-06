@@ -54,6 +54,12 @@ export interface ChatResponse {
   toolExecutionMessages: ChatMessage[];
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface StreamingChatResponse {
   type:
     | "token"
@@ -74,6 +80,7 @@ export interface StreamingChatResponse {
   hasToolCalls?: boolean; // Indicates more content will follow after tools
   partialMessageId?: string; // NEW: ID for partial message tracking
   messageOrder?: number; // NEW: Explicit message order
+  usage?: TokenUsage; // Token usage for this response
 }
 
 export interface ToolExecutionResult {

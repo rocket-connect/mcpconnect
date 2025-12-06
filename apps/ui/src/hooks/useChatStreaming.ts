@@ -11,6 +11,13 @@ export interface SemanticSearchState {
   startTime: number | null;
 }
 
+export interface TokenUsageState {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  lastUpdated: Date | null;
+}
+
 export interface StreamingState {
   isStreaming: boolean;
   currentStreamingContent: string;
@@ -22,6 +29,10 @@ export interface StreamingState {
     toolExecutionMessageIds: string[];
   };
   semanticSearch: SemanticSearchState;
+  tokenUsage: TokenUsageState;
+  // Track which chat the streaming/tokens belong to
+  streamingForConnectionId: string | undefined;
+  streamingForChatId: string | undefined;
 }
 
 export const useChatStreaming = (
@@ -51,6 +62,22 @@ export const useChatStreaming = (
     searchDuration: null,
     startTime: null,
   });
+
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageState>({
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    lastUpdated: null,
+  });
+
+  // Track which chat the streaming/tokens belong to
+  // This ensures token usage is properly scoped and doesn't bleed between chats
+  const [streamingForConnectionId, setStreamingForConnectionId] = useState<
+    string | undefined
+  >();
+  const [streamingForChatId, setStreamingForChatId] = useState<
+    string | undefined
+  >();
 
   const streamingMessageRef = useRef<string>("");
   const conversationsRef = useRef<any>({});
@@ -84,6 +111,8 @@ export const useChatStreaming = (
       searchDuration: null,
       startTime: null,
     });
+    setStreamingForConnectionId(undefined);
+    setStreamingForChatId(undefined);
     streamingMessageRef.current = "";
   }, []);
 
@@ -105,6 +134,9 @@ export const useChatStreaming = (
       searchDuration: null,
       startTime: null,
     });
+    // Capture which chat this streaming session belongs to
+    setStreamingForConnectionId(connectionIdRef.current);
+    setStreamingForChatId(chatIdRef.current);
   }, []);
 
   const handleStreamingEvent = useCallback(
@@ -227,6 +259,17 @@ export const useChatStreaming = (
             searchDuration: null,
             startTime: null,
           });
+
+          // Accumulate token usage (don't reset - accumulate across conversation)
+          if (event.data?.usage) {
+            setTokenUsage(prev => ({
+              promptTokens: prev.promptTokens + event.data!.usage!.promptTokens,
+              completionTokens:
+                prev.completionTokens + event.data!.usage!.completionTokens,
+              totalTokens: prev.totalTokens + event.data!.usage!.totalTokens,
+              lastUpdated: new Date(),
+            }));
+          }
 
           if (event.data?.assistantMessage) {
             const currentConversationId = connectionIdRef.current;
@@ -357,7 +400,54 @@ export const useChatStreaming = (
     streamingToolMessages,
     streamingContext,
     semanticSearch,
+    tokenUsage,
+    streamingForConnectionId,
+    streamingForChatId,
   };
+
+  // Reset token usage when switching conversations
+  const resetTokenUsage = useCallback(() => {
+    setTokenUsage({
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      lastUpdated: null,
+    });
+  }, []);
+
+  // Initialize token usage from saved conversation data before starting a new streaming session
+  // This ensures accumulation works correctly for existing conversations
+  const initializeTokenUsageForStreaming = useCallback(
+    (
+      savedUsage:
+        | {
+            promptTokens: number;
+            completionTokens: number;
+            totalTokens: number;
+          }
+        | undefined
+        | null
+    ) => {
+      if (savedUsage && savedUsage.totalTokens > 0) {
+        setTokenUsage({
+          promptTokens: savedUsage.promptTokens || 0,
+          completionTokens: savedUsage.completionTokens || 0,
+          totalTokens: savedUsage.totalTokens || 0,
+          lastUpdated: new Date(),
+        });
+      } else {
+        // Reset to 0 if no saved usage - ensures clean slate for new chats
+        // and prevents stale tokens from previous chats bleeding through
+        setTokenUsage({
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          lastUpdated: null,
+        });
+      }
+    },
+    []
+  );
 
   return {
     streamingState,
@@ -367,5 +457,7 @@ export const useChatStreaming = (
     startStreaming,
     handleStreamingEvent,
     setIsStreaming,
+    resetTokenUsage,
+    initializeTokenUsageForStreaming,
   };
 };

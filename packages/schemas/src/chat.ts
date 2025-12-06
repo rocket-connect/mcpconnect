@@ -57,6 +57,15 @@ export interface ExtendedChatMessage extends ChatMessage {
   isPartial: boolean;
 }
 
+export const TokenUsageSchema = z.object({
+  promptTokens: z.number().default(0),
+  completionTokens: z.number().default(0),
+  totalTokens: z.number().default(0),
+  lastUpdated: flexibleDateSchema,
+});
+
+export type TokenUsage = z.infer<typeof TokenUsageSchema>;
+
 export const ChatConversationSchema = z.object({
   id: z.string(),
   title: z.string().optional(),
@@ -64,6 +73,7 @@ export const ChatConversationSchema = z.object({
   createdAt: flexibleDateSchema.transform(val => val || new Date()),
   updatedAt: flexibleDateSchema.transform(val => val || new Date()),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  tokenUsage: TokenUsageSchema.optional(),
   settings: z
     .object({
       model: z.string().optional(),

@@ -58,7 +58,9 @@ export const ChatHeaderInfo: React.FC<ChatHeaderInfoProps> = ({
             )}
           </div>
         </div>
-        {children}
+
+        {/* Actions */}
+        <div className="flex items-center gap-4">{children}</div>
       </div>
     </div>
   );
