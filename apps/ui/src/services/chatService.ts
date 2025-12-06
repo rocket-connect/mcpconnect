@@ -11,6 +11,13 @@ import { StorageAdapter } from "@mcpconnect/base-adapters";
 // Re-export types for compatibility
 export type { ChatContext, ChatResponse, LLMSettings };
 
+// Token usage tracking
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 // SSE Event interface for streaming with new assistant_partial event
 export interface SSEEvent {
   type:
@@ -22,7 +29,8 @@ export interface SSEEvent {
     | "error"
     | "assistant_partial"
     | "semantic_search_start"
-    | "semantic_search_end";
+    | "semantic_search_end"
+    | "usage_update";
   data?: {
     delta?: string;
     content?: string; // For partial messages
@@ -40,6 +48,8 @@ export interface SSEEvent {
     semanticSearchId?: string;
     relevantTools?: Array<{ name: string; score: number }>;
     searchDuration?: number;
+    // Token usage fields
+    usage?: TokenUsage;
   };
 }
 
@@ -227,6 +237,7 @@ export class ChatService {
             assistantMessage: streamEvent.assistantMessage,
             toolExecutionMessages: streamEvent.toolExecutionMessages,
             finalAssistantMessage: streamEvent.finalAssistantMessage, // NEW: Include final response
+            usage: streamEvent.usage,
           },
         });
         break;

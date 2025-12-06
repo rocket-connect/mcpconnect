@@ -292,6 +292,10 @@ export async function* sendMessageStream(
   let hasEmittedPartialMessage = false;
   let partialMessageId: string | null = null;
 
+  // Track cumulative token usage across all iterations
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+
   try {
     while (iteration < maxIterations) {
       iteration++;
@@ -336,6 +340,12 @@ export async function* sendMessageStream(
               }
             }
           }
+        }
+
+        // Capture token usage from each iteration
+        if (chunk.usage) {
+          totalPromptTokens += chunk.usage.promptTokens;
+          totalCompletionTokens += chunk.usage.completionTokens;
         }
 
         if (chunk.finishReason) break;
@@ -463,6 +473,11 @@ export async function* sendMessageStream(
       assistantMessage,
       toolExecutionMessages: allToolExecutionMessages,
       finalAssistantMessage, // Separate final response message
+      usage: {
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens: totalPromptTokens + totalCompletionTokens,
+      },
     };
   } catch (error) {
     console.error("Stream error:", error);

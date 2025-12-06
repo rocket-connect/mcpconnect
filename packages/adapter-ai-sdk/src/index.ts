@@ -4,6 +4,7 @@ export type {
   ChatContext,
   ChatResponse,
   StreamingChatResponse,
+  TokenUsage,
   ToolExecutionResult,
   LLMSettings,
   ModelOption,
