@@ -15,6 +15,7 @@ Browser-based development environment for debugging and testing Model Context Pr
 - → [How to connect to the Supabase MCP server](https://www.rconnect.tech/blog/how-to-mcp-connect-supabase)
 - → [How to connect to the GitHub MCP server](https://www.rconnect.tech/blog/how-to-mcp-connect-github)
 - → [How to connect to the Neo4j MCP server](https://www.rconnect.tech/blog/how-to-mcp-connect-neo4j)
+- → [Semantic Tool Selection with MCP Connect](https://www.rconnect.tech/blog/semantic-tool-selection-guide)
 
 ## Quick Start
 
@@ -37,64 +38,6 @@ Opens browser!
 - Iterate quickly on tool development
 - Execute tools manually from tool page
 - Test changes without restarting clients
-
-## Setup
-
-### 1. Start MCP Connect
-
-```bash
-# One-time use
-npx @mcpconnect/cli@latest
-
-# Or install globally
-npm install -g @mcpconnect/cli@latest
-mcpconnect
-```
-
-### 2. Add Connection
-
-- Click **+ New Connection**
-- Enter your MCP server URL
-- Test and save
-
-### 3. Configure AI Provider
-
-- Click **Settings** (⚙️)
-- Configure endpoint, model, and API token
-- Test and save
-
-### 4. Start Testing
-
-Enable tools in sidebar, then chat with your AI model.
-
-## Key Features
-
-| Feature                | Description                                           |
-| ---------------------- | ----------------------------------------------------- |
-| **Tool Management**    | Enable/disable individual tools to reduce token usage |
-| **Protocol Inspector** | View raw MCP requests and responses                   |
-| **Multi-Connection**   | Manage multiple MCP servers simultaneously            |
-| **Export**             | Save conversations as JSON, Markdown, or text         |
-| **Local Storage**      | All data stays in your browser                        |
-| **Zero Config**        | No signup, no external dependencies                   |
-
-## Browser Support
-
-Requires modern browser with:
-
-- ES2020+ JavaScript
-- WebSocket API
-- Server-Sent Events
-- localStorage (10MB+)
-
-## Development
-
-```bash
-git clone https://github.com/rocket-connect/mcpconnect.git
-cd mcpconnect
-pnpm install
-pnpm run dev
-```
 
 ## License
 
